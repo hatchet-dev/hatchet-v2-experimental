@@ -1,5 +1,5 @@
 import { Separator } from '@/components/ui/separator';
-import { WorkflowRunsTable } from './components/workflow-runs-table';
+import { TaskRunsTable } from './components/workflow-runs-table';
 import { Button } from '@/components/ui/button';
 import { TriggerWorkflowForm } from '../workflows/$workflow/components/trigger-workflow-form';
 import { useState } from 'react';
@@ -12,10 +12,13 @@ export default function Tasks() {
       <div className="mx-auto max-w-7xl py-8 px-4 sm:px-6 lg:px-8">
         <div className="flex flex-row justify-between items-center">
           <h2 className="text-2xl font-bold leading-tight text-foreground">
-            Workflow Runs
+            Task Runs
           </h2>
-          <Button onClick={() => setTriggerWorkflow(true)}>
-            Trigger Workflow
+          <Button
+            onClick={() => setTriggerWorkflow(true)}
+            className="text-red-700 font-bold animate-bounce"
+          >
+            Trigger Workflow - What should we show here?
           </Button>
         </div>
         <TriggerWorkflowForm
@@ -24,7 +27,7 @@ export default function Tasks() {
           onClose={() => setTriggerWorkflow(false)}
         />
         <Separator className="my-4" />
-        <WorkflowRunsTable showMetrics={true} />
+        <TaskRunsTable showMetrics={true} />
       </div>
     </div>
   );

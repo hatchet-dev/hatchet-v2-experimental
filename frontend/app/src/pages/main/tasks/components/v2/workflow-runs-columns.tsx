@@ -9,6 +9,7 @@ import {
 import RelativeDate from '@/components/molecules/relative-date';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ListableWorkflowRun } from '../workflow-runs-table';
+import { ClipboardDocumentIcon } from '@heroicons/react/24/outline';
 
 export const columns: (
   onAdditionalMetadataClick?: (click: AdditionalMetadataClick) => void,
@@ -38,14 +39,33 @@ export const columns: (
     enableHiding: false,
   },
   {
-    accessorKey: 'id',
+    accessorKey: 'task_id',
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Run Id" />
+      <DataTableColumnHeader column={column} title="Id" />
+    ),
+    cell: ({ row }) => (
+      <div
+        className="cursor-pointer hover:underline min-w-fit whitespace-nowrap items-center flex-row flex gap-x-1"
+        onClick={() => {
+          navigator.clipboard.writeText(row.original.taskId.toString());
+        }}
+      >
+        {row.original.taskId}
+        <ClipboardDocumentIcon className="size-4 ml-1" />
+      </div>
+    ),
+    enableSorting: false,
+    enableHiding: true,
+  },
+  {
+    accessorKey: 'task_name',
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Task" />
     ),
     cell: ({ row }) => (
       <Link to={'/workflow-runs/' + row.original.metadata.id}>
         <div className="cursor-pointer hover:underline min-w-fit whitespace-nowrap">
-          {row.original.displayName || row.original.metadata.id}
+          {row.original.displayName}
         </div>
       </Link>
     ),
@@ -83,20 +103,17 @@ export const columns: (
     enableSorting: false,
     enableHiding: true,
   },
-  // TODO: Add this back
-  // {
-  //   accessorKey: 'Triggered by',
-  //   header: ({ column }) => (
-  //     <DataTableColumnHeader column={column} title="Triggered by" />
-  //   ),
-  //   cell: () => {
-  //     const eventKey = 'N/A'; // FIXME: add back event keys, crons, etc
-
-  //     return <div>{eventKey}</div>;
-  //   },
-  //   enableSorting: false,
-  //   enableHiding: true,
-  // },
+  {
+    accessorKey: 'Triggered by',
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Triggered by" />
+    ),
+    cell: ({ row }) => {
+      return <div>{row.original.triggeredBy}</div>;
+    },
+    enableSorting: false,
+    enableHiding: true,
+  },
   {
     accessorKey: 'Created at',
     header: ({ column }) => (

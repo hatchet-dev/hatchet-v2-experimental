@@ -58,7 +58,7 @@ import {
 import { DateTimePicker } from '@/components/molecules/time-picker/date-time-picker';
 import { AdditionalMetadataClick } from '../../events/components/additional-metadata';
 
-export interface WorkflowRunsTableProps {
+export interface TaskRunsTableProps {
   createdAfter?: string;
   createdBefore?: string;
   workflowId?: string;
@@ -92,7 +92,7 @@ export const getCreatedAfterFromTimeRange = (timeRange?: string) => {
   }
 };
 
-export function WorkflowRunsTable({
+export function TaskRunsTable({
   workflowId,
   workerId,
   createdAfter: createdAfterProp,
@@ -101,7 +101,7 @@ export function WorkflowRunsTable({
   refetchInterval = 5000,
   showMetrics = false,
   showCounts = true,
-}: WorkflowRunsTableProps) {
+}: TaskRunsTableProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const { tenant } = useOutletContext<TenantContextType>();
   invariant(tenant);

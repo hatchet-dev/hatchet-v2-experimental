@@ -105,11 +105,7 @@ export function WorkflowTable() {
           href="https://docs.hatchet.run/home/basics/workflows"
           className="flex flex-row item-center"
         >
-          <Button
-            onClick={() => {}}
-            variant="link"
-            className="p-0 w-fit text-wrap"
-          >
+          <Button onClick={() => {}} variant="link" className="p-0 w-fit">
             <QuestionMarkCircleIcon className={cn('h-4 w-4 mr-2')} />
             Docs: Understanding Workflows in Hatchet
           </Button>
