@@ -1,18 +1,19 @@
 import { ColumnDef } from '@tanstack/react-table';
-import { DataTableColumnHeader } from '../../../../components/molecules/data-table/data-table-column-header';
-import { WorkflowRun } from '@/lib/api';
+import { DataTableColumnHeader } from '../../../../../components/molecules/data-table/data-table-column-header';
 import { Link } from 'react-router-dom';
-import { RunStatus } from './run-statuses';
+import { V2RunStatus } from '../run-statuses';
 import {
   AdditionalMetadata,
   AdditionalMetadataClick,
-} from '../../events/components/additional-metadata';
+} from '../../../events/components/additional-metadata';
 import RelativeDate from '@/components/molecules/relative-date';
 import { Checkbox } from '@/components/ui/checkbox';
+import { ListableWorkflowRun } from '../task-runs-table';
+import { ClipboardDocumentIcon } from '@heroicons/react/24/outline';
 
 export const columns: (
   onAdditionalMetadataClick?: (click: AdditionalMetadataClick) => void,
-) => ColumnDef<WorkflowRun>[] = (onAdditionalMetadataClick) => [
+) => ColumnDef<ListableWorkflowRun>[] = (onAdditionalMetadataClick) => [
   {
     id: 'select',
     header: ({ table }) => (
@@ -38,14 +39,33 @@ export const columns: (
     enableHiding: false,
   },
   {
-    accessorKey: 'id',
+    accessorKey: 'task_id',
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Run Id" />
+      <DataTableColumnHeader column={column} title="Id" />
+    ),
+    cell: ({ row }) => (
+      <div
+        className="cursor-pointer hover:underline min-w-fit whitespace-nowrap items-center flex-row flex gap-x-1"
+        onClick={() => {
+          navigator.clipboard.writeText(row.original.taskId.toString());
+        }}
+      >
+        {row.original.taskId}
+        <ClipboardDocumentIcon className="size-4 ml-1" />
+      </div>
+    ),
+    enableSorting: false,
+    enableHiding: true,
+  },
+  {
+    accessorKey: 'task_name',
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Task" />
     ),
     cell: ({ row }) => (
       <Link to={'/workflow-runs/' + row.original.metadata.id}>
         <div className="cursor-pointer hover:underline min-w-fit whitespace-nowrap">
-          {row.original.displayName || row.original.metadata.id}
+          {row.original.displayName}
         </div>
       </Link>
     ),
@@ -57,7 +77,7 @@ export const columns: (
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Status" />
     ),
-    cell: ({ row }) => <RunStatus status={row.original.status} />,
+    cell: ({ row }) => <V2RunStatus status={row.original.status} />,
     enableSorting: false,
     enableHiding: false,
   },
@@ -67,19 +87,19 @@ export const columns: (
       <DataTableColumnHeader column={column} title="Workflow" />
     ),
     cell: ({ row }) => {
-      const workflow = row.original.workflowVersion?.workflow;
-      const workflowName = workflow?.name;
-      const workflowId = workflow?.metadata.id;
+      const workflowId = row.original?.workflowId;
+      const workflowName = row.original.workflowName;
 
       return (
         <div className="min-w-fit whitespace-nowrap">
-          {(workflow && (
+          {(workflowId && workflowName && (
             <a href={`/workflows/${workflowId}`}>{workflowName}</a>
           )) ||
             'N/A'}
         </div>
       );
     },
+    show: false,
     enableSorting: false,
     enableHiding: true,
   },
@@ -88,10 +108,8 @@ export const columns: (
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Triggered by" />
     ),
-    cell: () => {
-      const eventKey = 'N/A'; // FIXME: add back event keys, crons, etc
-
-      return <div>{eventKey}</div>;
+    cell: ({ row }) => {
+      return <div>{row.original.triggeredBy}</div>;
     },
     enableSorting: false,
     enableHiding: true,

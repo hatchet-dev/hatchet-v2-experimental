@@ -1,5 +1,5 @@
 import { DataTable } from '@/components/molecules/data-table/data-table.tsx';
-import { columns } from './v2/workflow-runs-columns';
+import { columns } from './v2/task-runs-columns';
 import { useEffect, useMemo, useState } from 'react';
 import {
   ColumnFiltersState,
@@ -30,7 +30,7 @@ import {
   XCircleIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline';
-import { V2WorkflowRunsMetricsView } from './workflow-runs-metrics';
+import { V2WorkflowRunsMetricsView } from './task-runs-metrics';
 import queryClient from '@/query-client';
 import { useApiError } from '@/lib/hooks';
 import {
