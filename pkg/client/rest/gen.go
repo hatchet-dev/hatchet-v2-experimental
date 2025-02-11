@@ -1225,6 +1225,22 @@ type V2TaskStatus string
 
 // V2TaskSummary defines model for V2TaskSummary.
 type V2TaskSummary struct {
+	// Children The list of child tasks
+	Children []V2TaskSummarySingle `json:"children"`
+	Metadata APIResourceMeta       `json:"metadata"`
+	Parent   V2TaskSummarySingle   `json:"parent"`
+}
+
+// V2TaskSummaryList defines model for V2TaskSummaryList.
+type V2TaskSummaryList struct {
+	Pagination PaginationResponse `json:"pagination"`
+
+	// Rows The list of tasks
+	Rows []V2TaskSummary `json:"rows"`
+}
+
+// V2TaskSummarySingle defines model for V2TaskSummarySingle.
+type V2TaskSummarySingle struct {
 	// AdditionalMetadata Additional metadata for the task run.
 	AdditionalMetadata *map[string]interface{} `json:"additionalMetadata,omitempty"`
 
@@ -1251,14 +1267,6 @@ type V2TaskSummary struct {
 	// TenantId The ID of the tenant.
 	TenantId   openapi_types.UUID `json:"tenantId"`
 	WorkflowId openapi_types.UUID `json:"workflowId"`
-}
-
-// V2TaskSummaryList defines model for V2TaskSummaryList.
-type V2TaskSummaryList struct {
-	Pagination PaginationResponse `json:"pagination"`
-
-	// Rows The list of tasks
-	Rows []V2TaskSummary `json:"rows"`
 }
 
 // WebhookWorker defines model for WebhookWorker.

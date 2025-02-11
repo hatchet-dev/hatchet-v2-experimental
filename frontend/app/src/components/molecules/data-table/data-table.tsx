@@ -169,8 +169,6 @@ export function DataTable<TData extends IDGetter, TValue>({
   });
 
   const getTableRow = (row: Row<TData>) => {
-    const isSubrow = row.depth > 0;
-
     if (row.original.getRow) {
       return row.original.getRow();
     }

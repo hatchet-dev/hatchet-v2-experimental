@@ -659,9 +659,12 @@ SELECT
     r.readable_status,
     r.kind,
     r.workflow_id,
-    COALESCE(d.display_name, t.display_name) AS display_name,
+    COALESCE(t.display_name, d.display_name) AS display_name,
     COALESCE(d.input, t.input) AS input,
-    COALESCE(d.additional_metadata, t.additional_metadata) AS additional_metadata
+    COALESCE(d.additional_metadata, t.additional_metadata) AS additional_metadata,
+    r.inserted_at AS created_at,
+    r.inserted_at AS started_at,
+    r.inserted_at AS finished_at
 FROM v2_runs_olap r
 LEFT JOIN v2_dags_olap d ON (r.tenant_id, r.external_id, r.inserted_at) = (d.tenant_id, d.external_id, d.inserted_at)
 LEFT JOIN v2_tasks_olap t ON (r.tenant_id, r.external_id, r.inserted_at) = (t.tenant_id, t.external_id, t.inserted_at)
@@ -683,7 +686,10 @@ SELECT
     r.workflow_id,
     t.display_name,
     t.input,
-    t.additional_metadata
+    t.additional_metadata,
+    r.inserted_at AS created_at,
+    r.inserted_at AS started_at,
+    r.inserted_at AS finished_at
 FROM v2_runs_olap r
 LEFT JOIN v2_dags_olap d ON (r.tenant_id, r.external_id, r.inserted_at) = (d.tenant_id, d.external_id, d.inserted_at)
 LEFT JOIN v2_tasks_olap t ON (d.tenant_id, d.id) = (t.tenant_id, t.dag_id)

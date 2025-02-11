@@ -493,7 +493,7 @@ export function WorkflowRunsTable({
       workflowVersionId: 'first version',
       triggeredBy: 'manual',
       workflowName: workflowKeys?.rows?.find(
-        (r) => r.metadata.id == row.workflowId,
+        (r) => r.metadata.id == row.parent.workflowId,
       )?.name,
     }),
   );

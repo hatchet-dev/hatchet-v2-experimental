@@ -14,7 +14,7 @@ import api, {
   queries,
   ReplayWorkflowRunsRequest,
   V2TaskStatus,
-  V2TaskSummary,
+  V2TaskSummarySingle,
 } from '@/lib/api';
 import { TenantContextType } from '@/lib/outlet';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
@@ -73,7 +73,7 @@ export interface TaskRunsTableProps {
 }
 
 // TODO: Clean this up
-export type ListableWorkflowRun = V2TaskSummary & {
+export type ListableWorkflowRun = V2TaskSummarySingle & {
   workflowName: string | undefined;
   triggeredBy: string;
   workflowVersionId: string;
@@ -489,14 +489,24 @@ export function TaskRunsTable({
 
   const data: ListableWorkflowRun[] = (listTasksQuery.data?.rows || []).map(
     (row) => ({
-      ...row,
+      ...row.parent,
       workflowVersionId: 'first version',
       triggeredBy: 'manual',
       workflowName: workflowKeys?.rows?.find(
-        (r) => r.metadata.id == row.workflowId,
+        (r) => r.metadata.id == row.parent.workflowId,
       )?.name,
+      subRows: row.children.map((child) => ({
+        ...child,
+        workflowVersionId: 'first version',
+        triggeredBy: 'manual',
+        workflowName: workflowKeys?.rows?.find(
+          (r2) => r2.metadata.id == child.workflowId,
+        )?.name,
+      })),
     }),
   );
+
+  console.log(data);
 
   return (
     <>
@@ -648,11 +658,7 @@ export function TaskRunsTable({
         columns={columns(onAdditionalMetadataClick)}
         columnVisibility={columnVisibility}
         setColumnVisibility={setColumnVisibility}
-        // TODO: This is a hack - fix this type
-        data={data.map((row, ix) => ({
-          ...row,
-          subRows: ix < 2 ? data : [],
-        }))}
+        data={data}
         filters={filters}
         actions={actions}
         sorting={sorting}
