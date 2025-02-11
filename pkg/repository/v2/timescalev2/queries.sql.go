@@ -791,7 +791,7 @@ WITH locked_events AS (
     SELECT
         d.id,
         d.inserted_at,
-        d.readable_status, 
+        d.readable_status,
         d.tenant_id
     FROM
         v2_dags_olap d

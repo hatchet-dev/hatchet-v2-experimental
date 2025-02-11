@@ -59,7 +59,7 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_tables WHERE tablename = newTableName) THEN
         EXECUTE format('CREATE TABLE %s (LIKE %s INCLUDING INDEXES) PARTITION BY LIST (readable_status)', newTableName, targetTableName);
     END IF;
-    
+
     PERFORM create_v2_partition_with_status(newTableName, 'QUEUED');
     PERFORM create_v2_partition_with_status(newTableName, 'RUNNING');
     PERFORM create_v2_partition_with_status(newTableName, 'COMPLETED');
@@ -138,7 +138,7 @@ $$;
 CREATE TABLE v2_tasks_olap (
     tenant_id UUID NOT NULL,
     id BIGINT NOT NULL,
-    inserted_at TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    inserted_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     external_id UUID NOT NULL DEFAULT gen_random_uuid(),
     queue TEXT NOT NULL,
     action_id TEXT NOT NULL,
@@ -211,7 +211,7 @@ CREATE TABLE v2_lookup_table (
     external_id UUID NOT NULL,
     task_id BIGINT,
     dag_id BIGINT,
-    inserted_at TIMESTAMPTZ(3) NOT NULL,
+    inserted_at TIMESTAMPTZ NOT NULL,
 
     PRIMARY KEY (external_id)
 );
@@ -285,15 +285,15 @@ CREATE TYPE v2_event_type_olap AS ENUM (
     'RATE_LIMIT_ERROR'
 );
 
--- this is a hash-partitioned table on the task_id, so that we can process batches of events in parallel 
+-- this is a hash-partitioned table on the task_id, so that we can process batches of events in parallel
 -- without needing to place conflicting locks on tasks.
 CREATE TABLE v2_task_events_olap_tmp (
     tenant_id UUID NOT NULL,
-    requeue_after TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    requeue_after TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     requeue_retries INT NOT NULL DEFAULT 0,
     id bigint GENERATED ALWAYS AS IDENTITY,
     task_id BIGINT NOT NULL,
-    task_inserted_at TIMESTAMPTZ(3) NOT NULL,
+    task_inserted_at TIMESTAMPTZ NOT NULL,
     event_type v2_event_type_olap NOT NULL,
     readable_status v2_readable_status_olap NOT NULL,
     retry_count INT NOT NULL DEFAULT 0,
@@ -329,12 +329,12 @@ $$;
 CREATE TABLE v2_task_events_olap (
     tenant_id UUID NOT NULL,
     id bigint GENERATED ALWAYS AS IDENTITY,
-    inserted_at TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    inserted_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     task_id BIGINT NOT NULL,
-    task_inserted_at TIMESTAMPTZ(3) NOT NULL,
+    task_inserted_at TIMESTAMPTZ NOT NULL,
     event_type v2_event_type_olap NOT NULL,
     workflow_id UUID NOT NULL,
-    event_timestamp TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    event_timestamp TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     readable_status v2_readable_status_olap NOT NULL,
     retry_count INT NOT NULL DEFAULT 0,
     error_message TEXT,
@@ -371,11 +371,11 @@ SELECT add_continuous_aggregate_policy('v2_cagg_task_events_minute',
   end_offset => INTERVAL '1 minute',
   schedule_interval => INTERVAL '15 seconds');
 
--- this is a hash-partitioned table on the dag_id, so that we can process batches of events in parallel 
+-- this is a hash-partitioned table on the dag_id, so that we can process batches of events in parallel
 -- without needing to place conflicting locks on dags.
 CREATE TABLE v2_task_status_updates_tmp (
     tenant_id UUID NOT NULL,
-    requeue_after TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    requeue_after TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     requeue_retries INT NOT NULL DEFAULT 0,
     id bigint GENERATED ALWAYS AS IDENTITY,
     dag_id BIGINT NOT NULL,
@@ -414,18 +414,18 @@ RETURNS TRIGGER AS
 $$
 BEGIN
     INSERT INTO v2_runs_olap (
-        tenant_id, 
-        id, 
-        inserted_at, 
+        tenant_id,
+        id,
+        inserted_at,
         external_id,
         readable_status,
         kind,
         workflow_id
     )
-    SELECT 
+    SELECT
         tenant_id,
-        id, 
-        inserted_at, 
+        id,
+        inserted_at,
         external_id,
         readable_status,
         'TASK',
@@ -439,10 +439,10 @@ BEGIN
         task_id,
         inserted_at
     )
-    SELECT 
-        tenant_id, 
-        external_id, 
-        id, 
+    SELECT
+        tenant_id,
+        external_id,
+        id,
         inserted_at
     FROM new_rows;
 
@@ -453,14 +453,14 @@ BEGIN
         task_id,
         task_inserted_at
     )
-    SELECT 
-        dag_id, 
-        dag_inserted_at, 
-        id, 
+    SELECT
+        dag_id,
+        dag_inserted_at,
+        id,
         inserted_at
     FROM new_rows
     WHERE dag_id IS NOT NULL;
-    
+
     RETURN NULL;
 END;
 $$
@@ -476,12 +476,12 @@ CREATE OR REPLACE FUNCTION v2_tasks_olap_status_update_function()
 RETURNS TRIGGER AS
 $$
 BEGIN
-    UPDATE 
+    UPDATE
         v2_runs_olap r
-    SET 
+    SET
         readable_status = n.readable_status
     FROM new_rows n
-    WHERE 
+    WHERE
         r.id = n.id
         AND r.inserted_at = n.inserted_at
         AND r.kind = 'TASK';
@@ -492,9 +492,9 @@ BEGIN
         dag_id,
         dag_inserted_at
     )
-    SELECT 
-        tenant_id, 
-        dag_id, 
+    SELECT
+        tenant_id,
+        dag_id,
         dag_inserted_at
     FROM new_rows
     WHERE dag_id IS NOT NULL;
@@ -515,18 +515,18 @@ RETURNS TRIGGER AS
 $$
 BEGIN
     INSERT INTO v2_runs_olap (
-        tenant_id, 
-        id, 
-        inserted_at, 
+        tenant_id,
+        id,
+        inserted_at,
         external_id,
         readable_status,
         kind,
         workflow_id
     )
-    SELECT 
+    SELECT
         tenant_id,
-        id, 
-        inserted_at, 
+        id,
+        inserted_at,
         external_id,
         readable_status,
         'DAG',
@@ -539,13 +539,13 @@ BEGIN
         dag_id,
         inserted_at
     )
-    SELECT 
-        tenant_id, 
-        external_id, 
-        id, 
+    SELECT
+        tenant_id,
+        external_id,
+        id,
         inserted_at
     FROM new_rows;
-    
+
     RETURN NULL;
 END;
 $$
@@ -561,12 +561,12 @@ CREATE OR REPLACE FUNCTION v2_dags_olap_status_update_function()
 RETURNS TRIGGER AS
 $$
 BEGIN
-    UPDATE 
+    UPDATE
         v2_runs_olap r
-    SET 
+    SET
         readable_status = n.readable_status
     FROM new_rows n
-    WHERE 
+    WHERE
         r.id = n.id
         AND r.inserted_at = n.inserted_at
         AND r.kind = 'DAG';
@@ -588,21 +588,21 @@ $$
 BEGIN
     INSERT INTO v2_statuses_olap (
         external_id,
-        inserted_at, 
-        tenant_id, 
+        inserted_at,
+        tenant_id,
         workflow_id,
         kind,
         readable_status
     )
-    SELECT 
+    SELECT
         external_id,
-        inserted_at, 
-        tenant_id, 
+        inserted_at,
+        tenant_id,
         workflow_id,
         kind,
         readable_status
     FROM new_rows;
-    
+
     RETURN NULL;
 END;
 $$
@@ -618,12 +618,12 @@ CREATE OR REPLACE FUNCTION v2_runs_olap_status_update_function()
 RETURNS TRIGGER AS
 $$
 BEGIN
-    UPDATE 
+    UPDATE
         v2_statuses_olap s
-    SET 
+    SET
         readable_status = n.readable_status
     FROM new_rows n
-    WHERE 
+    WHERE
         s.external_id = n.external_id
         AND s.inserted_at = n.inserted_at;
 
