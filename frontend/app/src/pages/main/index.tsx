@@ -1,9 +1,9 @@
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import {
-  AdjustmentsHorizontalIcon,
   CalendarDaysIcon,
   CpuChipIcon,
+  PlayIcon,
   QueueListIcon,
   ScaleIcon,
   ServerStackIcon,
@@ -104,23 +104,21 @@ function Sidebar({ className, memberships, currTenant }: SidebarProps) {
       <div className="flex flex-col justify-between items-start space-y-4 px-4 py-4 h-full pb-16 md:pb-4">
         <div className="grow w-full">
           <div className="py-2">
-            <h2 className="mb-2 text-lg font-semibold tracking-tight">
-              Activity
-            </h2>
+            <h2 className="mb-2 text-lg font-semibold tracking-tight">Runs</h2>
             <div className="space-y-1">
               <SidebarButtonPrimary
                 key={1}
                 onNavLinkClick={onNavLinkClick}
-                to="/workflow-runs"
-                name="Workflow Runs"
-                icon={<AdjustmentsHorizontalIcon className="mr-2 h-4 w-4" />}
+                to="/tasks"
+                name="Tasks"
+                icon={<PlayIcon className="mr-2 h-4 w-4" />}
               />
               <SidebarButtonPrimary
                 key={2}
                 onNavLinkClick={onNavLinkClick}
-                to="/events"
-                name="Events"
-                icon={<QueueListIcon className="mr-2 h-4 w-4" />}
+                to="/workflow-runs"
+                name="Workflows"
+                icon={<Squares2X2Icon className="mr-2 w-4" />}
               />
             </div>
           </div>
@@ -130,18 +128,25 @@ function Sidebar({ className, memberships, currTenant }: SidebarProps) {
             </h2>
             <div className="space-y-1">
               <SidebarButtonPrimary
-                key={4}
+                key={3}
                 onNavLinkClick={onNavLinkClick}
                 to="/scheduled"
                 name="Scheduled Runs"
                 icon={<CalendarDaysIcon className="mr-2 h-4 w-4" />}
               />
               <SidebarButtonPrimary
-                key={5}
+                key={4}
                 onNavLinkClick={onNavLinkClick}
                 to="/cron-jobs"
                 name="Cron Jobs"
                 icon={<ClockIcon className="mr-2 h-4 w-4" />}
+              />
+              <SidebarButtonPrimary
+                key={5}
+                onNavLinkClick={onNavLinkClick}
+                to="/events"
+                name="Events"
+                icon={<QueueListIcon className="mr-2 h-4 w-4" />}
               />
             </div>
           </div>
