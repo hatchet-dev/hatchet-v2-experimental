@@ -2,6 +2,7 @@ import * as React from 'react';
 import {
   ColumnDef,
   ColumnFiltersState,
+  ExpandedState,
   OnChangeFn,
   PaginationState,
   Row,
@@ -31,11 +32,13 @@ import { DataTablePagination } from './data-table-pagination';
 import { DataTableToolbar, ToolbarFilters } from './data-table-toolbar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import { Updater } from '@tanstack/react-query';
 
 export interface IDGetter {
   metadata: {
     id: string;
   };
+  subRows?: any[];
   getRow?: () => JSX.Element;
   onClick?: () => void;
   isExpandable?: boolean;
@@ -113,12 +116,17 @@ export function DataTable<TData extends IDGetter, TValue>({
   manualSorting = true,
   manualFiltering = true,
 }: DataTableProps<TData, TValue> & ExtraDataTableProps) {
+  const [expanded, setExpanded] = React.useState<ExpandedState>({});
+
+  console.log(expanded);
   const loadingNoData = isLoading && !data.length;
 
   const tableData = React.useMemo(
     () => (loadingNoData ? Array(10).fill({ metadata: {} }) : data),
     [loadingNoData, data],
   );
+
+  console.log(data);
 
   const tableColumns = React.useMemo(
     () =>
@@ -140,6 +148,7 @@ export function DataTable<TData extends IDGetter, TValue>({
       rowSelection: rowSelection || {},
       columnFilters,
       pagination,
+      expanded,
     },
     pageCount,
     enableRowSelection: !!rowSelection,
@@ -154,6 +163,9 @@ export function DataTable<TData extends IDGetter, TValue>({
     getSortedRowModel: getSortedRowModel(),
     getFacetedRowModel: getFacetedRowModel(),
     getFacetedUniqueValues: getFacetedUniqueValues(),
+    getSubRows: (row) => row.subRows || [],
+    onExpandedChange: setExpanded,
+    getRowCanExpand: (row) => (row.original.subRows || []).length > 0,
     manualSorting,
     manualFiltering,
     manualPagination: true,
@@ -161,6 +173,8 @@ export function DataTable<TData extends IDGetter, TValue>({
   });
 
   const getTableRow = (row: Row<TData>) => {
+    const isSubrow = row.parentId !== undefined;
+
     if (row.original.getRow) {
       return row.original.getRow();
     }
@@ -171,6 +185,7 @@ export function DataTable<TData extends IDGetter, TValue>({
         data-state={row.getIsSelected() && 'selected'}
         className={cn(
           row.original.isExpandable && 'cursor-pointer hover:bg-muted',
+          isSubrow && 'm-12 p-12',
         )}
         onClick={row.original.onClick}
       >
@@ -211,7 +226,13 @@ export function DataTable<TData extends IDGetter, TValue>({
             </TableCell>
           </TableRow>
         ) : table.getRowModel().rows?.length ? (
-          table.getRowModel().rows.map((row) => getTableRow(row))
+          table.getRowModel().rows.map((row) => (
+            <React.Fragment key={row.id}>
+              {getTableRow(row)}
+              {row.getIsExpanded() &&
+                row.subRows.map((subRow) => getTableRow(subRow))}
+            </React.Fragment>
+          ))
         ) : (
           <TableRow>
             <TableCell colSpan={columns.length} className="h-24 text-center">

@@ -649,7 +649,10 @@ export function TaskRunsTable({
         columnVisibility={columnVisibility}
         setColumnVisibility={setColumnVisibility}
         // TODO: This is a hack - fix this type
-        data={data as any}
+        data={data.map((row) => ({
+          ...row,
+          subRows: data,
+        }))}
         filters={filters}
         actions={actions}
         sorting={sorting}

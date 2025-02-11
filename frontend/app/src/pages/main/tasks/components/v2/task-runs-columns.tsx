@@ -10,6 +10,7 @@ import RelativeDate from '@/components/molecules/relative-date';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ListableWorkflowRun } from '../task-runs-table';
 import { ClipboardDocumentIcon } from '@heroicons/react/24/outline';
+import { Button } from '@/components/ui/button';
 
 export const columns: (
   onAdditionalMetadataClick?: (click: AdditionalMetadataClick) => void,
@@ -28,12 +29,55 @@ export const columns: (
       />
     ),
     cell: ({ row }) => (
-      <Checkbox
-        checked={row.getIsSelected()}
-        onCheckedChange={(value) => row.toggleSelected(!!value)}
-        aria-label="Select row"
-        className="translate-y-[2px]"
-      />
+      <div
+        style={{
+          // Since rows are flattened by default,
+          // we can use the row.depth property
+          // and paddingLeft to visually indicate the depth
+          // of the row
+          paddingLeft: `${row.depth * 2}rem`,
+        }}
+      >
+        <Checkbox
+          checked={row.getIsSelected()}
+          onCheckedChange={(value) => row.toggleSelected(!!value)}
+          aria-label="Select row"
+          className="translate-y-[2px]"
+        />
+        {row.getCanExpand() ? (
+          <Button
+            {...{
+              onClick: () => {
+                console.log(
+                  'row.getToggleExpandedHandler()',
+                  row.getToggleExpandedHandler(),
+                  row.getCanExpand(),
+                );
+                return row.toggleExpanded();
+              },
+              style: { cursor: 'pointer' },
+            }}
+          >
+            {row.getIsExpanded() ? '👇' : '👉'}
+          </Button>
+        ) : (
+          <Button
+            {...{
+              onClick: () => {
+                console.log(
+                  'row.getToggleExpandedHandler()',
+                  row.getToggleExpandedHandler(),
+                  row.getCanExpand(),
+                );
+                return row.toggleExpanded();
+              },
+              style: { cursor: 'pointer' },
+            }}
+          >
+            {row.getIsExpanded() ? '👇' : '👉'}
+          </Button>
+        )}
+      </div>
     ),
     enableSorting: false,
     enableHiding: false,
