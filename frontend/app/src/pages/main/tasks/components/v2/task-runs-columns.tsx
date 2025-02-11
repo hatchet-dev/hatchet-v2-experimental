@@ -52,26 +52,18 @@ export const columns: (
           aria-label="Select row"
         />
         {row.getCanExpand() && (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  onClick={() => row.toggleExpanded()}
-                  variant="ghost"
-                  className="cursor-pointer px-2"
-                >
-                  {row.getIsExpanded() ? (
-                    <ArrowDownIcon className="size-4" />
-                  ) : (
-                    <ArrowRightIcon className="size-4" />
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Show task</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <Button
+            onClick={() => row.toggleExpanded()}
+            variant="ghost"
+            className="cursor-pointer px-2"
+            hoverText="Show task"
+          >
+            {row.getIsExpanded() ? (
+              <ArrowDownIcon className="size-4" />
+            ) : (
+              <ArrowRightIcon className="size-4" />
+            )}
+          </Button>
         )}
       </div>
     ),

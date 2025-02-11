@@ -105,7 +105,7 @@ function Sidebar({ className, memberships, currTenant }: SidebarProps) {
         <div className="grow w-full">
           <div className="py-2">
             <h2 className="mb-2 text-lg font-semibold tracking-tight">Runs</h2>
-            <div className="space-y-1">
+            <div className="flex flex-col gap-y-1">
               <SidebarButtonPrimary
                 key={1}
                 onNavLinkClick={onNavLinkClick}

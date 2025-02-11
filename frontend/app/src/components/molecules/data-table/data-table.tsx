@@ -32,7 +32,6 @@ import { DataTablePagination } from './data-table-pagination';
 import { DataTableToolbar, ToolbarFilters } from './data-table-toolbar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
-import { Updater } from '@tanstack/react-query';
 
 export interface IDGetter {
   metadata: {
