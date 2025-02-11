@@ -170,7 +170,7 @@ export function DataTable<TData extends IDGetter, TValue>({
   });
 
   const getTableRow = (row: Row<TData>) => {
-    const isSubrow = row.parentId !== undefined;
+    const isSubrow = row.depth > 0;
 
     if (row.original.getRow) {
       return row.original.getRow();
@@ -182,7 +182,6 @@ export function DataTable<TData extends IDGetter, TValue>({
         data-state={row.getIsSelected() && 'selected'}
         className={cn(
           row.original.isExpandable && 'cursor-pointer hover:bg-muted',
-          isSubrow && 'm-12 p-12',
         )}
         onClick={row.original.onClick}
       >

@@ -649,9 +649,9 @@ export function TaskRunsTable({
         columnVisibility={columnVisibility}
         setColumnVisibility={setColumnVisibility}
         // TODO: This is a hack - fix this type
-        data={data.map((row) => ({
+        data={data.map((row, ix) => ({
           ...row,
-          subRows: data,
+          subRows: ix < 2 ? data : [],
         }))}
         filters={filters}
         actions={actions}

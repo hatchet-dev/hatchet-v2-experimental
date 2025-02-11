@@ -43,7 +43,7 @@ export const columns: (
       <div
         className={cn(
           `pl-${row.depth * 4}`,
-          'flex flex-row items-center justify-center gap-x-2',
+          'flex flex-row items-center justify-start gap-x-2',
         )}
       >
         <Checkbox
@@ -68,7 +68,7 @@ export const columns: (
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                <p>Show task runs</p>
+                <p>Show task</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
