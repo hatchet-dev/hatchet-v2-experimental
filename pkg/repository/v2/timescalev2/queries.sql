@@ -689,6 +689,6 @@ LEFT JOIN v2_dags_olap d ON (r.tenant_id, r.external_id, r.inserted_at) = (d.ten
 LEFT JOIN v2_tasks_olap t ON (d.tenant_id, d.id) = (t.tenant_id, t.dag_id)
 WHERE
     kind = 'DAG'
-    AND (sqlc.narg('dagIds')::uuid[] IS NULL OR d.id = ANY(sqlc.narg('dagIds')))
+    AND (sqlc.narg('dagIds')::bigint[] IS NULL OR d.id = ANY(sqlc.narg('dagIds')::bigint[]))
     -- AND other filters here
 ;

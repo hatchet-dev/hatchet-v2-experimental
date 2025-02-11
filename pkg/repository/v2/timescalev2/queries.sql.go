@@ -223,7 +223,7 @@ LEFT JOIN v2_dags_olap d ON (r.tenant_id, r.external_id, r.inserted_at) = (d.ten
 LEFT JOIN v2_tasks_olap t ON (d.tenant_id, d.id) = (t.tenant_id, t.dag_id)
 WHERE
     kind = 'DAG'
-    AND ($1::uuid[] IS NULL OR d.id = ANY($1))
+    AND ($1::bigint[] IS NULL OR d.id = ANY($1::bigint[]))
     -- AND other filters here
 `
 
@@ -242,7 +242,7 @@ type ListDAGChildrenRow struct {
 	AdditionalMetadata []byte               `json:"additional_metadata"`
 }
 
-func (q *Queries) ListDAGChildren(ctx context.Context, db DBTX, dagids []pgtype.UUID) ([]*ListDAGChildrenRow, error) {
+func (q *Queries) ListDAGChildren(ctx context.Context, db DBTX, dagids []int64) ([]*ListDAGChildrenRow, error) {
 	rows, err := db.Query(ctx, listDAGChildren, dagids)
 	if err != nil {
 		return nil, err

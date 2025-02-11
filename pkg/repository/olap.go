@@ -642,3 +642,46 @@ func durationToPgInterval(d time.Duration) pgtype.Interval {
 		Valid:        true,
 	}
 }
+
+func uniq[T comparable](arr []T) []T {
+	const t = true
+
+	seen := make(map[T]bool)
+	uniq := make([]T, 0)
+
+	for _, item := range arr {
+		if _, ok := seen[item]; !ok {
+			seen[item] = t
+			uniq = append(uniq, item)
+		}
+	}
+
+	return uniq
+}
+
+func (r *olapEventRepository) ReadWorkflowRuns(ctx context.Context, tenantId string, insertedAfter *time.Time, limit, offset int64,
+	statuses []gen.V2TaskStatus) ([]*timescalev2.PopulateTaskRunDataRow, int, error) {
+
+	rows, err := r.queries.ListWorkflowRuns(ctx, r.pool)
+
+	if err != nil {
+		return nil, 0, err
+	}
+
+	dagIds := make([]int64, 0)
+
+	for _, row := range rows {
+		dagIds = append(dagIds, row.DagID.Int64)
+	}
+
+	dagIds = uniq(dagIds)
+
+	children, err := r.queries.ListDAGChildren(ctx, r.pool, dagIds)
+
+
+	if err != nil {
+		return nil, 0, err
+	}
+	
+
+}
