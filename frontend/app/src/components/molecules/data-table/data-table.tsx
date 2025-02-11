@@ -118,15 +118,12 @@ export function DataTable<TData extends IDGetter, TValue>({
 }: DataTableProps<TData, TValue> & ExtraDataTableProps) {
   const [expanded, setExpanded] = React.useState<ExpandedState>({});
 
-  console.log(expanded);
   const loadingNoData = isLoading && !data.length;
 
   const tableData = React.useMemo(
     () => (loadingNoData ? Array(10).fill({ metadata: {} }) : data),
     [loadingNoData, data],
   );
-
-  console.log(data);
 
   const tableColumns = React.useMemo(
     () =>

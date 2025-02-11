@@ -9,8 +9,19 @@ import {
 import RelativeDate from '@/components/molecules/relative-date';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ListableWorkflowRun } from '../task-runs-table';
-import { ClipboardDocumentIcon } from '@heroicons/react/24/outline';
+import {
+  ArrowDownIcon,
+  ArrowRightIcon,
+  ClipboardDocumentIcon,
+} from '@heroicons/react/24/outline';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 export const columns: (
   onAdditionalMetadataClick?: (click: AdditionalMetadataClick) => void,
@@ -30,52 +41,37 @@ export const columns: (
     ),
     cell: ({ row }) => (
       <div
-        style={{
-          // Since rows are flattened by default,
-          // we can use the row.depth property
-          // and paddingLeft to visually indicate the depth
-          // of the row
-          paddingLeft: `${row.depth * 2}rem`,
-        }}
+        className={cn(
+          `pl-${row.depth * 4}`,
+          'flex flex-row items-center justify-center gap-x-2',
+        )}
       >
         <Checkbox
           checked={row.getIsSelected()}
           onCheckedChange={(value) => row.toggleSelected(!!value)}
           aria-label="Select row"
-          className="translate-y-[2px]"
         />
-        {row.getCanExpand() ? (
-          <Button
-            {...{
-              onClick: () => {
-                console.log(
-                  'row.getToggleExpandedHandler()',
-                  row.getToggleExpandedHandler(),
-                  row.getCanExpand(),
-                );
-                return row.toggleExpanded();
-              },
-              style: { cursor: 'pointer' },
-            }}
-          >
-            {row.getIsExpanded() ? '👇' : '👉'}
-          </Button>
-        ) : (
-          <Button
-            {...{
-              onClick: () => {
-                console.log(
-                  'row.getToggleExpandedHandler()',
-                  row.getToggleExpandedHandler(),
-                  row.getCanExpand(),
-                );
-                return row.toggleExpanded();
-              },
-              style: { cursor: 'pointer' },
-            }}
-          >
-            {row.getIsExpanded() ? '👇' : '👉'}
-          </Button>
+        {row.getCanExpand() && (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={() => row.toggleExpanded()}
+                  variant="ghost"
+                  className="cursor-pointer px-2"
+                >
+                  {row.getIsExpanded() ? (
+                    <ArrowDownIcon className="size-4" />
+                  ) : (
+                    <ArrowRightIcon className="size-4" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Show task runs</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         )}
       </div>
     ),
