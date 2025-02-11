@@ -204,6 +204,77 @@ func (q *Queries) GetTenantStatusMetrics(ctx context.Context, db DBTX, arg GetTe
 	return &i, err
 }
 
+const listDAGChildren = `-- name: ListDAGChildren :many
+SELECT
+    r.id AS run_id,
+    r.tenant_id,
+    r.inserted_at,
+    r.external_id,
+    d.id AS dag_id,
+    t.id AS task_id,
+    r.readable_status,
+    r.kind,
+    r.workflow_id,
+    t.display_name,
+    t.input,
+    t.additional_metadata
+FROM v2_runs_olap r
+LEFT JOIN v2_dags_olap d ON (r.tenant_id, r.external_id, r.inserted_at) = (d.tenant_id, d.external_id, d.inserted_at)
+LEFT JOIN v2_tasks_olap t ON (d.tenant_id, d.id) = (t.tenant_id, t.dag_id)
+WHERE
+    kind = 'DAG'
+    AND ($1::uuid[] IS NULL OR d.id = ANY($1))
+    -- AND other filters here
+`
+
+type ListDAGChildrenRow struct {
+	RunID              int64                `json:"run_id"`
+	TenantID           pgtype.UUID          `json:"tenant_id"`
+	InsertedAt         pgtype.Timestamptz   `json:"inserted_at"`
+	ExternalID         pgtype.UUID          `json:"external_id"`
+	DagID              pgtype.Int8          `json:"dag_id"`
+	TaskID             pgtype.Int8          `json:"task_id"`
+	ReadableStatus     V2ReadableStatusOlap `json:"readable_status"`
+	Kind               V2RunKind            `json:"kind"`
+	WorkflowID         pgtype.UUID          `json:"workflow_id"`
+	DisplayName        pgtype.Text          `json:"display_name"`
+	Input              []byte               `json:"input"`
+	AdditionalMetadata []byte               `json:"additional_metadata"`
+}
+
+func (q *Queries) ListDAGChildren(ctx context.Context, db DBTX, dagids []pgtype.UUID) ([]*ListDAGChildrenRow, error) {
+	rows, err := db.Query(ctx, listDAGChildren, dagids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []*ListDAGChildrenRow
+	for rows.Next() {
+		var i ListDAGChildrenRow
+		if err := rows.Scan(
+			&i.RunID,
+			&i.TenantID,
+			&i.InsertedAt,
+			&i.ExternalID,
+			&i.DagID,
+			&i.TaskID,
+			&i.ReadableStatus,
+			&i.Kind,
+			&i.WorkflowID,
+			&i.DisplayName,
+			&i.Input,
+			&i.AdditionalMetadata,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, &i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listOLAPTaskPartitionsBeforeDate = `-- name: ListOLAPTaskPartitionsBeforeDate :many
 SELECT
     p::text AS partition_name
@@ -410,6 +481,76 @@ func (q *Queries) ListTasks(ctx context.Context, db DBTX, arg ListTasksParams) (
 			&i.LatestWorkerID,
 			&i.DagID,
 			&i.DagInsertedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, &i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWorkflowRuns = `-- name: ListWorkflowRuns :many
+SELECT
+    r.id AS run_id,
+    r.tenant_id,
+    r.inserted_at,
+    r.external_id,
+    d.id AS dag_id,
+    t.id AS task_id,
+    r.readable_status,
+    r.kind,
+    r.workflow_id,
+    COALESCE(d.display_name, t.display_name) AS display_name,
+    COALESCE(d.input, t.input) AS input,
+    COALESCE(d.additional_metadata, t.additional_metadata) AS additional_metadata
+FROM v2_runs_olap r
+LEFT JOIN v2_dags_olap d ON (r.tenant_id, r.external_id, r.inserted_at) = (d.tenant_id, d.external_id, d.inserted_at)
+LEFT JOIN v2_tasks_olap t ON (r.tenant_id, r.external_id, r.inserted_at) = (t.tenant_id, t.external_id, t.inserted_at)
+WHERE
+    (kind = 'TASK' AND d.id IS NULL) OR kind = 'DAG'
+    -- Other filters here
+`
+
+type ListWorkflowRunsRow struct {
+	RunID              int64                `json:"run_id"`
+	TenantID           pgtype.UUID          `json:"tenant_id"`
+	InsertedAt         pgtype.Timestamptz   `json:"inserted_at"`
+	ExternalID         pgtype.UUID          `json:"external_id"`
+	DagID              pgtype.Int8          `json:"dag_id"`
+	TaskID             pgtype.Int8          `json:"task_id"`
+	ReadableStatus     V2ReadableStatusOlap `json:"readable_status"`
+	Kind               V2RunKind            `json:"kind"`
+	WorkflowID         pgtype.UUID          `json:"workflow_id"`
+	DisplayName        string               `json:"display_name"`
+	Input              []byte               `json:"input"`
+	AdditionalMetadata []byte               `json:"additional_metadata"`
+}
+
+func (q *Queries) ListWorkflowRuns(ctx context.Context, db DBTX) ([]*ListWorkflowRunsRow, error) {
+	rows, err := db.Query(ctx, listWorkflowRuns)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []*ListWorkflowRunsRow
+	for rows.Next() {
+		var i ListWorkflowRunsRow
+		if err := rows.Scan(
+			&i.RunID,
+			&i.TenantID,
+			&i.InsertedAt,
+			&i.ExternalID,
+			&i.DagID,
+			&i.TaskID,
+			&i.ReadableStatus,
+			&i.Kind,
+			&i.WorkflowID,
+			&i.DisplayName,
+			&i.Input,
+			&i.AdditionalMetadata,
 		); err != nil {
 			return nil, err
 		}

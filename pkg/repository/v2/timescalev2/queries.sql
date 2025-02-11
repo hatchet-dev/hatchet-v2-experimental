@@ -646,3 +646,49 @@ SELECT
     COUNT(*)
 FROM
     locked_events;
+
+
+-- name: ListWorkflowRuns :many
+SELECT
+    r.id AS run_id,
+    r.tenant_id,
+    r.inserted_at,
+    r.external_id,
+    d.id AS dag_id,
+    t.id AS task_id,
+    r.readable_status,
+    r.kind,
+    r.workflow_id,
+    COALESCE(d.display_name, t.display_name) AS display_name,
+    COALESCE(d.input, t.input) AS input,
+    COALESCE(d.additional_metadata, t.additional_metadata) AS additional_metadata
+FROM v2_runs_olap r
+LEFT JOIN v2_dags_olap d ON (r.tenant_id, r.external_id, r.inserted_at) = (d.tenant_id, d.external_id, d.inserted_at)
+LEFT JOIN v2_tasks_olap t ON (r.tenant_id, r.external_id, r.inserted_at) = (t.tenant_id, t.external_id, t.inserted_at)
+WHERE
+    (kind = 'TASK' AND d.id IS NULL) OR kind = 'DAG'
+    -- Other filters here
+;
+
+-- name: ListDAGChildren :many
+SELECT
+    r.id AS run_id,
+    r.tenant_id,
+    r.inserted_at,
+    r.external_id,
+    d.id AS dag_id,
+    t.id AS task_id,
+    r.readable_status,
+    r.kind,
+    r.workflow_id,
+    t.display_name,
+    t.input,
+    t.additional_metadata
+FROM v2_runs_olap r
+LEFT JOIN v2_dags_olap d ON (r.tenant_id, r.external_id, r.inserted_at) = (d.tenant_id, d.external_id, d.inserted_at)
+LEFT JOIN v2_tasks_olap t ON (d.tenant_id, d.id) = (t.tenant_id, t.dag_id)
+WHERE
+    kind = 'DAG'
+    AND (sqlc.narg('dagIds')::uuid[] IS NULL OR d.id = ANY(sqlc.narg('dagIds')))
+    -- AND other filters here
+;
