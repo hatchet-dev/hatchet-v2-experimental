@@ -1250,9 +1250,15 @@ type V2TaskSummarySingle struct {
 	// Duration The duration of the task run, in milliseconds.
 	Duration *int `json:"duration,omitempty"`
 
+	// ErrorMessage The error message of the task run (for the latest run)
+	ErrorMessage *string `json:"errorMessage,omitempty"`
+
 	// FinishedAt The timestamp the task run finished.
 	FinishedAt *time.Time      `json:"finishedAt,omitempty"`
 	Metadata   APIResourceMeta `json:"metadata"`
+
+	// Output The output of the task run (for the latest run)
+	Output map[string]interface{} `json:"output"`
 
 	// StartedAt The timestamp the task run started.
 	StartedAt *time.Time   `json:"startedAt,omitempty"`

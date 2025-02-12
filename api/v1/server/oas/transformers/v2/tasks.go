@@ -41,6 +41,8 @@ func WorkflowRunRowToTaskSummaryUnit(task *timescalev2.ListWorkflowRunsRow) gen.
 		durationPtr = &duration
 	}
 
+	output := jsonToMap(task.Output)
+
 	return gen.V2TaskSummarySingle{
 		Metadata: gen.APIResourceMeta{
 			Id:        sqlchelpers.UUIDToStr(task.ExternalID),
@@ -57,6 +59,8 @@ func WorkflowRunRowToTaskSummaryUnit(task *timescalev2.ListWorkflowRunsRow) gen.
 		Status:             gen.V2TaskStatus(task.ReadableStatus),
 		TenantId:           uuid.MustParse(sqlchelpers.UUIDToStr(task.TenantID)),
 		WorkflowId:         uuid.MustParse(sqlchelpers.UUIDToStr(task.WorkflowID)),
+		Output:             output,
+		ErrorMessage:       &task.ErrorMessage.String,
 	}
 }
 

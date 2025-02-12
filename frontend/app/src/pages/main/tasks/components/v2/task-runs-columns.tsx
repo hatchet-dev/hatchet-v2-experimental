@@ -248,7 +248,7 @@ export const columns: (
             {
               label: 'Copy Run Id',
               onClick: () => {
-                navigator.clipboard.writeText(row.original.taskId.toString());
+                navigator.clipboard.writeText(row.original.metadata.id);
               },
             },
           ]}

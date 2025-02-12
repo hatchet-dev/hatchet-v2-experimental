@@ -3,8 +3,6 @@ import { cn } from '@/lib/utils';
 import {
   CalendarDaysIcon,
   CpuChipIcon,
-  PlayIcon,
-  QueueListIcon,
   ScaleIcon,
   ServerStackIcon,
   Squares2X2Icon,
@@ -61,8 +59,24 @@ interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {
   currTenant: Tenant;
 }
 
+function useSidebarButtonSelected() {
+  const location = useLocation();
+
+  function getSelectedAndOpenStates(prefix: string, to: string) {
+    return {
+      open: location.pathname.startsWith(prefix || to),
+      selected: !prefix && location.pathname === to,
+    };
+  }
+
+  return {
+    getSelectedAndOpenStates,
+  };
+}
+
 function Sidebar({ className, memberships, currTenant }: SidebarProps) {
   const { sidebarOpen, setSidebarOpen } = useSidebar();
+  const { getSelectedAndOpenStates } = useSidebarButtonSelected();
 
   const meta = useCloudApiMeta();
   const featureFlags = useCloudFeatureFlags(currTenant.metadata.id);
@@ -108,12 +122,15 @@ function Sidebar({ className, memberships, currTenant }: SidebarProps) {
               <Button
                 variant="ghost"
                 className={cn(
-                  'w-full justify-start',
-                  // selected && 'bg-slate-200 dark:bg-slate-800',
+                  'w-full justify-start flex flex-row items-center px-0 mx-0 hover:px-2',
+                  getSelectedAndOpenStates('', '/tasks').selected &&
+                    'bg-slate-200 dark:bg-slate-800  px-2',
                 )}
               >
-                {<PlayIcon className="mr-2 h-4 w-4" />}
-                <h1>Activity</h1>
+                {/* <PlayIcon className="mr-2 size-6" /> */}
+                <h2 className="text-lg font-semibold tracking-tight">
+                  Activity
+                </h2>
               </Button>
             </Link>
             {/* <h2 className="mb-2 text-lg font-semibold tracking-tight">Runs</h2> */}

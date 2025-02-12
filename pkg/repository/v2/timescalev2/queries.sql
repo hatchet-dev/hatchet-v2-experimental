@@ -727,9 +727,13 @@ WITH tasks AS (
                 ) AS u ON kv.key = u.k AND kv.value = u.v
             )
         )
+        AND (
+            sqlc.narg('workerId')::uuid IS NULL
+            OR t.latest_worker_id = sqlc.narg('workerId')::uuid
+        )
     LIMIT @listWorkflowRunsLimit::integer
     OFFSET @listWorkflowRunsOffset::integer
-), timers AS (
+), metadata AS (
     SELECT
         t.run_id,
         MIN(e.inserted_at)::timestamptz AS created_at,
@@ -740,9 +744,16 @@ WITH tasks AS (
     GROUP BY t.run_id
 )
 
-SELECT t.*, COALESCE(ti.created_at, t.inserted_at) AS created_at, ti.started_at, ti.finished_at
+SELECT
+    t.*,
+    COALESCE(m.created_at, t.inserted_at) AS created_at,
+    m.started_at,
+    m.finished_at,
+    e.output,
+    e.error_message
 FROM tasks t
-LEFT JOIN timers ti ON t.run_id = ti.run_id
+LEFT JOIN metadata m ON t.run_id = m.run_id
+LEFT JOIN v2_task_events_olap e ON (e.tenant_id, e.task_id, e.retry_count, e.readable_status) = (t.tenant_id, t.task_id, t.latest_retry_count, t.readable_status)
 ORDER BY t.inserted_at DESC
 ;
 

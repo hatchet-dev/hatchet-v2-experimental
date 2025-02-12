@@ -312,6 +312,11 @@ func (r *olapEventRepository) ListTaskRuns(ctx context.Context, tenantId string,
 		params.Until = sqlchelpers.TimestamptzFromTime(*until)
 	}
 
+	workerId := opts.WorkerId
+	if workerId != nil {
+		params.WorkerId = sqlchelpers.UUIDFromStr(workerId.String())
+	}
+
 	for key, value := range opts.AdditionalMetadata {
 		params.Keys = append(params.Keys, key)
 		params.Values = append(params.Values, value.(string))
@@ -333,10 +338,6 @@ func (r *olapEventRepository) ListTaskRuns(ctx context.Context, tenantId string,
 
 	children, err := r.queries.ListDAGChildren(ctx, r.pool, dagIds)
 
-	if err != nil {
-		return nil, 0, err
-	}
-
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return nil, 0, err
 	}
@@ -347,6 +348,9 @@ func (r *olapEventRepository) ListTaskRuns(ctx context.Context, tenantId string,
 
 	records := make([]*olap.TaskRunDataRow, 0)
 	for _, row := range rows {
+		fmt.Println("Output: ", row.Output)
+		fmt.Println("ErrorMessage: ", row.ErrorMessage)
+
 		parent := &timescalev2.ListWorkflowRunsRow{
 			TenantID:           row.TenantID,
 			RunID:              row.RunID,
@@ -358,6 +362,8 @@ func (r *olapEventRepository) ListTaskRuns(ctx context.Context, tenantId string,
 			ReadableStatus:     row.ReadableStatus,
 			FinishedAt:         row.FinishedAt,
 			StartedAt:          row.StartedAt,
+			Output:             row.Output,
+			ErrorMessage:       row.ErrorMessage,
 		}
 
 		rowChildren := make([]*timescalev2.ListDAGChildrenRow, 0)

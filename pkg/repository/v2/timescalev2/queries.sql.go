@@ -649,9 +649,13 @@ WITH tasks AS (
                 ) AS u ON kv.key = u.k AND kv.value = u.v
             )
         )
-    LIMIT $8::integer
-    OFFSET $7::integer
-), timers AS (
+        AND (
+            $7::uuid IS NULL
+            OR t.latest_worker_id = $7::uuid
+        )
+    LIMIT $9::integer
+    OFFSET $8::integer
+), metadata AS (
     SELECT
         t.run_id,
         MIN(e.inserted_at)::timestamptz AS created_at,
@@ -662,9 +666,16 @@ WITH tasks AS (
     GROUP BY t.run_id
 )
 
-SELECT t.run_id, t.tenant_id, t.inserted_at, t.external_id, t.dag_id, t.task_id, t.readable_status, t.kind, t.workflow_id, t.display_name, t.input, t.additional_metadata, t.latest_retry_count, COALESCE(ti.created_at, t.inserted_at) AS created_at, ti.started_at, ti.finished_at
+SELECT
+    t.run_id, t.tenant_id, t.inserted_at, t.external_id, t.dag_id, t.task_id, t.readable_status, t.kind, t.workflow_id, t.display_name, t.input, t.additional_metadata, t.latest_retry_count,
+    COALESCE(m.created_at, t.inserted_at) AS created_at,
+    m.started_at,
+    m.finished_at,
+    e.output,
+    e.error_message
 FROM tasks t
-LEFT JOIN timers ti ON t.run_id = ti.run_id
+JOIN metadata m ON t.run_id = m.run_id
+JOIN v2_task_events_olap e ON (e.tenant_id, e.task_id, e.retry_count, e.readable_status) = (t.tenant_id, t.task_id, t.latest_retry_count, t.readable_status)
 ORDER BY t.inserted_at DESC
 `
 
@@ -675,6 +686,7 @@ type ListWorkflowRunsParams struct {
 	Until                  pgtype.Timestamptz `json:"until"`
 	Keys                   []string           `json:"keys"`
 	Values                 []string           `json:"values"`
+	WorkerId               pgtype.UUID        `json:"workerId"`
 	Listworkflowrunsoffset int32              `json:"listworkflowrunsoffset"`
 	Listworkflowrunslimit  int32              `json:"listworkflowrunslimit"`
 }
@@ -696,6 +708,8 @@ type ListWorkflowRunsRow struct {
 	CreatedAt          pgtype.Timestamptz   `json:"created_at"`
 	StartedAt          pgtype.Timestamptz   `json:"started_at"`
 	FinishedAt         pgtype.Timestamptz   `json:"finished_at"`
+	Output             []byte               `json:"output"`
+	ErrorMessage       pgtype.Text          `json:"error_message"`
 }
 
 func (q *Queries) ListWorkflowRuns(ctx context.Context, db DBTX, arg ListWorkflowRunsParams) ([]*ListWorkflowRunsRow, error) {
@@ -706,6 +720,7 @@ func (q *Queries) ListWorkflowRuns(ctx context.Context, db DBTX, arg ListWorkflo
 		arg.Until,
 		arg.Keys,
 		arg.Values,
+		arg.WorkerId,
 		arg.Listworkflowrunsoffset,
 		arg.Listworkflowrunslimit,
 	)
@@ -733,6 +748,8 @@ func (q *Queries) ListWorkflowRuns(ctx context.Context, db DBTX, arg ListWorkflo
 			&i.CreatedAt,
 			&i.StartedAt,
 			&i.FinishedAt,
+			&i.Output,
+			&i.ErrorMessage,
 		); err != nil {
 			return nil, err
 		}

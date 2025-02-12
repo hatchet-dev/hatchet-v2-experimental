@@ -97,6 +97,10 @@ export interface V2TaskSummarySingle {
   displayName: string;
   /** @format uuid */
   workflowId: string;
+  /** The output of the task run (for the latest run) */
+  output: object;
+  /** The error message of the task run (for the latest run) */
+  errorMessage?: string;
 }
 
 export interface V2TaskSummary {

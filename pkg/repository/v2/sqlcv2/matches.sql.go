@@ -338,7 +338,7 @@ WITH match_counts AS (
     GROUP BY v2_match_id
 ), result_matches AS (
     SELECT
-        m.id, m.tenant_id, m.kind, m.is_satisfied, m.signal_target_id, m.signal_key, m.trigger_dag_id, m.trigger_dag_inserted_at, m.trigger_step_id, m.trigger_external_id, 
+        m.id, m.tenant_id, m.kind, m.is_satisfied, m.signal_target_id, m.signal_key, m.trigger_dag_id, m.trigger_dag_inserted_at, m.trigger_step_id, m.trigger_external_id,
         mc.aggregated_data::jsonb as mc_aggregated_data
     FROM
         v2_match m
