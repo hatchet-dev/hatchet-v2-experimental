@@ -161,3 +161,72 @@ func (q *Queries) CreateTasks(ctx context.Context, db DBTX, arg CreateTasksParam
 	}
 	return items, nil
 }
+
+const createTaskEvents = `-- name: CreateTaskEvents :exec
+WITH locked_tasks AS (
+    SELECT
+        id
+    FROM
+        v2_task
+    WHERE
+        id = ANY($2::bigint[])
+        AND tenant_id = $1::uuid
+    -- order by the task id to get a stable lock order
+    ORDER BY
+        id
+    FOR UPDATE
+), input AS (
+    SELECT
+        task_id, retry_count, event_type, event_key, data
+    FROM
+        (
+            SELECT
+                unnest($2::bigint[]) AS task_id,
+                unnest($3::integer[]) AS retry_count,
+                unnest(cast($4::text[] as v2_task_event_type[])) AS event_type,
+                unnest($5::text[]) AS event_key,
+                unnest($6::jsonb[]) AS data
+        ) AS subquery
+)
+INSERT INTO v2_task_event (
+    tenant_id,
+    task_id,
+    retry_count,
+    event_type,
+    event_key,
+    data
+)
+SELECT
+    $1::uuid,
+    i.task_id,
+    i.retry_count,
+    i.event_type,
+    i.event_key,
+    i.data
+FROM
+    input i
+ON CONFLICT (tenant_id, task_id, event_type, event_key) WHERE event_key IS NOT NULL DO NOTHING
+`
+
+type CreateTaskEventsParams struct {
+	Tenantid    pgtype.UUID   `json:"tenantid"`
+	Taskids     []int64       `json:"taskids"`
+	Retrycounts []int32       `json:"retrycounts"`
+	Eventtypes  []string      `json:"eventtypes"`
+	Eventkeys   []pgtype.Text `json:"eventkeys"`
+	Datas       [][]byte      `json:"datas"`
+}
+
+// We get a FOR UPDATE lock on tasks to prevent concurrent writes to the task events
+// tables for each task
+func (q *Queries) CreateTaskEvents(ctx context.Context, db DBTX, arg CreateTaskEventsParams) error {
+	_, err := db.Exec(ctx, createTaskEvents,
+		arg.Tenantid,
+		arg.Taskids,
+		arg.Retrycounts,
+		arg.Eventtypes,
+		arg.Eventkeys,
+		arg.Datas,
+	)
+	return err
+}

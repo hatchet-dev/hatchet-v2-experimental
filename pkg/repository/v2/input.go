@@ -143,7 +143,7 @@ func (v1 *V1StepRunData) Bytes() []byte {
 	out, err := json.Marshal(v1)
 
 	if err != nil {
-		return nil
+		return []byte("{}")
 	}
 
 	return out

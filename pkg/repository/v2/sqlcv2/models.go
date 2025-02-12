@@ -897,9 +897,11 @@ func (ns NullV2StickyStrategy) Value() (driver.Value, error) {
 type V2TaskEventType string
 
 const (
-	V2TaskEventTypeCOMPLETED V2TaskEventType = "COMPLETED"
-	V2TaskEventTypeFAILED    V2TaskEventType = "FAILED"
-	V2TaskEventTypeCANCELLED V2TaskEventType = "CANCELLED"
+	V2TaskEventTypeCOMPLETED       V2TaskEventType = "COMPLETED"
+	V2TaskEventTypeFAILED          V2TaskEventType = "FAILED"
+	V2TaskEventTypeCANCELLED       V2TaskEventType = "CANCELLED"
+	V2TaskEventTypeSIGNALCREATED   V2TaskEventType = "SIGNAL_CREATED"
+	V2TaskEventTypeSIGNALCOMPLETED V2TaskEventType = "SIGNAL_COMPLETED"
 )
 
 func (e *V2TaskEventType) Scan(src interface{}) error {
@@ -1910,16 +1912,16 @@ type V2DagToTask struct {
 }
 
 type V2Match struct {
-	ID                     int64              `json:"id"`
-	TenantID               pgtype.UUID        `json:"tenant_id"`
-	Kind                   V2MatchKind        `json:"kind"`
-	IsSatisfied            bool               `json:"is_satisfied"`
-	SignalTargetID         pgtype.Int8        `json:"signal_target_id"`
-	SignalTargetInsertedAt pgtype.Timestamptz `json:"signal_target_inserted_at"`
-	TriggerDagID           pgtype.Int8        `json:"trigger_dag_id"`
-	TriggerDagInsertedAt   pgtype.Timestamptz `json:"trigger_dag_inserted_at"`
-	TriggerStepID          pgtype.UUID        `json:"trigger_step_id"`
-	TriggerExternalID      pgtype.UUID        `json:"trigger_external_id"`
+	ID                   int64              `json:"id"`
+	TenantID             pgtype.UUID        `json:"tenant_id"`
+	Kind                 V2MatchKind        `json:"kind"`
+	IsSatisfied          bool               `json:"is_satisfied"`
+	SignalTargetID       pgtype.Int8        `json:"signal_target_id"`
+	SignalKey            pgtype.Text        `json:"signal_key"`
+	TriggerDagID         pgtype.Int8        `json:"trigger_dag_id"`
+	TriggerDagInsertedAt pgtype.Timestamptz `json:"trigger_dag_inserted_at"`
+	TriggerStepID        pgtype.UUID        `json:"trigger_step_id"`
+	TriggerExternalID    pgtype.UUID        `json:"trigger_external_id"`
 }
 
 type V2MatchCondition struct {
@@ -1989,6 +1991,7 @@ type V2TaskEvent struct {
 	TaskID     int64            `json:"task_id"`
 	RetryCount int32            `json:"retry_count"`
 	EventType  V2TaskEventType  `json:"event_type"`
+	EventKey   pgtype.Text      `json:"event_key"`
 	CreatedAt  pgtype.Timestamp `json:"created_at"`
 	Data       []byte           `json:"data"`
 }

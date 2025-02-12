@@ -117,11 +117,50 @@ func NewOLAPEventRepository(l *zerolog.Logger) OLAPEventRepository {
 		log.Fatal(err)
 	}
 
+	setupRangePartition(
+		partitionCtx,
+		timescalePool,
+		queries.CreateOLAPTaskPartition,
+		queries.ListOLAPTaskPartitionsBeforeDate,
+		"v2_tasks_olap",
+	)
+
+	setupRangePartition(
+		partitionCtx,
+		timescalePool,
+		queries.CreateOLAPDAGPartition,
+		queries.ListOLAPDAGPartitionsBeforeDate,
+		"v2_dags_olap",
+	)
+
+	setupRangePartition(
+		partitionCtx,
+		timescalePool,
+		queries.CreateOLAPRunsPartition,
+		queries.ListOLAPRunsPartitionsBeforeDate,
+		"v2_runs_olap",
+	)
+
+	return &olapEventRepository{
+		pool:       timescalePool,
+		l:          l,
+		queries:    queries,
+		eventCache: eventCache,
+	}
+}
+
+func setupRangePartition(
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	create func(ctx context.Context, db timescalev2.DBTX, date pgtype.Date) error,
+	listBeforeDate func(ctx context.Context, db timescalev2.DBTX, date pgtype.Date) ([]string, error),
+	tableName string,
+) {
 	today := time.Now().UTC()
 	tomorrow := today.AddDate(0, 0, 1)
 	sevenDaysAgo := today.AddDate(0, 0, -7)
 
-	err = queries.CreateOLAPTaskPartition(partitionCtx, timescalePool, pgtype.Date{
+	err := create(ctx, pool, pgtype.Date{
 		Time:  today,
 		Valid: true,
 	})
@@ -130,7 +169,7 @@ func NewOLAPEventRepository(l *zerolog.Logger) OLAPEventRepository {
 		log.Fatal(err)
 	}
 
-	err = queries.CreateOLAPTaskPartition(partitionCtx, timescalePool, pgtype.Date{
+	err = create(ctx, pool, pgtype.Date{
 		Time:  tomorrow,
 		Valid: true,
 	})
@@ -139,7 +178,7 @@ func NewOLAPEventRepository(l *zerolog.Logger) OLAPEventRepository {
 		log.Fatal(err)
 	}
 
-	partitions, err := queries.ListOLAPTaskPartitionsBeforeDate(partitionCtx, timescalePool, pgtype.Date{
+	partitions, err := listBeforeDate(ctx, pool, pgtype.Date{
 		Time:  sevenDaysAgo,
 		Valid: true,
 	})
@@ -149,30 +188,23 @@ func NewOLAPEventRepository(l *zerolog.Logger) OLAPEventRepository {
 	}
 
 	for _, partition := range partitions {
-		_, err := timescalePool.Exec(
-			partitionCtx,
-			fmt.Sprintf("ALTER TABLE v2_task DETACH PARTITION %s CONCURRENTLY", partition),
+		_, err := pool.Exec(
+			ctx,
+			fmt.Sprintf("ALTER TABLE %s DETACH PARTITION %s CONCURRENTLY", tableName, partition),
 		)
 
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		_, err = timescalePool.Exec(
-			partitionCtx,
+		_, err = pool.Exec(
+			ctx,
 			fmt.Sprintf("DROP TABLE %s", partition),
 		)
 
 		if err != nil {
 			log.Fatal(err)
 		}
-	}
-
-	return &olapEventRepository{
-		pool:       timescalePool,
-		l:          l,
-		queries:    queries,
-		eventCache: eventCache,
 	}
 }
 

@@ -23,6 +23,30 @@ type CreateDAGsOLAPParams struct {
 	AdditionalMetadata []byte             `json:"additional_metadata"`
 }
 
+const createOLAPDAGPartition = `-- name: CreateOLAPDAGPartition :exec
+SELECT create_v2_olap_partition_with_date_and_status(
+    'v2_dags_olap'::text,
+    $1::date
+)
+`
+
+func (q *Queries) CreateOLAPDAGPartition(ctx context.Context, db DBTX, date pgtype.Date) error {
+	_, err := db.Exec(ctx, createOLAPDAGPartition, date)
+	return err
+}
+
+const createOLAPRunsPartition = `-- name: CreateOLAPRunsPartition :exec
+SELECT create_v2_olap_partition_with_date_and_status(
+    'v2_runs_olap'::text,
+    $1::date
+)
+`
+
+func (q *Queries) CreateOLAPRunsPartition(ctx context.Context, db DBTX, date pgtype.Date) error {
+	_, err := db.Exec(ctx, createOLAPRunsPartition, date)
+	return err
+}
+
 const createOLAPTaskEventTmpPartitions = `-- name: CreateOLAPTaskEventTmpPartitions :exec
 SELECT create_v2_hash_partitions(
     'v2_task_events_olap_tmp'::text,
@@ -202,6 +226,66 @@ func (q *Queries) GetTenantStatusMetrics(ctx context.Context, db DBTX, arg GetTe
 		&i.TotalFailed,
 	)
 	return &i, err
+}
+
+const listOLAPDAGPartitionsBeforeDate = `-- name: ListOLAPDAGPartitionsBeforeDate :many
+SELECT
+    p::text AS partition_name
+FROM
+    get_v2_partitions_before_date(
+        'v2_dags_olap'::text,
+        $1::date
+    ) AS p
+`
+
+func (q *Queries) ListOLAPDAGPartitionsBeforeDate(ctx context.Context, db DBTX, date pgtype.Date) ([]string, error) {
+	rows, err := db.Query(ctx, listOLAPDAGPartitionsBeforeDate, date)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var partition_name string
+		if err := rows.Scan(&partition_name); err != nil {
+			return nil, err
+		}
+		items = append(items, partition_name)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOLAPRunsPartitionsBeforeDate = `-- name: ListOLAPRunsPartitionsBeforeDate :many
+SELECT
+    p::text AS partition_name
+FROM
+    get_v2_partitions_before_date(
+        'v2_runs_olap'::text,
+        $1::date
+    ) AS p
+`
+
+func (q *Queries) ListOLAPRunsPartitionsBeforeDate(ctx context.Context, db DBTX, date pgtype.Date) ([]string, error) {
+	rows, err := db.Query(ctx, listOLAPRunsPartitionsBeforeDate, date)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var partition_name string
+		if err := rows.Scan(&partition_name); err != nil {
+			return nil, err
+		}
+		items = append(items, partition_name)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listOLAPTaskPartitionsBeforeDate = `-- name: ListOLAPTaskPartitionsBeforeDate :many
