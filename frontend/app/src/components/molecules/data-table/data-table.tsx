@@ -33,17 +33,17 @@ import { DataTableToolbar, ToolbarFilters } from './data-table-toolbar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
-export interface IDGetter {
+export interface IDGetter<T> {
   metadata: {
     id: string;
   };
-  subRows?: any[];
+  subRows?: T[];
   getRow?: () => JSX.Element;
   onClick?: () => void;
   isExpandable?: boolean;
 }
 
-interface DataTableProps<TData extends IDGetter, TValue> {
+interface DataTableProps<TData extends IDGetter<TData>, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
   error?: Error | null;
@@ -86,7 +86,7 @@ interface ExtraDataTableProps {
   };
 }
 
-export function DataTable<TData extends IDGetter, TValue>({
+export function DataTable<TData extends IDGetter<TData>, TValue>({
   columns,
   error,
   data,

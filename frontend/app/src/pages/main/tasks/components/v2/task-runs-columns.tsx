@@ -9,13 +9,10 @@ import {
 import RelativeDate from '@/components/molecules/relative-date';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ListableWorkflowRun } from '../task-runs-table';
-import {
-  ArrowDownIcon,
-  ArrowRightIcon,
-  ClipboardDocumentIcon,
-} from '@heroicons/react/24/outline';
+import { ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { DataTableRowActions } from '@/components/molecules/data-table/data-table-row-actions';
 
 export const columns: (
   onAdditionalMetadataClick?: (click: AdditionalMetadataClick) => void,
@@ -50,12 +47,12 @@ export const columns: (
             onClick={() => row.toggleExpanded()}
             variant="ghost"
             className="cursor-pointer px-2"
-            hoverText="Show task"
+            hoverText="Show tasks"
           >
             {row.getIsExpanded() ? (
-              <ArrowDownIcon className="size-4" />
+              <ChevronDownIcon className="size-4" />
             ) : (
-              <ArrowRightIcon className="size-4" />
+              <ChevronRightIcon className="size-4" />
             )}
           </Button>
         )}
@@ -64,25 +61,25 @@ export const columns: (
     enableSorting: false,
     enableHiding: false,
   },
-  {
-    accessorKey: 'task_id',
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Id" />
-    ),
-    cell: ({ row }) => (
-      <div
-        className="cursor-pointer hover:underline min-w-fit whitespace-nowrap items-center flex-row flex gap-x-1"
-        onClick={() => {
-          navigator.clipboard.writeText(row.original.taskId.toString());
-        }}
-      >
-        {row.original.taskId}
-        <ClipboardDocumentIcon className="size-4 ml-1" />
-      </div>
-    ),
-    enableSorting: false,
-    enableHiding: true,
-  },
+  // {
+  //   accessorKey: 'task_id',
+  //   header: ({ column }) => (
+  //     <DataTableColumnHeader column={column} title="Id" />
+  //   ),
+  //   cell: ({ row }) => (
+  //     <div
+  //       className="cursor-pointer hover:underline min-w-fit whitespace-nowrap items-center flex-row flex gap-x-1"
+  //       onClick={() => {
+  //         navigator.clipboard.writeText(row.original.taskId.toString());
+  //       }}
+  //     >
+  //       {row.original.taskId}
+  //       <ClipboardDocumentIcon className="size-4 ml-1" />
+  //     </div>
+  //   ),
+  //   enableSorting: false,
+  //   enableHiding: true,
+  // },
   {
     accessorKey: 'task_name',
     header: ({ column }) => (
@@ -241,8 +238,22 @@ export const columns: (
     },
     enableSorting: false,
   },
-  // {
-  //   id: "actions",
-  //   cell: ({ row }) => <DataTableRowActions row={row} labels={[]} />,
-  // },
+  {
+    id: 'actions',
+    cell: ({ row }) => {
+      return (
+        <DataTableRowActions
+          row={row}
+          actions={[
+            {
+              label: 'Copy Run Id',
+              onClick: () => {
+                navigator.clipboard.writeText(row.original.taskId.toString());
+              },
+            },
+          ]}
+        />
+      );
+    },
+  },
 ];

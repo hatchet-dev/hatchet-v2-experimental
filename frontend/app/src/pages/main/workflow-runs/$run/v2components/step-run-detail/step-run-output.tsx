@@ -110,15 +110,12 @@ const StepRunOutput: React.FC<StepRunOutputProps> = (props) => {
 export const V2StepRunOutput = (props: { taskRunId: string }) => {
   const { tenantId } = useTenant();
 
-  if (!tenantId) {
-    return null;
-  }
-
   const { isLoading, data } = useQuery({
     ...queries.v2Tasks.get(props.taskRunId),
+    enabled: !!tenantId,
   });
 
-  if (isLoading || !data) {
+  if (!tenantId || isLoading || !data) {
     return null;
   }
 

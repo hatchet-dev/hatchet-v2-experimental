@@ -122,6 +122,7 @@ function statusToFriendlyName(status: V2TaskStatus) {
     case V2TaskStatus.RUNNING:
       return 'Running';
     default:
+      // eslint-disable-next-line no-case-declarations
       const exhaustivenessCheck: never = status;
       throw new Error(`Unknown status: ${exhaustivenessCheck}`);
   }
