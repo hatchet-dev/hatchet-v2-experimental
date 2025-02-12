@@ -248,7 +248,37 @@ type getTaskRow struct {
 }
 
 func (r *olapEventRepository) ReadTaskRun(ctx context.Context, taskExternalId string) (*timescalev2.V2TasksOlap, error) {
-	return r.queries.ReadTaskByExternalID(ctx, r.pool, sqlchelpers.UUIDFromStr(taskExternalId))
+	row, err := r.queries.ReadTaskByExternalID(ctx, r.pool, sqlchelpers.UUIDFromStr(taskExternalId))
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &timescalev2.V2TasksOlap{
+		TenantID:           row.TenantID,
+		ID:                 row.ID,
+		InsertedAt:         row.InsertedAt,
+		Queue:              row.Queue,
+		ActionID:           row.ActionID,
+		StepID:             row.StepID,
+		WorkflowID:         row.WorkflowID,
+		ScheduleTimeout:    row.ScheduleTimeout,
+		StepTimeout:        row.StepTimeout,
+		Priority:           row.Priority,
+		Sticky:             row.Sticky,
+		DesiredWorkerID:    row.DesiredWorkerID,
+		DisplayName:        row.DisplayName,
+		Input:              row.Input,
+		AdditionalMetadata: row.AdditionalMetadata,
+		DagID:              row.DagID,
+		DagInsertedAt:      row.DagInsertedAt,
+		ReadableStatus:     row.ReadableStatus,
+		ExternalID:         row.ExternalID,
+		LatestRetryCount:   row.LatestRetryCount,
+		LatestWorkerID:     row.LatestWorkerID,
+		ErrorMessage:       row.ErrorMessage,
+		Output:             row.Output,
+	}, nil
 }
 
 func (r *olapEventRepository) ReadTaskRunData(ctx context.Context, tenantId pgtype.UUID, taskId int64, taskInsertedAt pgtype.Timestamptz) (*timescalev2.PopulateSingleTaskRunDataRow, error) {

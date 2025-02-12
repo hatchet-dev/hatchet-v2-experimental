@@ -674,8 +674,8 @@ SELECT
     e.output,
     e.error_message
 FROM tasks t
-JOIN metadata m ON t.run_id = m.run_id
-JOIN v2_task_events_olap e ON (e.tenant_id, e.task_id, e.retry_count, e.readable_status) = (t.tenant_id, t.task_id, t.latest_retry_count, t.readable_status)
+LEFT JOIN metadata m ON t.run_id = m.run_id
+LEFT JOIN v2_task_events_olap e ON (e.tenant_id, e.task_id, e.retry_count, e.readable_status) = (t.tenant_id, t.task_id, t.latest_retry_count, t.readable_status)
 ORDER BY t.inserted_at DESC
 `
 
@@ -1073,16 +1073,46 @@ WITH lookup_task AS (
         external_id = $1::uuid
 )
 SELECT
-    t.tenant_id, t.id, t.inserted_at, t.external_id, t.queue, t.action_id, t.step_id, t.workflow_id, t.schedule_timeout, t.step_timeout, t.priority, t.sticky, t.desired_worker_id, t.display_name, t.input, t.additional_metadata, t.readable_status, t.latest_retry_count, t.latest_worker_id, t.dag_id, t.dag_inserted_at
+    t.tenant_id, t.id, t.inserted_at, t.external_id, t.queue, t.action_id, t.step_id, t.workflow_id, t.schedule_timeout, t.step_timeout, t.priority, t.sticky, t.desired_worker_id, t.display_name, t.input, t.additional_metadata, t.readable_status, t.latest_retry_count, t.latest_worker_id, t.dag_id, t.dag_inserted_at,
+    e.output,
+    e.error_message
 FROM
     v2_tasks_olap t
 JOIN
     lookup_task lt ON lt.tenant_id = t.tenant_id AND lt.task_id = t.id AND lt.inserted_at = t.inserted_at
+JOIN
+    v2_task_events_olap e ON (e.tenant_id, e.task_id, e.readable_status, e.retry_count) = (t.tenant_id, t.id, t.readable_status, t.latest_retry_count)
 `
 
-func (q *Queries) ReadTaskByExternalID(ctx context.Context, db DBTX, externalid pgtype.UUID) (*V2TasksOlap, error) {
+type ReadTaskByExternalIDRow struct {
+	TenantID           pgtype.UUID          `json:"tenant_id"`
+	ID                 int64                `json:"id"`
+	InsertedAt         pgtype.Timestamptz   `json:"inserted_at"`
+	ExternalID         pgtype.UUID          `json:"external_id"`
+	Queue              string               `json:"queue"`
+	ActionID           string               `json:"action_id"`
+	StepID             pgtype.UUID          `json:"step_id"`
+	WorkflowID         pgtype.UUID          `json:"workflow_id"`
+	ScheduleTimeout    string               `json:"schedule_timeout"`
+	StepTimeout        pgtype.Text          `json:"step_timeout"`
+	Priority           pgtype.Int4          `json:"priority"`
+	Sticky             V2StickyStrategyOlap `json:"sticky"`
+	DesiredWorkerID    pgtype.UUID          `json:"desired_worker_id"`
+	DisplayName        string               `json:"display_name"`
+	Input              []byte               `json:"input"`
+	AdditionalMetadata []byte               `json:"additional_metadata"`
+	ReadableStatus     V2ReadableStatusOlap `json:"readable_status"`
+	LatestRetryCount   int32                `json:"latest_retry_count"`
+	LatestWorkerID     pgtype.UUID          `json:"latest_worker_id"`
+	DagID              pgtype.Int8          `json:"dag_id"`
+	DagInsertedAt      pgtype.Timestamptz   `json:"dag_inserted_at"`
+	Output             []byte               `json:"output"`
+	ErrorMessage       pgtype.Text          `json:"error_message"`
+}
+
+func (q *Queries) ReadTaskByExternalID(ctx context.Context, db DBTX, externalid pgtype.UUID) (*ReadTaskByExternalIDRow, error) {
 	row := db.QueryRow(ctx, readTaskByExternalID, externalid)
-	var i V2TasksOlap
+	var i ReadTaskByExternalIDRow
 	err := row.Scan(
 		&i.TenantID,
 		&i.ID,
@@ -1105,6 +1135,8 @@ func (q *Queries) ReadTaskByExternalID(ctx context.Context, db DBTX, externalid 
 		&i.LatestWorkerID,
 		&i.DagID,
 		&i.DagInsertedAt,
+		&i.Output,
+		&i.ErrorMessage,
 	)
 	return &i, err
 }

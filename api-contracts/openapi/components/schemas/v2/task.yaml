@@ -131,6 +131,9 @@ V2Task:
     output:
       type: string
       description: The output of the task run (for the latest run)
+    errorMessage:
+      type: string
+      description: The error message of the task run (for the latest run)
   required:
     - metadata
     - id

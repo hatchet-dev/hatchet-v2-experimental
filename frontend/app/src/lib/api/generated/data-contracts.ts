@@ -184,6 +184,8 @@ export interface V2Task {
   input: string;
   /** The output of the task run (for the latest run) */
   output?: string;
+  /** The error message of the task run (for the latest run) */
+  errorMessage?: string;
 }
 
 export enum V2TaskEventType {

@@ -196,11 +196,16 @@ WITH lookup_task AS (
         external_id = @externalId::uuid
 )
 SELECT
-    t.*
+    t.*,
+    e.output,
+    e.error_message
 FROM
     v2_tasks_olap t
 JOIN
-    lookup_task lt ON lt.tenant_id = t.tenant_id AND lt.task_id = t.id AND lt.inserted_at = t.inserted_at;
+    lookup_task lt ON lt.tenant_id = t.tenant_id AND lt.task_id = t.id AND lt.inserted_at = t.inserted_at
+JOIN
+    v2_task_events_olap e ON (e.tenant_id, e.task_id, e.readable_status, e.retry_count) = (t.tenant_id, t.id, t.readable_status, t.latest_retry_count)
+;
 
 -- name: ListTaskEvents :many
 WITH aggregated_events AS (
