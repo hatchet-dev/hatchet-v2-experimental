@@ -272,6 +272,9 @@ export function TaskRunsTable({
       since:
         createdAfter ||
         new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+      until: finishedBefore,
+      additional_metadata: columnFilters.find((f) => f.id === 'Metadata')
+        ?.value as string[],
     }),
     placeholderData: (prev) => prev,
     refetchInterval,

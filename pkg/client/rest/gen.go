@@ -1929,7 +1929,13 @@ type V2TaskListParams struct {
 	// Since The earliest date to filter by
 	Since time.Time `form:"since" json:"since"`
 
-	// WorkflowIds The workflow id to find runs for
+	// Until The earliest date to filter by
+	Until *time.Time `form:"until,omitempty" json:"until,omitempty"`
+
+	// AdditionalMetadata Additional metadata k-v pairs to filter by
+	AdditionalMetadata *[]string `form:"additional_metadata,omitempty" json:"additional_metadata,omitempty"`
+
+	// WorkflowIds The workflow ids to find runs for
 	WorkflowIds *[]openapi_types.UUID `form:"workflow_ids,omitempty" json:"workflow_ids,omitempty"`
 
 	// WorkerId The worker id to filter by
@@ -9032,6 +9038,38 @@ func NewV2TaskListRequest(server string, tenant openapi_types.UUID, params *V2Ta
 					queryValues.Add(k, v2)
 				}
 			}
+		}
+
+		if params.Until != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "until", runtime.ParamLocationQuery, *params.Until); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.AdditionalMetadata != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "additional_metadata", runtime.ParamLocationQuery, *params.AdditionalMetadata); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
 		}
 
 		if params.WorkflowIds != nil {

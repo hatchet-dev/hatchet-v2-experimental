@@ -669,8 +669,37 @@ FROM v2_runs_olap r
 LEFT JOIN v2_dags_olap d ON (r.tenant_id, r.external_id, r.inserted_at) = (d.tenant_id, d.external_id, d.inserted_at)
 LEFT JOIN v2_tasks_olap t ON (r.tenant_id, r.external_id, r.inserted_at) = (t.tenant_id, t.external_id, t.inserted_at)
 WHERE
-    (kind = 'TASK' AND d.id IS NULL) OR kind = 'DAG'
-    -- Other filters here
+    (
+        (r.kind = 'TASK' AND d.id IS NULL)
+        OR r.kind = 'DAG'
+    )
+    AND (
+        sqlc.narg('workflowIds')::uuid[] IS NULL
+        OR r.workflow_id = ANY(sqlc.narg('workflowIds')::uuid[])
+    )
+    AND (
+        sqlc.narg('statuses')::text[] IS NULL
+        OR r.readable_status = ANY(cast(sqlc.narg('statuses')::text[] as v2_readable_status_olap[]))
+    )
+    AND r.inserted_at >= @since::timestamptz
+    AND (
+        sqlc.narg('until')::timestamptz IS NULL
+        OR r.inserted_at <= sqlc.narg('until')::timestamptz
+    )
+    AND (
+        sqlc.narg('keys')::text[] IS NULL
+        OR sqlc.narg('values')::text[] IS NULL
+        OR COALESCE(d.additional_metadata, t.additional_metadata) IS NULL
+        OR EXISTS (
+            SELECT 1 FROM jsonb_each_text(COALESCE(d.additional_metadata, t.additional_metadata)) kv
+            JOIN LATERAL (
+                SELECT unnest(sqlc.narg('keys')::text[]) AS k,
+                       unnest(sqlc.narg('values')::text[]) AS v
+            ) AS u ON kv.key = u.k AND kv.value = u.v
+        )
+    )
+LIMIT @listWorkflowRunsLimit::integer
+OFFSET @listWorkflowRunsOffset::integer
 ;
 
 -- name: ListDAGChildren :many

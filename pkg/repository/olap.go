@@ -37,6 +37,12 @@ type ListTaskRunOpts struct {
 
 	WorkerId *uuid.UUID
 
+	StartedAfter time.Time
+
+	FinishedBefore *time.Time
+
+	AdditionalMetadata map[string]interface{}
+
 	Limit int64
 
 	Offset int64
@@ -246,7 +252,40 @@ func (r *olapEventRepository) ListTaskRuns(ctx context.Context, tenantId string,
 
 	defer tx.Rollback(ctx)
 
-	rows, err := r.queries.ListWorkflowRuns(ctx, r.pool)
+	statuses := make([]string, 0)
+	for _, status := range opts.Statuses {
+		statuses = append(statuses, string(status))
+	}
+
+	var workflowIdParams []pgtype.UUID
+
+	if len(opts.WorkflowIds) > 0 {
+		workflowIdParams = make([]pgtype.UUID, 0)
+
+		for _, id := range opts.WorkflowIds {
+			workflowIdParams = append(workflowIdParams, sqlchelpers.UUIDFromStr(id.String()))
+		}
+	}
+
+	params := timescalev2.ListWorkflowRunsParams{
+		WorkflowIds:            workflowIdParams,
+		Statuses:               statuses,
+		Since:                  sqlchelpers.TimestamptzFromTime(opts.CreatedAfter),
+		Listworkflowrunsoffset: int32(opts.Offset),
+		Listworkflowrunslimit:  int32(opts.Limit),
+	}
+
+	until := opts.FinishedBefore
+	if until != nil {
+		params.Until = sqlchelpers.TimestamptzFromTime(*until)
+	}
+
+	for key, value := range opts.AdditionalMetadata {
+		params.Keys = append(params.Keys, key)
+		params.Values = append(params.Values, value.(string))
+	}
+
+	rows, err := r.queries.ListWorkflowRuns(ctx, r.pool, params)
 
 	if err != nil {
 		return nil, 0, err
@@ -265,83 +304,6 @@ func (r *olapEventRepository) ListTaskRuns(ctx context.Context, tenantId string,
 	if err != nil {
 		return nil, 0, err
 	}
-
-	// lastSucceededAggTs, err := r.queries.LastSucceededStatusAggregate(ctx, tx)
-
-	// if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-	// 	return nil, 0, err
-	// }
-
-	// if !lastSucceededAggTs.Valid {
-	// 	lastSucceededAggTs = sqlchelpers.TimestamptzFromTime(time.Time{}) // zero value
-	// } else if lastSucceededAggTs.Time.After(time.Now().Add(-5 * time.Minute)) {
-	// 	// always search the last 5 minutes of data
-	// 	lastSucceededAggTs = sqlchelpers.TimestamptzFromTime(time.Now().Add(-5 * time.Minute))
-	// }
-
-	// taskIds := make([]int64, 0)
-	// tenantIds := make([]pgtype.UUID, 0)
-	// taskInsertedAts := make([]pgtype.Timestamptz, 0)
-	// retryCounts := make([]int32, 0)
-	// queryStatuses := make([]string, 0)
-
-	// realTimeParams := timescalev2.ListTasksParams{
-	// 	Tenantid:      sqlchelpers.UUIDFromStr(tenantId),
-	// 	Insertedafter: sqlchelpers.TimestamptzFromTime(opts.CreatedAfter),
-	// 	Tasklimit:     int32(opts.Limit),
-	// }
-
-	// if we're filtering by all statuses or no statuses, we don't pass status in
-	// if len(opts.Statuses) != 0 && len(opts.Statuses) != 5 {
-	// 	realTimeParams.Statuses = make([]string, 0)
-
-	// 	for _, status := range opts.Statuses {
-	// 		realTimeParams.Statuses = append(realTimeParams.Statuses, string(status))
-	// 	}
-	// }
-
-	// var workflowIdParams []pgtype.UUID
-
-	// if len(opts.WorkflowIds) > 0 {
-	// 	workflowIdParams = make([]pgtype.UUID, 0)
-
-	// 	for _, id := range opts.WorkflowIds {
-	// 		workflowIdParams = append(workflowIdParams, sqlchelpers.UUIDFromStr(id.String()))
-	// 	}
-	// }
-
-	// if opts.WorkerId != nil {
-	// 	realTimeParams.WorkerId = sqlchelpers.UUIDFromStr(opts.WorkerId.String())
-	// }
-
-	// realTimeParams.WorkflowIds = workflowIdParams
-
-	// uniqueTasks := make(map[int64]struct{}, 0)
-
-	// realTimeTasks, err := r.queries.ListTasks(ctx, tx, realTimeParams)
-
-	// if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-	// 	return nil, 0, err
-	// }
-
-	// for _, task := range realTimeTasks {
-	// 	uniqueTasks[task.ID] = struct{}{}
-	// 	taskIds = append(taskIds, task.ID)
-	// 	tenantIds = append(tenantIds, task.TenantID)
-	// 	taskInsertedAts = append(taskInsertedAts, task.InsertedAt)
-	// 	retryCounts = append(retryCounts, task.LatestRetryCount)
-	// 	queryStatuses = append(queryStatuses, string(task.ReadableStatus))
-	// }
-
-	// // get the task rows
-	// rows, err := r.queries.PopulateTaskRunData(ctx, tx, timescalev2.PopulateTaskRunDataParams{
-	// 	Taskids:         taskIds,
-	// 	Tenantids:       tenantIds,
-	// 	Taskinsertedats: taskInsertedAts,
-	// 	Retrycounts:     retryCounts,
-	// 	Statuses:        queryStatuses,
-	// 	Tasklimit:       int32(opts.Limit),
-	// })
 
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return nil, 0, err
