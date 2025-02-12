@@ -53,7 +53,7 @@ export function DataTableRowActions<TData extends IDGetter<TData>>({
                 <DropdownMenuItem
                   onClick={() => action.onClick(row.original)}
                   disabled={!!action.disabled}
-                  className="w-full"
+                  className="w-full hover:cursor-pointer"
                 >
                   {action.label}
                 </DropdownMenuItem>
