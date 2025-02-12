@@ -210,7 +210,7 @@ WITH tasks AS (
         r.id AS run_id,
         r.tenant_id,
         r.inserted_at,
-        r.external_id,
+        t.external_id,
         d.id AS dag_id,
         t.id AS task_id,
         r.readable_status,

@@ -14,12 +14,12 @@ export default function Tasks() {
           <h2 className="text-2xl font-bold leading-tight text-foreground">
             Task Runs
           </h2>
-          <Button
+          {/* <Button
             onClick={() => setTriggerWorkflow(true)}
             className="text-red-700 font-bold animate-bounce"
           >
             Trigger Workflow - What should we show here?
-          </Button>
+          </Button> */}
         </div>
         <TriggerWorkflowForm
           defaultWorkflow={undefined}

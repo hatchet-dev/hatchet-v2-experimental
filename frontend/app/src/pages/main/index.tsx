@@ -104,23 +104,26 @@ function Sidebar({ className, memberships, currTenant }: SidebarProps) {
       <div className="flex flex-col justify-between items-start space-y-4 px-4 py-4 h-full pb-16 md:pb-4">
         <div className="grow w-full">
           <div className="py-2">
-            <h2 className="mb-2 text-lg font-semibold tracking-tight">Runs</h2>
-            <div className="flex flex-col gap-y-1">
-              <SidebarButtonPrimary
-                key={1}
-                onNavLinkClick={onNavLinkClick}
-                to="/tasks"
-                name="Tasks"
-                icon={<PlayIcon className="mr-2 h-4 w-4" />}
-              />
-              <SidebarButtonPrimary
+            <Link to={'/tasks'} onClick={onNavLinkClick}>
+              <Button
+                variant="ghost"
+                className={cn(
+                  'w-full justify-start',
+                  // selected && 'bg-slate-200 dark:bg-slate-800',
+                )}
+              >
+                {<PlayIcon className="mr-2 h-4 w-4" />}
+                <h1>Activity</h1>
+              </Button>
+            </Link>
+            {/* <h2 className="mb-2 text-lg font-semibold tracking-tight">Runs</h2> */}
+            {/* <SidebarButtonPrimary
                 key={2}
                 onNavLinkClick={onNavLinkClick}
                 to="/workflow-runs"
                 name="Workflows"
                 icon={<Squares2X2Icon className="mr-2 w-4" />}
-              />
-            </div>
+              /> */}
           </div>
           <div className="py-2">
             <h2 className="mb-2 text-lg font-semibold tracking-tight">
@@ -141,13 +144,13 @@ function Sidebar({ className, memberships, currTenant }: SidebarProps) {
                 name="Cron Jobs"
                 icon={<ClockIcon className="mr-2 h-4 w-4" />}
               />
-              <SidebarButtonPrimary
+              {/* <SidebarButtonPrimary
                 key={5}
                 onNavLinkClick={onNavLinkClick}
                 to="/events"
                 name="Events"
                 icon={<QueueListIcon className="mr-2 h-4 w-4" />}
-              />
+              /> */}
             </div>
           </div>
           <div className="py-2">

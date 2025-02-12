@@ -126,17 +126,17 @@ export const columns: (
     enableSorting: false,
     enableHiding: true,
   },
-  {
-    accessorKey: 'Triggered by',
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Triggered by" />
-    ),
-    cell: ({ row }) => {
-      return <div>{row.original.triggeredBy}</div>;
-    },
-    enableSorting: false,
-    enableHiding: true,
-  },
+  // {
+  //   accessorKey: 'Triggered by',
+  //   header: ({ column }) => (
+  //     <DataTableColumnHeader column={column} title="Triggered by" />
+  //   ),
+  //   cell: ({ row }) => {
+  //     return <div>{row.original.triggeredBy}</div>;
+  //   },
+  //   enableSorting: false,
+  //   enableHiding: true,
+  // },
   {
     accessorKey: 'Created at',
     header: ({ column }) => (
