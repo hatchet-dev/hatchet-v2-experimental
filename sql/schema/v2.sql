@@ -95,7 +95,9 @@ SELECT create_v2_task_partition(DATE 'today');
 CREATE TYPE v2_task_event_type AS ENUM (
     'COMPLETED',
     'FAILED',
-    'CANCELLED'
+    'CANCELLED',
+    'SIGNAL_CREATED',
+    'SIGNAL_COMPLETED'
 );
 
 -- CreateTable
@@ -105,10 +107,19 @@ CREATE TABLE v2_task_event (
     task_id bigint NOT NULL,
     retry_count INTEGER NOT NULL,
     event_type v2_task_event_type NOT NULL,
+    event_key TEXT,
     created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     data JSONB,
     CONSTRAINT v2_task_event_pkey PRIMARY KEY (id)
 );
+
+-- Create unique index on (tenant_id, task_id, event_key) when event_key is not null
+CREATE UNIQUE INDEX v2_task_event_event_key_unique_idx ON v2_task_event (
+    tenant_id ASC,
+    task_id ASC,
+    event_type ASC,
+    event_key ASC
+) WHERE event_key IS NOT NULL;
 
 -- CreateTable
 CREATE TABLE v2_queue_item (
@@ -179,7 +190,7 @@ CREATE TABLE v2_match (
     kind v2_match_kind NOT NULL,
     is_satisfied BOOLEAN NOT NULL DEFAULT FALSE,
     signal_target_id bigint,
-    signal_target_inserted_at timestamptz,
+    signal_key TEXT,
     -- references the parent DAG for the task, which we can use to get input + additional metadata
     trigger_dag_id bigint,
     trigger_dag_inserted_at timestamptz,
@@ -206,7 +217,12 @@ CREATE TABLE v2_match_condition (
     CONSTRAINT v2_match_condition_pkey PRIMARY KEY (v2_match_id, id)
 );
 
--- TODO: index on tenant_id, registered_at, event_type, event_key, and is_satisfied
+CREATE INDEX v2_match_condition_filter_idx ON v2_match_condition (
+    tenant_id ASC,
+    event_type ASC,
+    event_key ASC,
+    is_satisfied ASC
+);
 
 CREATE TABLE v2_dag (
     id bigint GENERATED ALWAYS AS IDENTITY,

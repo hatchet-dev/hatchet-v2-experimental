@@ -33,6 +33,35 @@ FROM
 RETURNING
     *;
 
+-- name: CreateMatchesForSignalTriggers :many
+WITH input AS (
+    SELECT
+        *
+    FROM
+        (
+            SELECT
+                unnest(@tenantIds::uuid[]) AS tenant_id,
+                unnest(cast(@kinds::text[] as v2_match_kind[])) AS kind,
+                unnest(@signalTargetIds::bigint[]) AS signal_target_id,
+                unnest(@signalKeys::text[]) AS signal_key
+        ) AS subquery
+)
+INSERT INTO v2_match (
+    tenant_id,
+    kind,
+    signal_target_id,
+    signal_key
+)
+SELECT
+    i.tenant_id,
+    i.kind,
+    i.signal_target_id,
+    i.signal_key
+FROM
+    input i
+RETURNING
+    *;
+
 -- name: CreateMatchConditions :copyfrom
 INSERT INTO v2_match_condition (
     v2_match_id,
@@ -144,15 +173,39 @@ WITH match_counts AS (
     FROM v2_match_condition main
     WHERE v2_match_id = ANY(@matchIds::bigint[])
     GROUP BY v2_match_id
+), result_matches AS (
+    SELECT
+        m.*, 
+        mc.aggregated_data::jsonb as mc_aggregated_data
+    FROM
+        v2_match m
+    JOIN
+        match_counts mc ON m.id = mc.v2_match_id
+    WHERE
+        mc.total_groups = mc.satisfied_groups
+), deleted_matches AS (
+    DELETE FROM
+        v2_match
+    WHERE
+        id IN (SELECT id FROM result_matches)
+), locked_conditions AS (
+    SELECT
+        m.v2_match_id,
+        m.id
+    FROM
+        v2_match_condition m
+    JOIN
+        result_matches r ON r.id = m.v2_match_id
+    ORDER BY
+        m.id
+    FOR UPDATE
+), deleted_conditions AS (
+    DELETE FROM
+        v2_match_condition
+    WHERE
+        (v2_match_id, id) IN (SELECT v2_match_id, id FROM locked_conditions)
 )
-UPDATE
-    v2_match m
-SET
-    is_satisfied = TRUE
+SELECT
+    *
 FROM
-    match_counts mc
-WHERE
-    m.id = mc.v2_match_id
-AND
-    mc.total_groups = mc.satisfied_groups
-RETURNING m.*, mc.aggregated_data::jsonb;
+    result_matches;

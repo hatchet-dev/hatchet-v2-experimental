@@ -25,6 +25,36 @@ FROM
         @date::date
     ) AS p;
 
+-- name: CreateOLAPDAGPartition :exec
+SELECT create_v2_olap_partition_with_date_and_status(
+    'v2_dags_olap'::text,
+    @date::date
+);
+
+-- name: ListOLAPDAGPartitionsBeforeDate :many
+SELECT
+    p::text AS partition_name
+FROM
+    get_v2_partitions_before_date(
+        'v2_dags_olap'::text,
+        @date::date
+    ) AS p;
+
+-- name: CreateOLAPRunsPartition :exec
+SELECT create_v2_olap_partition_with_date_and_status(
+    'v2_runs_olap'::text,
+    @date::date
+);
+
+-- name: ListOLAPRunsPartitionsBeforeDate :many
+SELECT
+    p::text AS partition_name
+FROM
+    get_v2_partitions_before_date(
+        'v2_runs_olap'::text,
+        @date::date
+    ) AS p;
+
 -- name: CreateTasksOLAP :copyfrom
 INSERT INTO v2_tasks_olap (
     tenant_id,

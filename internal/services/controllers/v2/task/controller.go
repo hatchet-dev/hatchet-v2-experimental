@@ -2,6 +2,7 @@ package task
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -324,10 +325,17 @@ func (tc *TasksControllerImpl) handleTaskCompleted(ctx context.Context, tenantId
 	for _, task := range releasedTasks {
 		taskExternalId := sqlchelpers.UUIDToStr(task.ExternalID)
 
+		data := v2.CompletedData{
+			StepReadableId: task.StepReadableID,
+			Output:         idsToData[task.ID],
+		}
+
+		dataBytes, _ := json.Marshal(data)
+
 		internalEvents = append(internalEvents, internalEvent{
 			EventTimestamp: time.Now(),
 			EventKey:       v2.GetTaskCompletedEventKey(taskExternalId),
-			EventData:      idsToData[task.ID],
+			EventData:      dataBytes,
 		})
 	}
 
@@ -378,10 +386,17 @@ func (tc *TasksControllerImpl) handleTaskFailed(ctx context.Context, tenantId st
 
 		taskExternalId := sqlchelpers.UUIDToStr(task.ExternalID)
 
+		data := v2.FailedData{
+			StepReadableId: task.StepReadableID,
+			Error:          idsToErrorMsg[task.ID],
+		}
+
+		dataBytes, _ := json.Marshal(data)
+
 		internalEvents = append(internalEvents, internalEvent{
 			EventTimestamp: time.Now(),
 			EventKey:       v2.GetTaskFailedEventKey(taskExternalId),
-			EventData:      []byte(idsToErrorMsg[task.ID]),
+			EventData:      dataBytes,
 		})
 	}
 
@@ -579,13 +594,16 @@ func (tc *TasksControllerImpl) handleProcessTaskTrigger(ctx context.Context, ten
 			ExternalId:         msg.TaskExternalId,
 			Data:               msg.Data,
 			AdditionalMetadata: msg.AdditionalMetadata,
+			ParentTaskId:       msg.ParentTaskId,
+			ChildIndex:         msg.ChildIndex,
+			ChildKey:           msg.ChildKey,
 		})
 	}
 
 	tasks, dags, err := tc.repov2.Triggers().TriggerFromWorkflowNames(ctx, tenantId, opts)
 
 	if err != nil {
-		return fmt.Errorf("could not query workflows for events: %w", err)
+		return fmt.Errorf("could not trigger workflows from names: %w", err)
 	}
 
 	return tc.signalTasksCreated(ctx, tenantId, tasks, dags)
