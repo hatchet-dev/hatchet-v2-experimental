@@ -614,6 +614,7 @@ func (r *olapEventRepository) ListWorkflowRuns(ctx context.Context, tenantId str
 	count, err := r.queries.CountWorkflowRuns(ctx, r.pool, countParams)
 
 	if err != nil {
+		r.l.Error().Msgf("error counting workflow runs: %v", err)
 		count = int64(len(workflowRunIds))
 	}
 

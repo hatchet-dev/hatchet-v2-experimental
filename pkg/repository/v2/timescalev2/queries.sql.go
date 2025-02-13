@@ -78,9 +78,7 @@ func (q *Queries) CountTasks(ctx context.Context, db DBTX, arg CountTasksParams)
 
 const countWorkflowRuns = `-- name: CountWorkflowRuns :one
 SELECT COUNT(*)
-FROM v2_runs_olap r
-LEFT JOIN v2_dags_olap d ON (r.tenant_id, r.external_id, r.inserted_at) = (d.tenant_id, d.external_id, d.inserted_at)
-LEFT JOIN v2_tasks_olap t ON (r.tenant_id, r.external_id, r.inserted_at) = (t.tenant_id, t.external_id, t.inserted_at)
+FROM v2_runs_olap
 WHERE
     tenant_id = $1::uuid
     AND (
