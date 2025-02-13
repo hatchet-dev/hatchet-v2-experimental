@@ -2,9 +2,11 @@ package v2
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/hatchet-dev/hatchet/pkg/repository/prisma/sqlchelpers"
@@ -75,6 +77,8 @@ type TaskRepository interface {
 	ProcessTaskTimeouts(ctx context.Context, tenantId string) ([]*sqlcv2.ProcessTaskTimeoutsRow, bool, error)
 
 	ProcessTaskReassignments(ctx context.Context, tenantId string) ([]*sqlcv2.ProcessTaskReassignmentsRow, bool, error)
+
+	GetQueueCounts(ctx context.Context, tenantId string) (map[string]int, error)
 }
 
 type TaskRepositoryImpl struct {
@@ -515,6 +519,26 @@ func (r *TaskRepositoryImpl) ProcessTaskReassignments(ctx context.Context, tenan
 	}
 
 	return res, len(res) == limit, nil
+}
+
+func (r *TaskRepositoryImpl) GetQueueCounts(ctx context.Context, tenantId string) (map[string]int, error) {
+	counts, err := r.queries.GetQueuedCounts(ctx, r.pool, sqlchelpers.UUIDFromStr(tenantId))
+
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return map[string]int{}, nil
+		}
+
+		return nil, err
+	}
+
+	res := make(map[string]int)
+
+	for _, count := range counts {
+		res[count.Queue] = int(count.Count)
+	}
+
+	return res, nil
 }
 
 func (r *TaskRepositoryImpl) releaseTasks(ctx context.Context, tx sqlcv2.DBTX, tenantId string, tasks []TaskIdRetryCount) ([]*sqlcv2.ReleaseTasksRow, error) {

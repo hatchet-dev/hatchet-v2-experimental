@@ -734,6 +734,8 @@ func getChildWorkflowGroupMatches(parentExternalId string) []GroupMatchCondition
 }
 
 func getParentOnFailureGroupMatches(createGroupId, parentExternalId string) []GroupMatchCondition {
+	cancelGroupId := uuid.NewString()
+
 	return []GroupMatchCondition{
 		{
 			GroupId:    createGroupId,
@@ -743,11 +745,18 @@ func getParentOnFailureGroupMatches(createGroupId, parentExternalId string) []Gr
 			Action:     sqlcv2.V2MatchConditionActionCREATE,
 		},
 		{
-			GroupId:    uuid.NewString(),
+			GroupId:    cancelGroupId,
 			EventType:  sqlcv2.V2EventTypeINTERNAL,
 			EventKey:   GetTaskCompletedEventKey(parentExternalId),
 			Expression: "true",
-			Action:     sqlcv2.V2MatchConditionActionCANCEL,
+			Action:     sqlcv2.V2MatchConditionActionSKIP,
+		},
+		{
+			GroupId:    cancelGroupId,
+			EventType:  sqlcv2.V2EventTypeINTERNAL,
+			EventKey:   GetTaskCancelledEventKey(parentExternalId),
+			Expression: "true",
+			Action:     sqlcv2.V2MatchConditionActionSKIP,
 		},
 	}
 }

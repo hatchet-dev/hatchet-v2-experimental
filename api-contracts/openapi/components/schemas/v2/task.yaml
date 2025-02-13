@@ -214,6 +214,7 @@ V2TaskEventType:
     - ACKNOWLEDGED
     - CREATED
     - QUEUED
+    - SKIPPED
 
 V2TaskRunMetrics:
   type: array

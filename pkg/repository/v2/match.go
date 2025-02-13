@@ -52,6 +52,9 @@ type InternalEventMatchResults struct {
 
 	// A list of tasks which are created in a directly cancelled state
 	CreatedCancelledTasks []*sqlcv2.V2Task
+
+	// A list of tasks which are created in a skipped state
+	CreatedSkippedTasks []*sqlcv2.V2Task
 }
 
 type GroupMatchCondition struct {
@@ -100,8 +103,6 @@ func (m *MatchRepositoryImpl) ProcessInternalEventMatches(ctx context.Context, t
 	idsToEvents := make(map[string]CandidateEventMatch)
 
 	for _, event := range events {
-		fmt.Println("!! PROCESSING EVENT", event.Key)
-
 		idsToEvents[event.ID] = event
 
 		if _, ok := uniqueEventKeys[event.Key]; ok {
@@ -261,6 +262,8 @@ func (m *MatchRepositoryImpl) ProcessInternalEventMatches(ctx context.Context, t
 					opt.InitialState = sqlcv2.V2TaskInitialStateQUEUED
 				case sqlcv2.V2MatchConditionActionCANCEL:
 					opt.InitialState = sqlcv2.V2TaskInitialStateCANCELLED
+				case sqlcv2.V2MatchConditionActionSKIP:
+					opt.InitialState = sqlcv2.V2TaskInitialStateSKIPPED
 				}
 
 				if match.TriggerDagID.Valid && match.TriggerDagInsertedAt.Valid {
@@ -284,6 +287,8 @@ func (m *MatchRepositoryImpl) ProcessInternalEventMatches(ctx context.Context, t
 				res.CreatedQueuedTasks = append(res.CreatedQueuedTasks, task)
 			} else if task.InitialState == sqlcv2.V2TaskInitialStateCANCELLED {
 				res.CreatedCancelledTasks = append(res.CreatedCancelledTasks, task)
+			} else if task.InitialState == sqlcv2.V2TaskInitialStateSKIPPED {
+				res.CreatedSkippedTasks = append(res.CreatedSkippedTasks, task)
 			}
 		}
 	}

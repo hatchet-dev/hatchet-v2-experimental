@@ -45,6 +45,9 @@ func (s *sharedRepository) parseTriggerData(triggerData []byte) (*sqlcv2.V2Match
 		case "CANCEL":
 			cancel := sqlcv2.V2MatchConditionActionCANCEL
 			return &cancel, v, nil
+		case "SKIP":
+			skip := sqlcv2.V2MatchConditionActionSKIP
+			return &skip, v, nil
 		default:
 			s.l.Error().Str("action", k).Msg("unknown action")
 		}

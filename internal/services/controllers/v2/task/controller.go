@@ -650,6 +650,14 @@ func (tc *TasksControllerImpl) processInternalEvents(ctx context.Context, tenant
 		}
 	}
 
+	if len(matchResult.CreatedSkippedTasks) > 0 {
+		err = tc.signalTasksCreatedAndSkipped(ctx, tenantId, matchResult.CreatedSkippedTasks)
+
+		if err != nil {
+			return fmt.Errorf("could not signal skipped tasks: %w", err)
+		}
+	}
+
 	return nil
 }
 
@@ -822,6 +830,92 @@ func (tc *TasksControllerImpl) signalTasksCreatedAndCancelled(ctx context.Contex
 			TaskId:         taskCp.ID,
 			RetryCount:     taskCp.RetryCount,
 			EventType:      timescalev2.V2EventTypeOlapCANCELLED,
+			EventTimestamp: time.Now(),
+		})
+
+		if err != nil {
+			tc.l.Err(err).Msg("could not create message for olap queue")
+			continue
+		}
+
+		err = tc.pubBuffer.Pub(
+			ctx,
+			msgqueue.OLAP_QUEUE,
+			msg,
+			false,
+		)
+
+		if err != nil {
+			tc.l.Err(err).Msg("could not add message to olap queue")
+			continue
+		}
+	}
+
+	return nil
+}
+
+func (tc *TasksControllerImpl) signalTasksCreatedAndSkipped(ctx context.Context, tenantId string, tasks []*sqlcv2.V2Task) error {
+	internalEvents := make([]internalEvent, 0)
+
+	for _, task := range tasks {
+		taskExternalId := sqlchelpers.UUIDToStr(task.ExternalID)
+
+		outputMap := map[string]bool{
+			"skipped": true,
+		}
+
+		outputMapBytes, _ := json.Marshal(outputMap)
+
+		data := v2.CompletedData{
+			StepReadableId: task.StepReadableID,
+			Output:         outputMapBytes,
+		}
+
+		dataBytes, _ := json.Marshal(data)
+
+		internalEvents = append(internalEvents, internalEvent{
+			EventTimestamp: time.Now(),
+			EventKey:       v2.GetTaskCompletedEventKey(taskExternalId),
+			EventData:      dataBytes,
+		})
+	}
+
+	// TODO: MOVE THIS TO THE DATA LAYER?
+	// !! FIXME: RECURSION HERE
+	err := tc.processInternalEvents(ctx, tenantId, internalEvents)
+
+	if err != nil {
+		return err
+	}
+
+	// notify that tasks have been cancelled
+	// TODO: make this transactionally safe?
+	for _, task := range tasks {
+		taskCp := task
+
+		msg, err := tasktypes.CreatedTaskMessage(tenantId, taskCp)
+
+		if err != nil {
+			tc.l.Err(err).Msg("could not create message for olap queue")
+			continue
+		}
+
+		err = tc.pubBuffer.Pub(
+			ctx,
+			msgqueue.OLAP_QUEUE,
+			msg,
+			false,
+		)
+
+		if err != nil {
+			tc.l.Err(err).Msg("could not add message to olap queue")
+			continue
+		}
+
+		msg, err = tasktypes.MonitoringEventMessageFromInternal(tenantId, tasktypes.CreateMonitoringEventPayload{
+			TaskId:         taskCp.ID,
+			RetryCount:     taskCp.RetryCount,
+			EventType:      timescalev2.V2EventTypeOlapSKIPPED,
 			EventTimestamp: time.Now(),
 		})
 

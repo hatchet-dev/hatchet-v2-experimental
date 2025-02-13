@@ -208,6 +208,7 @@ export enum V2TaskEventType {
   ACKNOWLEDGED = 'ACKNOWLEDGED',
   CREATED = 'CREATED',
   QUEUED = 'QUEUED',
+  SKIPPED = 'SKIPPED',
 }
 
 export interface V2TaskEvent {

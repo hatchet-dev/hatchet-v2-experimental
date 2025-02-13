@@ -191,6 +191,7 @@ const (
 	V2TaskEventTypeRETRYING           V2TaskEventType = "RETRYING"
 	V2TaskEventTypeSCHEDULINGTIMEDOUT V2TaskEventType = "SCHEDULING_TIMED_OUT"
 	V2TaskEventTypeSENTTOWORKER       V2TaskEventType = "SENT_TO_WORKER"
+	V2TaskEventTypeSKIPPED            V2TaskEventType = "SKIPPED"
 	V2TaskEventTypeSLOTRELEASED       V2TaskEventType = "SLOT_RELEASED"
 	V2TaskEventTypeSTARTED            V2TaskEventType = "STARTED"
 	V2TaskEventTypeTIMEDOUT           V2TaskEventType = "TIMED_OUT"

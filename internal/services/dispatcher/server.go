@@ -2156,7 +2156,7 @@ type stepResult struct {
 	Error string `json:"error,omitempty"`
 }
 
-type signalEventData map[string][]stepResult
+type signalEventData map[string]map[string][]stepResult
 
 func (s *DispatcherImpl) taskEventsToWorkflowRunEvent(tenantId string, keyToId map[string]string, events []*sqlcv2.V2TaskEvent) ([]*contracts.WorkflowRunEvent, error) {
 	res := make([]*contracts.WorkflowRunEvent, 0)
@@ -2174,36 +2174,42 @@ func (s *DispatcherImpl) taskEventsToWorkflowRunEvent(tenantId string, keyToId m
 
 		stepRunResults := []*contracts.StepRunResult{}
 
-		for signalKey, stepResults := range parsedEventData {
-			var taskExternalId string
-
-			if strings.HasPrefix(signalKey, "task.completed.") {
-				taskExternalId = strings.TrimPrefix(signalKey, "task.completed.")
-			} else if strings.HasPrefix(signalKey, "task.failed.") {
-				taskExternalId = strings.TrimPrefix(signalKey, "task.failed.")
-			} else if strings.HasPrefix(signalKey, "task.cancelled.") {
-				taskExternalId = strings.TrimPrefix(signalKey, "task.cancelled.")
+		for actionKind, eventDatas := range parsedEventData {
+			if actionKind != "CREATE" {
+				continue
 			}
 
-			if taskExternalId != "" {
-				for _, stepResult := range stepResults {
-					res := &contracts.StepRunResult{
-						StepRunId:      taskExternalId,
-						StepReadableId: stepResult.StepReadableId,
-						JobRunId:       taskExternalId,
+			for signalKey, stepResults := range eventDatas {
+				var taskExternalId string
+
+				if strings.HasPrefix(signalKey, "task.completed.") {
+					taskExternalId = strings.TrimPrefix(signalKey, "task.completed.")
+				} else if strings.HasPrefix(signalKey, "task.failed.") {
+					taskExternalId = strings.TrimPrefix(signalKey, "task.failed.")
+				} else if strings.HasPrefix(signalKey, "task.cancelled.") {
+					taskExternalId = strings.TrimPrefix(signalKey, "task.cancelled.")
+				}
+
+				if taskExternalId != "" {
+					for _, stepResult := range stepResults {
+						res := &contracts.StepRunResult{
+							StepRunId:      taskExternalId,
+							StepReadableId: stepResult.StepReadableId,
+							JobRunId:       taskExternalId,
+						}
+
+						if stepResult.Output != nil {
+							out := string(stepResult.Output)
+
+							res.Output = &out
+						}
+
+						if stepResult.Error != "" {
+							res.Error = &stepResult.Error
+						}
+
+						stepRunResults = append(stepRunResults, res)
 					}
-
-					if stepResult.Output != nil {
-						out := string(stepResult.Output)
-
-						res.Output = &out
-					}
-
-					if stepResult.Error != "" {
-						res.Error = &stepResult.Error
-					}
-
-					stepRunResults = append(stepRunResults, res)
 				}
 			}
 		}
