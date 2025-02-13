@@ -94,7 +94,7 @@ func WorkflowRunChildToTaskSummaryUnit(task *timescalev2.ListDAGChildrenRow) gen
 		},
 		TaskId:             int(task.RunID),
 		TaskInsertedAt:     task.InsertedAt.Time,
-		DisplayName:        task.DisplayName.String,
+		DisplayName:        task.DisplayName,
 		Duration:           durationPtr,
 		StartedAt:          startedAt,
 		FinishedAt:         finishedAt,

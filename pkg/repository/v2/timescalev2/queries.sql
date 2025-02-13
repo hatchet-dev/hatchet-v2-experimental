@@ -771,7 +771,7 @@ WITH tasks AS (
         t.external_id,
         d.id AS dag_id,
         t.id AS task_id,
-        r.readable_status,
+        t.readable_status,
         r.kind,
         r.workflow_id,
         t.display_name,
@@ -779,8 +779,8 @@ WITH tasks AS (
         t.additional_metadata,
         t.latest_retry_count
     FROM v2_runs_olap r
-    LEFT JOIN v2_dags_olap d ON (r.tenant_id, r.external_id, r.inserted_at) = (d.tenant_id, d.external_id, d.inserted_at)
-    LEFT JOIN v2_tasks_olap t ON (d.tenant_id, d.id) = (t.tenant_id, t.dag_id)
+    JOIN v2_dags_olap d ON (r.tenant_id, r.external_id, r.inserted_at) = (d.tenant_id, d.external_id, d.inserted_at)
+    JOIN v2_tasks_olap t ON (d.tenant_id, d.id) = (t.tenant_id, t.dag_id)
     WHERE
         kind = 'DAG'
         AND (sqlc.narg('dagIds')::bigint[] IS NULL OR d.id = ANY(sqlc.narg('dagIds')::bigint[]))

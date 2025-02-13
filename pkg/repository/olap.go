@@ -276,8 +276,6 @@ func (r *olapEventRepository) ReadTaskRun(ctx context.Context, taskExternalId st
 		ExternalID:         row.ExternalID,
 		LatestRetryCount:   row.LatestRetryCount,
 		LatestWorkerID:     row.LatestWorkerID,
-		ErrorMessage:       row.ErrorMessage,
-		Output:             row.Output,
 	}, nil
 }
 
@@ -399,7 +397,7 @@ func (r *olapEventRepository) ListTaskRuns(ctx context.Context, tenantId string,
 		rowChildren := make([]*timescalev2.ListDAGChildrenRow, 0)
 
 		for _, child := range children {
-			if child.DagID.Int64 == row.DagID.Int64 {
+			if child.DagID == row.DagID.Int64 {
 				rowChildren = append(rowChildren, child)
 			}
 		}
