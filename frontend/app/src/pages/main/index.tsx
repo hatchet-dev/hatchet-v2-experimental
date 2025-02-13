@@ -125,8 +125,8 @@ function Sidebar({ className, memberships, currTenant }: SidebarProps) {
             <SidebarButtonPrimary
               key={1}
               onNavLinkClick={onNavLinkClick}
-              to="/tasks"
-              name="Tasks"
+              to="/workflow-runs"
+              name="Workflow Runs"
               icon={<PlayIcon className="mr-2 h-4 w-4" />}
             />
           </div>

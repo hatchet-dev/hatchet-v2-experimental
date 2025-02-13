@@ -9,6 +9,7 @@ type ListRateLimitsQuery = Parameters<typeof api.rateLimitList>[1];
 type ListLogLineQuery = Parameters<typeof api.logLineList>[1];
 type ListWorkflowRunsQuery = Parameters<typeof api.workflowRunList>[1];
 type GetTaskMetricsQuery = Parameters<typeof api.v2TaskListStatusMetrics>[1];
+type V2ListWorkflowRunsQuery = Parameters<typeof api.v2WorkflowRunList>[1];
 type V2ListTaskRunsQuery = Parameters<typeof api.v2TaskList>[1];
 type V2TaskGetPointMetricsQuery = Parameters<
   typeof api.v2TaskGetPointMetrics
@@ -207,6 +208,12 @@ export const queries = createQueryKeyStore({
     list: (tenant: string, query: CronWorkflowsQuery) => ({
       queryKey: ['cron-job:list', tenant, query],
       queryFn: async () => (await api.cronWorkflowList(tenant, query)).data,
+    }),
+  },
+  v2WorkflowRuns: {
+    list: (tenant: string, query: V2ListWorkflowRunsQuery) => ({
+      queryKey: ['v2:workflow-run:list', tenant, query],
+      queryFn: async () => (await api.v2WorkflowRunList(tenant, query)).data,
     }),
   },
   v2Tasks: {

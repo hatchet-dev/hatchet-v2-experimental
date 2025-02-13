@@ -11,62 +11,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const countRuns = `-- name: CountRuns :one
-SELECT COUNT(*)
-FROM v2_runs_olap r
-LEFT JOIN v2_dags_olap d ON (r.tenant_id, r.external_id, r.inserted_at) = (d.tenant_id, d.external_id, d.inserted_at)
-LEFT JOIN v2_tasks_olap t ON (r.tenant_id, r.external_id, r.inserted_at) = (t.tenant_id, t.external_id, t.inserted_at)
-WHERE
-    tenant_id = $1::uuid
-    AND (
-        $2::uuid[] IS NULL
-        OR workflow_id = ANY($2::uuid[])
-    )
-    AND (
-        $3::text[] IS NULL
-        OR readable_status = ANY(cast($3::text[] as v2_readable_status_olap[]))
-    )
-    AND inserted_at >= $4::timestamptz
-    AND (
-        $5::timestamptz IS NULL
-        OR inserted_at <= $5::timestamptz
-    )
-    -- TODO: Bring this back once we have additional_metadata on the run
-    -- AND (
-    --     sqlc.narg('keys')::text[] IS NULL
-    --     OR sqlc.narg('values')::text[] IS NULL
-    --     OR COALESCE(d.additional_metadata, t.additional_metadata) IS NULL
-    --     OR EXISTS (
-    --         SELECT 1 FROM jsonb_each_text(COALESCE(d.additional_metadata, t.additional_metadata)) kv
-    --         JOIN LATERAL (
-    --             SELECT unnest(sqlc.narg('keys')::text[]) AS k,
-    --                 unnest(sqlc.narg('values')::text[]) AS v
-    --         ) AS u ON kv.key = u.k AND kv.value = u.v
-    --     )
-    -- )
-`
-
-type CountRunsParams struct {
-	Tenantid    pgtype.UUID        `json:"tenantid"`
-	WorkflowIds []pgtype.UUID      `json:"workflowIds"`
-	Statuses    []string           `json:"statuses"`
-	Since       pgtype.Timestamptz `json:"since"`
-	Until       pgtype.Timestamptz `json:"until"`
-}
-
-func (q *Queries) CountRuns(ctx context.Context, db DBTX, arg CountRunsParams) (int64, error) {
-	row := db.QueryRow(ctx, countRuns,
-		arg.Tenantid,
-		arg.WorkflowIds,
-		arg.Statuses,
-		arg.Since,
-		arg.Until,
-	)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const countTasks = `-- name: CountTasks :one
 SELECT
     COUNT(*)
@@ -126,6 +70,63 @@ func (q *Queries) CountTasks(ctx context.Context, db DBTX, arg CountTasksParams)
 		arg.WorkerId,
 		arg.Keys,
 		arg.Values,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countWorkflowRuns = `-- name: CountWorkflowRuns :one
+SELECT COUNT(*)
+FROM v2_runs_olap r
+LEFT JOIN v2_dags_olap d ON (r.tenant_id, r.external_id, r.inserted_at) = (d.tenant_id, d.external_id, d.inserted_at)
+LEFT JOIN v2_tasks_olap t ON (r.tenant_id, r.external_id, r.inserted_at) = (t.tenant_id, t.external_id, t.inserted_at)
+WHERE
+    tenant_id = $1::uuid
+    AND (
+        $2::uuid[] IS NULL
+        OR workflow_id = ANY($2::uuid[])
+    )
+    AND (
+        $3::text[] IS NULL
+        OR readable_status = ANY(cast($3::text[] as v2_readable_status_olap[]))
+    )
+    AND inserted_at >= $4::timestamptz
+    AND (
+        $5::timestamptz IS NULL
+        OR inserted_at <= $5::timestamptz
+    )
+    -- TODO: Bring this back once we have additional_metadata on the run
+    -- AND (
+    --     sqlc.narg('keys')::text[] IS NULL
+    --     OR sqlc.narg('values')::text[] IS NULL
+    --     OR COALESCE(d.additional_metadata, t.additional_metadata) IS NULL
+    --     OR EXISTS (
+    --         SELECT 1 FROM jsonb_each_text(COALESCE(d.additional_metadata, t.additional_metadata)) kv
+    --         JOIN LATERAL (
+    --             SELECT unnest(sqlc.narg('keys')::text[]) AS k,
+    --                 unnest(sqlc.narg('values')::text[]) AS v
+    --         ) AS u ON kv.key = u.k AND kv.value = u.v
+    --     )
+    -- )
+LIMIT 20000
+`
+
+type CountWorkflowRunsParams struct {
+	Tenantid    pgtype.UUID        `json:"tenantid"`
+	WorkflowIds []pgtype.UUID      `json:"workflowIds"`
+	Statuses    []string           `json:"statuses"`
+	Since       pgtype.Timestamptz `json:"since"`
+	Until       pgtype.Timestamptz `json:"until"`
+}
+
+func (q *Queries) CountWorkflowRuns(ctx context.Context, db DBTX, arg CountWorkflowRunsParams) (int64, error) {
+	row := db.QueryRow(ctx, countWorkflowRuns,
+		arg.Tenantid,
+		arg.WorkflowIds,
+		arg.Statuses,
+		arg.Since,
+		arg.Until,
 	)
 	var count int64
 	err := row.Scan(&count)
@@ -251,249 +252,8 @@ type CreateTasksOLAPParams struct {
 	DagInsertedAt      pgtype.Timestamptz   `json:"dag_inserted_at"`
 }
 
-const fetchDAGChildren = `-- name: FetchDAGChildren :many
-WITH tasks AS (
-    SELECT
-        d.id AS dag_id,
-        t.id AS task_id,
-        r.id AS run_id,
-        r.tenant_id,
-        r.inserted_at,
-        r.external_id,
-        r.readable_status,
-        r.kind,
-        r.workflow_id,
-        t.display_name,
-        t.input,
-        t.additional_metadata
-    FROM v2_runs_olap r
-    JOIN v2_dags_olap d ON (r.tenant_id, r.external_id, r.inserted_at) = (d.tenant_id, d.external_id, d.inserted_at)
-    JOIN v2_dag_to_task_olap dt ON d.id = dt.dag_id -- Do I need to join by ` + "`" + `inserted_at` + "`" + ` here too?
-    JOIN v2_tasks_olap t ON dt.task_id = t.id -- Do I need to join by ` + "`" + `inserted_at` + "`" + ` here too?
-    WHERE
-        tenant_id = $1::uuid
-        AND r.kind = 'DAG'
-        AND (
-            $2::integer[] IS NULL
-            OR r.id = ANY($2::integer[])
-        )
-    LIMIT $4::integer
-    OFFSET $3::integer
-), metadata AS (
-    SELECT
-        t.run_id,
-        MIN(e.inserted_at)::timestamptz AS created_at,
-        MIN(e.inserted_at) FILTER (WHERE e.readable_status = 'RUNNING')::timestamptz AS started_at,
-        MAX(e.inserted_at) FILTER (WHERE e.readable_status IN ('COMPLETED', 'CANCELLED', 'FAILED'))::timestamptz AS finished_at,
-        MAX(e.error_message) FILTER (WHERE e.readable_status = 'FAILED') AS error_message,
-        MAX(e.output) FILTER (WHERE e.readable_status = 'COMPLETED') AS output
-    FROM tasks t
-    JOIN v2_task_events_olap e ON e.task_id = t.task_id -- Do I need to join by ` + "`" + `inserted_at` + "`" + ` here too?
-    GROUP BY t.run_id
-)
-
-SELECT
-    t.dag_id, t.task_id, t.run_id, t.tenant_id, t.inserted_at, t.external_id, t.readable_status, t.kind, t.workflow_id, t.display_name, t.input, t.additional_metadata,
-    m.created_at,
-    m.started_at,
-    m.finished_at,
-    m.output,
-    m.error_message
-FROM tasks t
-LEFT JOIN metadata m ON t.run_id = m.run_id
-ORDER BY t.inserted_at DESC
-`
-
-type FetchDAGChildrenParams struct {
-	Tenantid               pgtype.UUID `json:"tenantid"`
-	RunIds                 []int32     `json:"runIds"`
-	Listworkflowrunsoffset int32       `json:"listworkflowrunsoffset"`
-	Listworkflowrunslimit  int32       `json:"listworkflowrunslimit"`
-}
-
-type FetchDAGChildrenRow struct {
-	DagID              int64                `json:"dag_id"`
-	TaskID             int64                `json:"task_id"`
-	RunID              int64                `json:"run_id"`
-	TenantID           pgtype.UUID          `json:"tenant_id"`
-	InsertedAt         pgtype.Timestamptz   `json:"inserted_at"`
-	ExternalID         pgtype.UUID          `json:"external_id"`
-	ReadableStatus     V2ReadableStatusOlap `json:"readable_status"`
-	Kind               V2RunKind            `json:"kind"`
-	WorkflowID         pgtype.UUID          `json:"workflow_id"`
-	DisplayName        string               `json:"display_name"`
-	Input              []byte               `json:"input"`
-	AdditionalMetadata []byte               `json:"additional_metadata"`
-	CreatedAt          pgtype.Timestamptz   `json:"created_at"`
-	StartedAt          pgtype.Timestamptz   `json:"started_at"`
-	FinishedAt         pgtype.Timestamptz   `json:"finished_at"`
-	Output             interface{}          `json:"output"`
-	ErrorMessage       interface{}          `json:"error_message"`
-}
-
-func (q *Queries) FetchDAGChildren(ctx context.Context, db DBTX, arg FetchDAGChildrenParams) ([]*FetchDAGChildrenRow, error) {
-	rows, err := db.Query(ctx, fetchDAGChildren,
-		arg.Tenantid,
-		arg.RunIds,
-		arg.Listworkflowrunsoffset,
-		arg.Listworkflowrunslimit,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []*FetchDAGChildrenRow
-	for rows.Next() {
-		var i FetchDAGChildrenRow
-		if err := rows.Scan(
-			&i.DagID,
-			&i.TaskID,
-			&i.RunID,
-			&i.TenantID,
-			&i.InsertedAt,
-			&i.ExternalID,
-			&i.ReadableStatus,
-			&i.Kind,
-			&i.WorkflowID,
-			&i.DisplayName,
-			&i.Input,
-			&i.AdditionalMetadata,
-			&i.CreatedAt,
-			&i.StartedAt,
-			&i.FinishedAt,
-			&i.Output,
-			&i.ErrorMessage,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, &i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const fetchTaskRuns = `-- name: FetchTaskRuns :many
-WITH tasks AS (
-    SELECT
-        t.id AS task_id,
-        r.id AS run_id,
-        r.tenant_id,
-        r.inserted_at,
-        r.external_id,
-        r.readable_status,
-        r.kind,
-        r.workflow_id,
-        t.display_name,
-        t.input,
-        t.additional_metadata
-    FROM v2_runs_olap r
-    JOIN v2_tasks_olap t ON (r.tenant_id, r.external_id, r.inserted_at) = (t.tenant_id, t.external_id, t.inserted_at)
-    WHERE
-        tenant_id = $1::uuid
-        AND r.kind = 'TASK'
-        AND (
-            $2::integer[] IS NULL
-            OR r.id = ANY($2::integer[])
-        )
-    LIMIT $4::integer
-    OFFSET $3::integer
-), metadata AS (
-    SELECT
-        t.run_id,
-        MIN(e.inserted_at)::timestamptz AS created_at,
-        MIN(e.inserted_at) FILTER (WHERE e.readable_status = 'RUNNING')::timestamptz AS started_at,
-        MAX(e.inserted_at) FILTER (WHERE e.readable_status IN ('COMPLETED', 'CANCELLED', 'FAILED'))::timestamptz AS finished_at,
-        MAX(e.error_message) FILTER (WHERE e.readable_status = 'FAILED') AS error_message,
-        MAX(e.output) FILTER (WHERE e.readable_status = 'COMPLETED') AS output
-    FROM tasks t
-    JOIN v2_task_events_olap e ON e.task_id = t.task_id -- Do I need to join by ` + "`" + `inserted_at` + "`" + ` here too?
-    GROUP BY t.run_id
-)
-
-SELECT
-    t.task_id, t.run_id, t.tenant_id, t.inserted_at, t.external_id, t.readable_status, t.kind, t.workflow_id, t.display_name, t.input, t.additional_metadata,
-    m.created_at,
-    m.started_at,
-    m.finished_at,
-    m.output,
-    m.error_message
-FROM tasks t
-LEFT JOIN metadata m ON t.run_id = m.run_id
-ORDER BY t.inserted_at DESC
-`
-
-type FetchTaskRunsParams struct {
-	Tenantid               pgtype.UUID `json:"tenantid"`
-	RunIds                 []int32     `json:"runIds"`
-	Listworkflowrunsoffset int32       `json:"listworkflowrunsoffset"`
-	Listworkflowrunslimit  int32       `json:"listworkflowrunslimit"`
-}
-
-type FetchTaskRunsRow struct {
-	TaskID             int64                `json:"task_id"`
-	RunID              int64                `json:"run_id"`
-	TenantID           pgtype.UUID          `json:"tenant_id"`
-	InsertedAt         pgtype.Timestamptz   `json:"inserted_at"`
-	ExternalID         pgtype.UUID          `json:"external_id"`
-	ReadableStatus     V2ReadableStatusOlap `json:"readable_status"`
-	Kind               V2RunKind            `json:"kind"`
-	WorkflowID         pgtype.UUID          `json:"workflow_id"`
-	DisplayName        string               `json:"display_name"`
-	Input              []byte               `json:"input"`
-	AdditionalMetadata []byte               `json:"additional_metadata"`
-	CreatedAt          pgtype.Timestamptz   `json:"created_at"`
-	StartedAt          pgtype.Timestamptz   `json:"started_at"`
-	FinishedAt         pgtype.Timestamptz   `json:"finished_at"`
-	Output             interface{}          `json:"output"`
-	ErrorMessage       interface{}          `json:"error_message"`
-}
-
-func (q *Queries) FetchTaskRuns(ctx context.Context, db DBTX, arg FetchTaskRunsParams) ([]*FetchTaskRunsRow, error) {
-	rows, err := db.Query(ctx, fetchTaskRuns,
-		arg.Tenantid,
-		arg.RunIds,
-		arg.Listworkflowrunsoffset,
-		arg.Listworkflowrunslimit,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []*FetchTaskRunsRow
-	for rows.Next() {
-		var i FetchTaskRunsRow
-		if err := rows.Scan(
-			&i.TaskID,
-			&i.RunID,
-			&i.TenantID,
-			&i.InsertedAt,
-			&i.ExternalID,
-			&i.ReadableStatus,
-			&i.Kind,
-			&i.WorkflowID,
-			&i.DisplayName,
-			&i.Input,
-			&i.AdditionalMetadata,
-			&i.CreatedAt,
-			&i.StartedAt,
-			&i.FinishedAt,
-			&i.Output,
-			&i.ErrorMessage,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, &i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const fetchWorkflowRunIds = `-- name: FetchWorkflowRunIds :many
-SELECT id AS run_id
+SELECT id, inserted_at, kind, external_id
 FROM v2_runs_olap
 WHERE
     tenant_id = $1::uuid
@@ -523,7 +283,7 @@ WHERE
     --         ) AS u ON kv.key = u.k AND kv.value = u.v
     --     )
     -- )
-ORDER BY inserted_at DESC
+ORDER BY inserted_at DESC, id DESC
 LIMIT $7::integer
 OFFSET $6::integer
 `
@@ -538,7 +298,14 @@ type FetchWorkflowRunIdsParams struct {
 	Listworkflowrunslimit  int32              `json:"listworkflowrunslimit"`
 }
 
-func (q *Queries) FetchWorkflowRunIds(ctx context.Context, db DBTX, arg FetchWorkflowRunIdsParams) ([]int64, error) {
+type FetchWorkflowRunIdsRow struct {
+	ID         int64              `json:"id"`
+	InsertedAt pgtype.Timestamptz `json:"inserted_at"`
+	Kind       V2RunKind          `json:"kind"`
+	ExternalID pgtype.UUID        `json:"external_id"`
+}
+
+func (q *Queries) FetchWorkflowRunIds(ctx context.Context, db DBTX, arg FetchWorkflowRunIdsParams) ([]*FetchWorkflowRunIdsRow, error) {
 	rows, err := db.Query(ctx, fetchWorkflowRunIds,
 		arg.Tenantid,
 		arg.WorkflowIds,
@@ -552,128 +319,14 @@ func (q *Queries) FetchWorkflowRunIds(ctx context.Context, db DBTX, arg FetchWor
 		return nil, err
 	}
 	defer rows.Close()
-	var items []int64
+	var items []*FetchWorkflowRunIdsRow
 	for rows.Next() {
-		var run_id int64
-		if err := rows.Scan(&run_id); err != nil {
-			return nil, err
-		}
-		items = append(items, run_id)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const fetchWorkflowRuns = `-- name: FetchWorkflowRuns :many
-WITH workflows AS (
-    SELECT
-        d.id AS dag_id,
-        r.id AS run_id,
-        r.tenant_id,
-        r.inserted_at,
-        r.external_id,
-        r.readable_status,
-        r.kind,
-        r.workflow_id,
-        d.display_name,
-        d.input,
-        d.additional_metadata
-    FROM v2_runs_olap r
-    JOIN v2_dags_olap d ON (r.tenant_id, r.external_id, r.inserted_at) = (d.tenant_id, d.external_id, d.inserted_at)
-    WHERE
-        tenant_id = $1::uuid
-        AND r.kind = 'DAG'
-        AND (
-            $2::integer[] IS NULL
-            OR r.id = ANY($2::integer[])
-        )
-    LIMIT $4::integer
-    OFFSET $3::integer
-), metadata AS (
-    SELECT
-        w.run_id,
-        MIN(e.inserted_at)::timestamptz AS created_at,
-        MIN(e.inserted_at) FILTER (WHERE e.readable_status = 'RUNNING')::timestamptz AS started_at,
-        MAX(e.inserted_at) FILTER (WHERE e.readable_status IN ('COMPLETED', 'CANCELLED', 'FAILED'))::timestamptz AS finished_at,
-        MAX(e.error_message) FILTER (WHERE e.readable_status = 'FAILED') AS error_message,
-        MAX(e.output) FILTER (WHERE e.readable_status = 'COMPLETED') AS output
-    FROM workflows w
-    JOIN v2_dag_to_task_olap dt ON w.dag_id = dt.dag_id  -- Do I need to join by ` + "`" + `inserted_at` + "`" + ` here too?
-    JOIN v2_task_events_olap e ON e.task_id = dt.task_id -- Do I need to join by ` + "`" + `inserted_at` + "`" + ` here too?
-    GROUP BY w.run_id
-)
-
-SELECT
-    w.dag_id, w.run_id, w.tenant_id, w.inserted_at, w.external_id, w.readable_status, w.kind, w.workflow_id, w.display_name, w.input, w.additional_metadata,
-    m.created_at,
-    m.started_at,
-    m.finished_at,
-    m.output,
-    m.error_message
-FROM workflows w
-LEFT JOIN metadata m ON w.run_id = m.run_id
-ORDER BY w.inserted_at DESC
-`
-
-type FetchWorkflowRunsParams struct {
-	Tenantid               pgtype.UUID `json:"tenantid"`
-	RunIds                 []int32     `json:"runIds"`
-	Listworkflowrunsoffset int32       `json:"listworkflowrunsoffset"`
-	Listworkflowrunslimit  int32       `json:"listworkflowrunslimit"`
-}
-
-type FetchWorkflowRunsRow struct {
-	DagID              int64                `json:"dag_id"`
-	RunID              int64                `json:"run_id"`
-	TenantID           pgtype.UUID          `json:"tenant_id"`
-	InsertedAt         pgtype.Timestamptz   `json:"inserted_at"`
-	ExternalID         pgtype.UUID          `json:"external_id"`
-	ReadableStatus     V2ReadableStatusOlap `json:"readable_status"`
-	Kind               V2RunKind            `json:"kind"`
-	WorkflowID         pgtype.UUID          `json:"workflow_id"`
-	DisplayName        string               `json:"display_name"`
-	Input              []byte               `json:"input"`
-	AdditionalMetadata []byte               `json:"additional_metadata"`
-	CreatedAt          pgtype.Timestamptz   `json:"created_at"`
-	StartedAt          pgtype.Timestamptz   `json:"started_at"`
-	FinishedAt         pgtype.Timestamptz   `json:"finished_at"`
-	Output             interface{}          `json:"output"`
-	ErrorMessage       interface{}          `json:"error_message"`
-}
-
-func (q *Queries) FetchWorkflowRuns(ctx context.Context, db DBTX, arg FetchWorkflowRunsParams) ([]*FetchWorkflowRunsRow, error) {
-	rows, err := db.Query(ctx, fetchWorkflowRuns,
-		arg.Tenantid,
-		arg.RunIds,
-		arg.Listworkflowrunsoffset,
-		arg.Listworkflowrunslimit,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []*FetchWorkflowRunsRow
-	for rows.Next() {
-		var i FetchWorkflowRunsRow
+		var i FetchWorkflowRunIdsRow
 		if err := rows.Scan(
-			&i.DagID,
-			&i.RunID,
-			&i.TenantID,
+			&i.ID,
 			&i.InsertedAt,
-			&i.ExternalID,
-			&i.ReadableStatus,
 			&i.Kind,
-			&i.WorkflowID,
-			&i.DisplayName,
-			&i.Input,
-			&i.AdditionalMetadata,
-			&i.CreatedAt,
-			&i.StartedAt,
-			&i.FinishedAt,
-			&i.Output,
-			&i.ErrorMessage,
+			&i.ExternalID,
 		); err != nil {
 			return nil, err
 		}
@@ -1109,6 +762,172 @@ func (q *Queries) ListTasksByDAGId(ctx context.Context, db DBTX, arg ListTasksBy
 	return items, nil
 }
 
+const listTasksByExternalIds = `-- name: ListTasksByExternalIds :many
+SELECT
+    tenant_id,
+    task_id,
+    inserted_at
+FROM
+    v2_lookup_table
+WHERE
+    external_id = ANY($1::uuid[])
+    AND tenant_id = $2::uuid
+`
+
+type ListTasksByExternalIdsParams struct {
+	Externalids []pgtype.UUID `json:"externalids"`
+	Tenantid    pgtype.UUID   `json:"tenantid"`
+}
+
+type ListTasksByExternalIdsRow struct {
+	TenantID   pgtype.UUID        `json:"tenant_id"`
+	TaskID     pgtype.Int8        `json:"task_id"`
+	InsertedAt pgtype.Timestamptz `json:"inserted_at"`
+}
+
+func (q *Queries) ListTasksByExternalIds(ctx context.Context, db DBTX, arg ListTasksByExternalIdsParams) ([]*ListTasksByExternalIdsRow, error) {
+	rows, err := db.Query(ctx, listTasksByExternalIds, arg.Externalids, arg.Tenantid)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []*ListTasksByExternalIdsRow
+	for rows.Next() {
+		var i ListTasksByExternalIdsRow
+		if err := rows.Scan(&i.TenantID, &i.TaskID, &i.InsertedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, &i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const populateDAGMetadata = `-- name: PopulateDAGMetadata :many
+WITH input AS (
+    SELECT
+        UNNEST($1::bigint[]) AS id,
+        UNNEST($2::timestamptz[]) AS inserted_at
+), runs AS (
+    SELECT
+        d.id AS dag_id,
+        r.id AS run_id,
+        r.tenant_id,
+        r.inserted_at,
+        r.external_id,
+        r.readable_status,
+        r.kind,
+        r.workflow_id,
+        d.display_name,
+        d.input,
+        d.additional_metadata
+    FROM v2_runs_olap r
+    JOIN v2_dags_olap d ON (r.tenant_id, r.external_id, r.inserted_at) = (d.tenant_id, d.external_id, d.inserted_at)
+    WHERE
+        (r.inserted_at, r.id) IN (SELECT inserted_at, id FROM input)
+        AND r.tenant_id = $3::uuid
+        AND r.kind = 'DAG'
+), relevant_events AS (
+    SELECT
+        r.run_id,
+        e.tenant_id, e.id, e.inserted_at, e.task_id, e.task_inserted_at, e.event_type, e.workflow_id, e.event_timestamp, e.readable_status, e.retry_count, e.error_message, e.output, e.worker_id, e.additional__event_data, e.additional__event_message
+    FROM runs r
+    JOIN v2_dag_to_task_olap dt ON r.dag_id = dt.dag_id  -- Do I need to join by ` + "`" + `inserted_at` + "`" + ` here too?
+    JOIN v2_task_events_olap e ON e.task_id = dt.task_id -- Do I need to join by ` + "`" + `inserted_at` + "`" + ` here too?
+), metadata AS (
+    SELECT
+        e.run_id,
+        MIN(e.inserted_at)::timestamptz AS created_at,
+        MIN(e.inserted_at) FILTER (WHERE e.readable_status = 'RUNNING')::timestamptz AS started_at,
+        MAX(e.inserted_at) FILTER (WHERE e.readable_status IN ('COMPLETED', 'CANCELLED', 'FAILED'))::timestamptz AS finished_at
+    FROM
+        relevant_events e
+    GROUP BY e.run_id
+), error_message AS (
+    SELECT
+        DISTINCT ON (e.run_id) e.run_id::bigint,
+        e.error_message
+    FROM
+        relevant_events e
+    WHERE
+        e.readable_status = 'FAILED'
+    ORDER BY
+        e.run_id, e.retry_count DESC
+)
+SELECT
+    r.dag_id, r.run_id, r.tenant_id, r.inserted_at, r.external_id, r.readable_status, r.kind, r.workflow_id, r.display_name, r.input, r.additional_metadata,
+    m.created_at,
+    m.started_at,
+    m.finished_at,
+    e.error_message
+FROM runs r
+LEFT JOIN metadata m ON r.run_id = m.run_id
+LEFT JOIN error_message e ON r.run_id = e.run_id
+ORDER BY r.inserted_at DESC, r.run_id DESC
+`
+
+type PopulateDAGMetadataParams struct {
+	Ids         []int64              `json:"ids"`
+	Insertedats []pgtype.Timestamptz `json:"insertedats"`
+	Tenantid    pgtype.UUID          `json:"tenantid"`
+}
+
+type PopulateDAGMetadataRow struct {
+	DagID              int64                `json:"dag_id"`
+	RunID              int64                `json:"run_id"`
+	TenantID           pgtype.UUID          `json:"tenant_id"`
+	InsertedAt         pgtype.Timestamptz   `json:"inserted_at"`
+	ExternalID         pgtype.UUID          `json:"external_id"`
+	ReadableStatus     V2ReadableStatusOlap `json:"readable_status"`
+	Kind               V2RunKind            `json:"kind"`
+	WorkflowID         pgtype.UUID          `json:"workflow_id"`
+	DisplayName        string               `json:"display_name"`
+	Input              []byte               `json:"input"`
+	AdditionalMetadata []byte               `json:"additional_metadata"`
+	CreatedAt          pgtype.Timestamptz   `json:"created_at"`
+	StartedAt          pgtype.Timestamptz   `json:"started_at"`
+	FinishedAt         pgtype.Timestamptz   `json:"finished_at"`
+	ErrorMessage       pgtype.Text          `json:"error_message"`
+}
+
+func (q *Queries) PopulateDAGMetadata(ctx context.Context, db DBTX, arg PopulateDAGMetadataParams) ([]*PopulateDAGMetadataRow, error) {
+	rows, err := db.Query(ctx, populateDAGMetadata, arg.Ids, arg.Insertedats, arg.Tenantid)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []*PopulateDAGMetadataRow
+	for rows.Next() {
+		var i PopulateDAGMetadataRow
+		if err := rows.Scan(
+			&i.DagID,
+			&i.RunID,
+			&i.TenantID,
+			&i.InsertedAt,
+			&i.ExternalID,
+			&i.ReadableStatus,
+			&i.Kind,
+			&i.WorkflowID,
+			&i.DisplayName,
+			&i.Input,
+			&i.AdditionalMetadata,
+			&i.CreatedAt,
+			&i.StartedAt,
+			&i.FinishedAt,
+			&i.ErrorMessage,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, &i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const populateSingleTaskRunData = `-- name: PopulateSingleTaskRunData :one
 WITH latest_retry_count AS (
     SELECT
@@ -1286,7 +1105,8 @@ WITH input AS (
         t.external_id,
         t.display_name,
         t.input,
-        t.additional_metadata
+        t.additional_metadata,
+        t.readable_status
     FROM
         v2_tasks_olap t
     JOIN
@@ -1346,7 +1166,7 @@ WITH input AS (
     GROUP BY e.task_id
 ), error_message AS (
     SELECT
-        e.task_id::bigint,
+        DISTINCT ON (e.task_id) e.task_id::bigint,
         e.error_message
     FROM
         relevant_events e
@@ -1359,8 +1179,7 @@ WITH input AS (
     WHERE
         e.readable_status = 'FAILED'
     ORDER BY
-        e.event_timestamp DESC
-    LIMIT 1
+        e.task_id, e.retry_count DESC
 )
 SELECT
     t.tenant_id,
@@ -1377,7 +1196,7 @@ SELECT
     t.sticky,
     t.display_name,
     t.additional_metadata,
-    t.status::v2_readable_status_olap as status,
+    t.readable_status::v2_readable_status_olap as status,
     f.finished_at::timestamptz as finished_at,
     s.started_at::timestamptz as started_at,
     e.error_message as error_message

@@ -223,6 +223,47 @@ export interface V2TaskEventList {
   rows?: V2TaskEvent[];
 }
 
+export interface V2WorkflowRun {
+  metadata: APIResourceMeta;
+  status: V2TaskStatus;
+  /**
+   * The timestamp the task run started.
+   * @format date-time
+   */
+  startedAt?: string;
+  /**
+   * The timestamp the task run finished.
+   * @format date-time
+   */
+  finishedAt?: string;
+  /** The duration of the task run, in milliseconds. */
+  duration?: number;
+  /**
+   * The ID of the tenant.
+   * @format uuid
+   * @minLength 36
+   * @maxLength 36
+   * @example "bb214807-246e-43a5-a25d-41761d1cff9e"
+   */
+  tenantId: string;
+  /** Additional metadata for the task run. */
+  additionalMetadata?: object;
+  /** The display name of the task run. */
+  displayName: string;
+  /** @format uuid */
+  workflowId: string;
+  /** The output of the task run (for the latest run) */
+  output: object;
+  /** The error message of the task run (for the latest run) */
+  errorMessage?: string;
+}
+
+export interface V2WorkflowRunList {
+  pagination: PaginationResponse;
+  /** The list of workflow runs */
+  rows: V2WorkflowRun[];
+}
+
 export interface V2TaskRunMetric {
   status: V2TaskStatus;
   count: number;

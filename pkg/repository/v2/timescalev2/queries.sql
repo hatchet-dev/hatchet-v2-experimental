@@ -208,6 +208,17 @@ JOIN
     v2_task_events_olap e ON (e.tenant_id, e.task_id, e.readable_status, e.retry_count) = (t.tenant_id, t.id, t.readable_status, t.latest_retry_count)
 ;
 
+-- name: ListTasksByExternalIds :many
+SELECT
+    tenant_id,
+    task_id,
+    inserted_at
+FROM
+    v2_lookup_table
+WHERE
+    external_id = ANY(@externalIds::uuid[])
+    AND tenant_id = @tenantId::uuid;
+
 -- name: ListTasksByDAGId :many
 SELECT
     *
@@ -462,7 +473,8 @@ WITH input AS (
         t.external_id,
         t.display_name,
         t.input,
-        t.additional_metadata
+        t.additional_metadata,
+        t.readable_status
     FROM
         v2_tasks_olap t
     JOIN
@@ -522,7 +534,7 @@ WITH input AS (
     GROUP BY e.task_id
 ), error_message AS (
     SELECT
-        e.task_id::bigint,
+        DISTINCT ON (e.task_id) e.task_id::bigint,
         e.error_message
     FROM
         relevant_events e
@@ -535,8 +547,7 @@ WITH input AS (
     WHERE
         e.readable_status = 'FAILED'
     ORDER BY
-        e.event_timestamp DESC
-    LIMIT 1
+        e.task_id, e.retry_count DESC
 )
 SELECT
     t.tenant_id,
@@ -553,7 +564,7 @@ SELECT
     t.sticky,
     t.display_name,
     t.additional_metadata,
-    t.status::v2_readable_status_olap as status,
+    t.readable_status::v2_readable_status_olap as status,
     f.finished_at::timestamptz as finished_at,
     s.started_at::timestamptz as started_at,
     e.error_message as error_message
@@ -824,7 +835,7 @@ FROM
 
 
 -- name: FetchWorkflowRunIds :many
-SELECT id AS run_id
+SELECT id, inserted_at, kind, external_id
 FROM v2_runs_olap
 WHERE
     tenant_id = @tenantId::uuid
@@ -854,12 +865,12 @@ WHERE
     --         ) AS u ON kv.key = u.k AND kv.value = u.v
     --     )
     -- )
-ORDER BY inserted_at DESC
+ORDER BY inserted_at DESC, id DESC
 LIMIT @listWorkflowRunsLimit::integer
 OFFSET @listWorkflowRunsOffset::integer
 ;
 
--- name: CountRuns :one
+-- name: CountWorkflowRuns :one
 SELECT COUNT(*)
 FROM v2_runs_olap r
 LEFT JOIN v2_dags_olap d ON (r.tenant_id, r.external_id, r.inserted_at) = (d.tenant_id, d.external_id, d.inserted_at)
@@ -892,11 +903,14 @@ WHERE
     --         ) AS u ON kv.key = u.k AND kv.value = u.v
     --     )
     -- )
-;
+LIMIT 20000;
 
-
--- name: FetchWorkflowRuns :many
-WITH workflows AS (
+-- name: PopulateDAGMetadata :many
+WITH input AS (
+    SELECT
+        UNNEST(@ids::bigint[]) AS id,
+        UNNEST(@insertedAts::timestamptz[]) AS inserted_at
+), runs AS (
     SELECT
         d.id AS dag_id,
         r.id AS run_id,
@@ -912,139 +926,43 @@ WITH workflows AS (
     FROM v2_runs_olap r
     JOIN v2_dags_olap d ON (r.tenant_id, r.external_id, r.inserted_at) = (d.tenant_id, d.external_id, d.inserted_at)
     WHERE
-        tenant_id = @tenantId::uuid
+        (r.inserted_at, r.id) IN (SELECT inserted_at, id FROM input)
+        AND r.tenant_id = @tenantId::uuid
         AND r.kind = 'DAG'
-        AND (
-            sqlc.narg('runIds')::integer[] IS NULL
-            OR r.id = ANY(sqlc.narg('runIds')::integer[])
-        )
-    LIMIT @listWorkflowRunsLimit::integer
-    OFFSET @listWorkflowRunsOffset::integer
-), metadata AS (
+), relevant_events AS (
     SELECT
-        w.run_id,
-        MIN(e.inserted_at)::timestamptz AS created_at,
-        MIN(e.inserted_at) FILTER (WHERE e.readable_status = 'RUNNING')::timestamptz AS started_at,
-        MAX(e.inserted_at) FILTER (WHERE e.readable_status IN ('COMPLETED', 'CANCELLED', 'FAILED'))::timestamptz AS finished_at,
-        MAX(e.error_message) FILTER (WHERE e.readable_status = 'FAILED') AS error_message,
-        MAX(e.output) FILTER (WHERE e.readable_status = 'COMPLETED') AS output
-    FROM workflows w
-    JOIN v2_dag_to_task_olap dt ON w.dag_id = dt.dag_id  -- Do I need to join by `inserted_at` here too?
+        r.run_id,
+        e.*
+    FROM runs r
+    JOIN v2_dag_to_task_olap dt ON r.dag_id = dt.dag_id  -- Do I need to join by `inserted_at` here too?
     JOIN v2_task_events_olap e ON e.task_id = dt.task_id -- Do I need to join by `inserted_at` here too?
-    GROUP BY w.run_id
-)
-
-SELECT
-    w.*,
-    m.created_at,
-    m.started_at,
-    m.finished_at,
-    m.output,
-    m.error_message
-FROM workflows w
-LEFT JOIN metadata m ON w.run_id = m.run_id
-ORDER BY w.inserted_at DESC
-;
-
--- name: FetchTaskRuns :many
-WITH tasks AS (
-    SELECT
-        t.id AS task_id,
-        r.id AS run_id,
-        r.tenant_id,
-        r.inserted_at,
-        r.external_id,
-        r.readable_status,
-        r.kind,
-        r.workflow_id,
-        t.display_name,
-        t.input,
-        t.additional_metadata
-    FROM v2_runs_olap r
-    JOIN v2_tasks_olap t ON (r.tenant_id, r.external_id, r.inserted_at) = (t.tenant_id, t.external_id, t.inserted_at)
-    WHERE
-        tenant_id = @tenantId::uuid
-        AND r.kind = 'TASK'
-        AND (
-            sqlc.narg('runIds')::integer[] IS NULL
-            OR r.id = ANY(sqlc.narg('runIds')::integer[])
-        )
-    LIMIT @listWorkflowRunsLimit::integer
-    OFFSET @listWorkflowRunsOffset::integer
 ), metadata AS (
     SELECT
-        t.run_id,
+        e.run_id,
         MIN(e.inserted_at)::timestamptz AS created_at,
         MIN(e.inserted_at) FILTER (WHERE e.readable_status = 'RUNNING')::timestamptz AS started_at,
-        MAX(e.inserted_at) FILTER (WHERE e.readable_status IN ('COMPLETED', 'CANCELLED', 'FAILED'))::timestamptz AS finished_at,
-        MAX(e.error_message) FILTER (WHERE e.readable_status = 'FAILED') AS error_message,
-        MAX(e.output) FILTER (WHERE e.readable_status = 'COMPLETED') AS output
-    FROM tasks t
-    JOIN v2_task_events_olap e ON e.task_id = t.task_id -- Do I need to join by `inserted_at` here too?
-    GROUP BY t.run_id
-)
-
-SELECT
-    t.*,
-    m.created_at,
-    m.started_at,
-    m.finished_at,
-    m.output,
-    m.error_message
-FROM tasks t
-LEFT JOIN metadata m ON t.run_id = m.run_id
-ORDER BY t.inserted_at DESC
-;
-
--- name: FetchDAGChildren :many
-WITH tasks AS (
+        MAX(e.inserted_at) FILTER (WHERE e.readable_status IN ('COMPLETED', 'CANCELLED', 'FAILED'))::timestamptz AS finished_at
+    FROM
+        relevant_events e
+    GROUP BY e.run_id
+), error_message AS (
     SELECT
-        d.id AS dag_id,
-        t.id AS task_id,
-        r.id AS run_id,
-        r.tenant_id,
-        r.inserted_at,
-        r.external_id,
-        r.readable_status,
-        r.kind,
-        r.workflow_id,
-        t.display_name,
-        t.input,
-        t.additional_metadata
-    FROM v2_runs_olap r
-    JOIN v2_dags_olap d ON (r.tenant_id, r.external_id, r.inserted_at) = (d.tenant_id, d.external_id, d.inserted_at)
-    JOIN v2_dag_to_task_olap dt ON d.id = dt.dag_id -- Do I need to join by `inserted_at` here too?
-    JOIN v2_tasks_olap t ON dt.task_id = t.id -- Do I need to join by `inserted_at` here too?
+        DISTINCT ON (e.run_id) e.run_id::bigint,
+        e.error_message
+    FROM
+        relevant_events e
     WHERE
-        tenant_id = @tenantId::uuid
-        AND r.kind = 'DAG'
-        AND (
-            sqlc.narg('runIds')::integer[] IS NULL
-            OR r.id = ANY(sqlc.narg('runIds')::integer[])
-        )
-    LIMIT @listWorkflowRunsLimit::integer
-    OFFSET @listWorkflowRunsOffset::integer
-), metadata AS (
-    SELECT
-        t.run_id,
-        MIN(e.inserted_at)::timestamptz AS created_at,
-        MIN(e.inserted_at) FILTER (WHERE e.readable_status = 'RUNNING')::timestamptz AS started_at,
-        MAX(e.inserted_at) FILTER (WHERE e.readable_status IN ('COMPLETED', 'CANCELLED', 'FAILED'))::timestamptz AS finished_at,
-        MAX(e.error_message) FILTER (WHERE e.readable_status = 'FAILED') AS error_message,
-        MAX(e.output) FILTER (WHERE e.readable_status = 'COMPLETED') AS output
-    FROM tasks t
-    JOIN v2_task_events_olap e ON e.task_id = t.task_id -- Do I need to join by `inserted_at` here too?
-    GROUP BY t.run_id
+        e.readable_status = 'FAILED'
+    ORDER BY
+        e.run_id, e.retry_count DESC
 )
-
 SELECT
-    t.*,
+    r.*,
     m.created_at,
     m.started_at,
     m.finished_at,
-    m.output,
-    m.error_message
-FROM tasks t
-LEFT JOIN metadata m ON t.run_id = m.run_id
-ORDER BY t.inserted_at DESC
-;
+    e.error_message
+FROM runs r
+LEFT JOIN metadata m ON r.run_id = m.run_id
+LEFT JOIN error_message e ON r.run_id = e.run_id
+ORDER BY r.inserted_at DESC, r.run_id DESC;

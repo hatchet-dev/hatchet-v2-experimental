@@ -14,7 +14,7 @@ import api, {
   queries,
   ReplayWorkflowRunsRequest,
   V2TaskStatus,
-  V2TaskSummary,
+  V2WorkflowRun,
 } from '@/lib/api';
 import { TenantContextType } from '@/lib/outlet';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
@@ -73,7 +73,7 @@ export interface WorkflowRunsTableProps {
 }
 
 // TODO: Clean this up
-export type ListableWorkflowRun = V2TaskSummary & {
+export type ListableWorkflowRun = V2WorkflowRun & {
   workflowName: string | undefined;
   triggeredBy: string;
   workflowVersionId: string;
@@ -493,7 +493,7 @@ export function WorkflowRunsTable({
       workflowVersionId: 'first version',
       triggeredBy: 'manual',
       workflowName: workflowKeys?.rows?.find(
-        (r) => r.metadata.id == row.parent.workflowId,
+        (r) => r.metadata.id == row.workflowId,
       )?.name,
     }),
   );
