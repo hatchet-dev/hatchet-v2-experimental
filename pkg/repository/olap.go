@@ -532,13 +532,12 @@ func (r *olapEventRepository) ListWorkflowRuns(ctx context.Context, tenantId str
 		countParams.Until = sqlchelpers.TimestamptzFromTime(*until)
 	}
 
-	// TODO: ADD BACK
-	// for key, value := range opts.AdditionalMetadata {
-	// 	params.Keys = append(params.Keys, key)
-	// 	params.Values = append(params.Values, value.(string))
-	// 	countParams.Keys = append(countParams.Keys, key)
-	// 	countParams.Values = append(countParams.Values, value.(string))
-	// }
+	for key, value := range opts.AdditionalMetadata {
+		params.Keys = append(params.Keys, key)
+		params.Values = append(params.Values, value.(string))
+		countParams.Keys = append(countParams.Keys, key)
+		countParams.Values = append(countParams.Values, value.(string))
+	}
 
 	workflowRunIds, err := r.queries.FetchWorkflowRunIds(ctx, tx, params)
 

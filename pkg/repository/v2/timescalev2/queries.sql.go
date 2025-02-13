@@ -35,7 +35,6 @@ WHERE
     AND (
         $7::text[] IS NULL
         OR $8::text[] IS NULL
-        OR additional_metadata IS NULL
         OR EXISTS (
             SELECT 1 FROM jsonb_each_text(additional_metadata) kv
             JOIN LATERAL (
@@ -94,19 +93,17 @@ WHERE
         $5::timestamptz IS NULL
         OR inserted_at <= $5::timestamptz
     )
-    -- TODO: Bring this back once we have additional_metadata on the run
-    -- AND (
-    --     sqlc.narg('keys')::text[] IS NULL
-    --     OR sqlc.narg('values')::text[] IS NULL
-    --     OR COALESCE(d.additional_metadata, t.additional_metadata) IS NULL
-    --     OR EXISTS (
-    --         SELECT 1 FROM jsonb_each_text(COALESCE(d.additional_metadata, t.additional_metadata)) kv
-    --         JOIN LATERAL (
-    --             SELECT unnest(sqlc.narg('keys')::text[]) AS k,
-    --                 unnest(sqlc.narg('values')::text[]) AS v
-    --         ) AS u ON kv.key = u.k AND kv.value = u.v
-    --     )
-    -- )
+    AND (
+        $6::text[] IS NULL
+        OR $7::text[] IS NULL
+        OR EXISTS (
+            SELECT 1 FROM jsonb_each_text(additional_metadata) kv
+            JOIN LATERAL (
+                SELECT unnest($6::text[]) AS k,
+                    unnest($7::text[]) AS v
+            ) AS u ON kv.key = u.k AND kv.value = u.v
+        )
+    )
 LIMIT 20000
 `
 
@@ -116,6 +113,8 @@ type CountWorkflowRunsParams struct {
 	Statuses    []string           `json:"statuses"`
 	Since       pgtype.Timestamptz `json:"since"`
 	Until       pgtype.Timestamptz `json:"until"`
+	Keys        []string           `json:"keys"`
+	Values      []string           `json:"values"`
 }
 
 func (q *Queries) CountWorkflowRuns(ctx context.Context, db DBTX, arg CountWorkflowRunsParams) (int64, error) {
@@ -125,6 +124,8 @@ func (q *Queries) CountWorkflowRuns(ctx context.Context, db DBTX, arg CountWorkf
 		arg.Statuses,
 		arg.Since,
 		arg.Until,
+		arg.Keys,
+		arg.Values,
 	)
 	var count int64
 	err := row.Scan(&count)
@@ -268,22 +269,20 @@ WHERE
         $5::timestamptz IS NULL
         OR inserted_at <= $5::timestamptz
     )
-    -- TODO: Bring this back once we have additional_metadata on the run
-    -- AND (
-    --     sqlc.narg('keys')::text[] IS NULL
-    --     OR sqlc.narg('values')::text[] IS NULL
-    --     OR COALESCE(d.additional_metadata, t.additional_metadata) IS NULL
-    --     OR EXISTS (
-    --         SELECT 1 FROM jsonb_each_text(COALESCE(d.additional_metadata, t.additional_metadata)) kv
-    --         JOIN LATERAL (
-    --             SELECT unnest(sqlc.narg('keys')::text[]) AS k,
-    --                 unnest(sqlc.narg('values')::text[]) AS v
-    --         ) AS u ON kv.key = u.k AND kv.value = u.v
-    --     )
-    -- )
+    AND (
+        $6::text[] IS NULL
+        OR $7::text[] IS NULL
+        OR EXISTS (
+            SELECT 1 FROM jsonb_each_text(additional_metadata) kv
+            JOIN LATERAL (
+                SELECT unnest($6::text[]) AS k,
+                    unnest($7::text[]) AS v
+            ) AS u ON kv.key = u.k AND kv.value = u.v
+        )
+    )
 ORDER BY inserted_at DESC, id DESC
-LIMIT $7::integer
-OFFSET $6::integer
+LIMIT $9::integer
+OFFSET $8::integer
 `
 
 type FetchWorkflowRunIdsParams struct {
@@ -292,6 +291,8 @@ type FetchWorkflowRunIdsParams struct {
 	Statuses               []string           `json:"statuses"`
 	Since                  pgtype.Timestamptz `json:"since"`
 	Until                  pgtype.Timestamptz `json:"until"`
+	Keys                   []string           `json:"keys"`
+	Values                 []string           `json:"values"`
 	Listworkflowrunsoffset int32              `json:"listworkflowrunsoffset"`
 	Listworkflowrunslimit  int32              `json:"listworkflowrunslimit"`
 }
@@ -310,6 +311,8 @@ func (q *Queries) FetchWorkflowRunIds(ctx context.Context, db DBTX, arg FetchWor
 		arg.Statuses,
 		arg.Since,
 		arg.Until,
+		arg.Keys,
+		arg.Values,
 		arg.Listworkflowrunsoffset,
 		arg.Listworkflowrunslimit,
 	)
@@ -656,7 +659,6 @@ WHERE
     AND (
         $7::text[] IS NULL
         OR $8::text[] IS NULL
-        OR additional_metadata IS NULL
         OR EXISTS (
             SELECT 1 FROM jsonb_each_text(additional_metadata) kv
             JOIN LATERAL (

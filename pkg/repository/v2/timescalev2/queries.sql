@@ -315,7 +315,6 @@ WHERE
     AND (
         sqlc.narg('keys')::text[] IS NULL
         OR sqlc.narg('values')::text[] IS NULL
-        OR additional_metadata IS NULL
         OR EXISTS (
             SELECT 1 FROM jsonb_each_text(additional_metadata) kv
             JOIN LATERAL (
@@ -353,7 +352,6 @@ WHERE
     AND (
         sqlc.narg('keys')::text[] IS NULL
         OR sqlc.narg('values')::text[] IS NULL
-        OR additional_metadata IS NULL
         OR EXISTS (
             SELECT 1 FROM jsonb_each_text(additional_metadata) kv
             JOIN LATERAL (
@@ -852,19 +850,17 @@ WHERE
         sqlc.narg('until')::timestamptz IS NULL
         OR inserted_at <= sqlc.narg('until')::timestamptz
     )
-    -- TODO: Bring this back once we have additional_metadata on the run
-    -- AND (
-    --     sqlc.narg('keys')::text[] IS NULL
-    --     OR sqlc.narg('values')::text[] IS NULL
-    --     OR COALESCE(d.additional_metadata, t.additional_metadata) IS NULL
-    --     OR EXISTS (
-    --         SELECT 1 FROM jsonb_each_text(COALESCE(d.additional_metadata, t.additional_metadata)) kv
-    --         JOIN LATERAL (
-    --             SELECT unnest(sqlc.narg('keys')::text[]) AS k,
-    --                 unnest(sqlc.narg('values')::text[]) AS v
-    --         ) AS u ON kv.key = u.k AND kv.value = u.v
-    --     )
-    -- )
+    AND (
+        sqlc.narg('keys')::text[] IS NULL
+        OR sqlc.narg('values')::text[] IS NULL
+        OR EXISTS (
+            SELECT 1 FROM jsonb_each_text(additional_metadata) kv
+            JOIN LATERAL (
+                SELECT unnest(sqlc.narg('keys')::text[]) AS k,
+                    unnest(sqlc.narg('values')::text[]) AS v
+            ) AS u ON kv.key = u.k AND kv.value = u.v
+        )
+    )
 ORDER BY inserted_at DESC, id DESC
 LIMIT @listWorkflowRunsLimit::integer
 OFFSET @listWorkflowRunsOffset::integer
@@ -888,19 +884,17 @@ WHERE
         sqlc.narg('until')::timestamptz IS NULL
         OR inserted_at <= sqlc.narg('until')::timestamptz
     )
-    -- TODO: Bring this back once we have additional_metadata on the run
-    -- AND (
-    --     sqlc.narg('keys')::text[] IS NULL
-    --     OR sqlc.narg('values')::text[] IS NULL
-    --     OR COALESCE(d.additional_metadata, t.additional_metadata) IS NULL
-    --     OR EXISTS (
-    --         SELECT 1 FROM jsonb_each_text(COALESCE(d.additional_metadata, t.additional_metadata)) kv
-    --         JOIN LATERAL (
-    --             SELECT unnest(sqlc.narg('keys')::text[]) AS k,
-    --                 unnest(sqlc.narg('values')::text[]) AS v
-    --         ) AS u ON kv.key = u.k AND kv.value = u.v
-    --     )
-    -- )
+    AND (
+        sqlc.narg('keys')::text[] IS NULL
+        OR sqlc.narg('values')::text[] IS NULL
+        OR EXISTS (
+            SELECT 1 FROM jsonb_each_text(additional_metadata) kv
+            JOIN LATERAL (
+                SELECT unnest(sqlc.narg('keys')::text[]) AS k,
+                    unnest(sqlc.narg('values')::text[]) AS v
+            ) AS u ON kv.key = u.k AND kv.value = u.v
+        )
+    )
 LIMIT 20000;
 
 -- name: PopulateDAGMetadata :many
