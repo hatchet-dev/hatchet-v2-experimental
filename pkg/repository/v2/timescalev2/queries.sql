@@ -859,7 +859,7 @@ WITH tasks AS (
 )
 
 SELECT
-    w.*,
+    t.*,
     m.created_at,
     m.started_at,
     m.finished_at,
@@ -912,7 +912,7 @@ WITH tasks AS (
 )
 
 SELECT
-    w.*,
+    t.*,
     m.created_at,
     m.started_at,
     m.finished_at,
