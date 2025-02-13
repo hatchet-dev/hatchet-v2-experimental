@@ -376,9 +376,6 @@ func (r *olapEventRepository) ListTaskRuns(ctx context.Context, tenantId string,
 
 	records := make([]*olap.TaskRunDataRow, 0)
 	for _, row := range rows {
-		fmt.Println("Output: ", row.Output)
-		fmt.Println("ErrorMessage: ", row.ErrorMessage)
-
 		parent := &timescalev2.ListWorkflowRunsRow{
 			TenantID:           row.TenantID,
 			RunID:              row.RunID,
