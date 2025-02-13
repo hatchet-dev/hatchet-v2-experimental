@@ -237,7 +237,7 @@ WITH tasks AS (
         t.external_id,
         d.id AS dag_id,
         t.id AS task_id,
-        r.readable_status,
+        t.readable_status,
         r.kind,
         r.workflow_id,
         t.display_name,
@@ -245,8 +245,8 @@ WITH tasks AS (
         t.additional_metadata,
         t.latest_retry_count
     FROM v2_runs_olap r
-    LEFT JOIN v2_dags_olap d ON (r.tenant_id, r.external_id, r.inserted_at) = (d.tenant_id, d.external_id, d.inserted_at)
-    LEFT JOIN v2_tasks_olap t ON (d.tenant_id, d.id) = (t.tenant_id, t.dag_id)
+    JOIN v2_dags_olap d ON (r.tenant_id, r.external_id, r.inserted_at) = (d.tenant_id, d.external_id, d.inserted_at)
+    JOIN v2_tasks_olap t ON (d.tenant_id, d.id) = (t.tenant_id, t.dag_id)
     WHERE
         kind = 'DAG'
         AND ($1::bigint[] IS NULL OR d.id = ANY($1::bigint[]))
@@ -272,15 +272,15 @@ type ListDAGChildrenRow struct {
 	TenantID           pgtype.UUID          `json:"tenant_id"`
 	InsertedAt         pgtype.Timestamptz   `json:"inserted_at"`
 	ExternalID         pgtype.UUID          `json:"external_id"`
-	DagID              pgtype.Int8          `json:"dag_id"`
-	TaskID             pgtype.Int8          `json:"task_id"`
+	DagID              int64                `json:"dag_id"`
+	TaskID             int64                `json:"task_id"`
 	ReadableStatus     V2ReadableStatusOlap `json:"readable_status"`
 	Kind               V2RunKind            `json:"kind"`
 	WorkflowID         pgtype.UUID          `json:"workflow_id"`
-	DisplayName        pgtype.Text          `json:"display_name"`
+	DisplayName        string               `json:"display_name"`
 	Input              []byte               `json:"input"`
 	AdditionalMetadata []byte               `json:"additional_metadata"`
-	LatestRetryCount   pgtype.Int4          `json:"latest_retry_count"`
+	LatestRetryCount   int32                `json:"latest_retry_count"`
 	CreatedAt          pgtype.Timestamptz   `json:"created_at"`
 	StartedAt          pgtype.Timestamptz   `json:"started_at"`
 	FinishedAt         pgtype.Timestamptz   `json:"finished_at"`
