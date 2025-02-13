@@ -78,7 +78,7 @@ func (t *TasksService) V2TaskList(ctx echo.Context, request gen.V2TaskListReques
 		opts.FinishedBefore = request.Params.Until
 	}
 
-	tasks, total, err := t.config.EngineRepository.OLAP().ListTaskRuns(
+	tasks, total, err := t.config.EngineRepository.OLAP().ListTasks(
 		ctx.Request().Context(),
 		tenant.ID,
 		opts,

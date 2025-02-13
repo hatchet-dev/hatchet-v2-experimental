@@ -57,6 +57,7 @@ type ReadTaskRunMetricsOpts struct {
 type OLAPEventRepository interface {
 	ReadTaskRun(ctx context.Context, taskExternalId string) (*timescalev2.V2TasksOlap, error)
 	ReadTaskRunData(ctx context.Context, tenantId pgtype.UUID, taskId int64, taskInsertedAt pgtype.Timestamptz) (*timescalev2.PopulateSingleTaskRunDataRow, error)
+	ListTasks(ctx context.Context, tenantId string, opts ListTaskRunOpts) ([]*timescalev2.PopulateTaskRunDataRow, int, error)
 	ListTaskRuns(ctx context.Context, tenantId string, opts ListTaskRunOpts) ([]*olap.TaskRunDataRow, int, error)
 	ListTaskRunEvents(ctx context.Context, tenantId string, taskId int64, taskInsertedAt pgtype.Timestamptz, limit, offset int64) ([]*timescalev2.ListTaskEventsRow, error)
 	ReadTaskRunMetrics(ctx context.Context, tenantId string, opts ReadTaskRunMetricsOpts) ([]olap.TaskRunMetric, error)
@@ -66,6 +67,8 @@ type OLAPEventRepository interface {
 	GetTaskPointMetrics(ctx context.Context, tenantId string, startTimestamp *time.Time, endTimestamp *time.Time, bucketInterval time.Duration) ([]*timescalev2.GetTaskPointMetricsRow, error)
 	UpdateTaskStatuses(ctx context.Context, tenantId string) (bool, error)
 	UpdateDAGStatuses(ctx context.Context, tenantId string) (bool, error)
+	ReadDAG(ctx context.Context, dagExternalId string) (*timescalev2.V2DagsOlap, error)
+	ListTasksByDAGId(ctx context.Context, tenantId string, dagId int64, dagInsertedAt pgtype.Timestamptz) ([]*timescalev2.PopulateTaskRunDataRow, error)
 }
 
 type olapEventRepository struct {
@@ -301,6 +304,149 @@ func uniq[T comparable](arr []T) []T {
 	}
 
 	return uniq
+}
+
+func (r *olapEventRepository) ListTasks(ctx context.Context, tenantId string, opts ListTaskRunOpts) ([]*timescalev2.PopulateTaskRunDataRow, int, error) {
+	tx, err := r.pool.Begin(ctx)
+
+	if err != nil {
+		return nil, 0, err
+	}
+
+	defer tx.Rollback(ctx)
+
+	params := timescalev2.ListTasksParams{
+		Tenantid:   sqlchelpers.UUIDFromStr(tenantId),
+		Since:      sqlchelpers.TimestamptzFromTime(opts.CreatedAfter),
+		Tasklimit:  int32(opts.Limit),
+		Taskoffset: int32(opts.Offset),
+	}
+
+	countParams := timescalev2.CountTasksParams{
+		Tenantid: sqlchelpers.UUIDFromStr(tenantId),
+		Since:    sqlchelpers.TimestamptzFromTime(opts.CreatedAfter),
+	}
+
+	statuses := make([]string, 0)
+
+	for _, status := range opts.Statuses {
+		statuses = append(statuses, string(status))
+	}
+
+	if len(statuses) != 0 && len(statuses) != 5 {
+		params.Statuses = statuses
+		countParams.Statuses = statuses
+	}
+
+	if len(opts.WorkflowIds) > 0 {
+		workflowIdParams := make([]pgtype.UUID, 0)
+
+		for _, id := range opts.WorkflowIds {
+			workflowIdParams = append(workflowIdParams, sqlchelpers.UUIDFromStr(id.String()))
+		}
+
+		params.WorkflowIds = workflowIdParams
+		countParams.WorkflowIds = workflowIdParams
+	}
+
+	until := opts.FinishedBefore
+
+	if until != nil {
+		params.Until = sqlchelpers.TimestamptzFromTime(*until)
+		countParams.Until = sqlchelpers.TimestamptzFromTime(*until)
+	}
+
+	workerId := opts.WorkerId
+
+	if workerId != nil {
+		params.WorkerId = sqlchelpers.UUIDFromStr(workerId.String())
+	}
+
+	for key, value := range opts.AdditionalMetadata {
+		params.Keys = append(params.Keys, key)
+		params.Values = append(params.Values, value.(string))
+		countParams.Keys = append(countParams.Keys, key)
+		countParams.Values = append(countParams.Values, value.(string))
+	}
+
+	rows, err := r.queries.ListTasks(ctx, tx, params)
+
+	if err != nil {
+		return nil, 0, err
+	}
+
+	taskIds := make([]int64, 0)
+	taskInsertedAts := make([]pgtype.Timestamptz, 0)
+
+	for _, row := range rows {
+		taskIds = append(taskIds, row.ID)
+		taskInsertedAts = append(taskInsertedAts, row.InsertedAt)
+	}
+
+	tasksWithData, err := r.queries.PopulateTaskRunData(ctx, tx, timescalev2.PopulateTaskRunDataParams{
+		Taskids:         taskIds,
+		Taskinsertedats: taskInsertedAts,
+		Tenantid:        sqlchelpers.UUIDFromStr(tenantId),
+	})
+
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return nil, 0, err
+	}
+
+	count, err := r.queries.CountTasks(ctx, r.pool, countParams)
+
+	if err != nil {
+		count = int64(len(tasksWithData))
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, 0, err
+	}
+
+	return tasksWithData, int(count), nil
+}
+
+func (r *olapEventRepository) ListTasksByDAGId(ctx context.Context, tenantId string, dagId int64, dagInsertedAt pgtype.Timestamptz) ([]*timescalev2.PopulateTaskRunDataRow, error) {
+	tx, err := r.pool.Begin(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	defer tx.Rollback(ctx)
+
+	tasks, err := r.queries.ListTasksByDAGId(ctx, tx, timescalev2.ListTasksByDAGIdParams{
+		Dagid:         dagId,
+		Daginsertedat: dagInsertedAt,
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	taskIds := make([]int64, 0)
+	taskInsertedAts := make([]pgtype.Timestamptz, 0)
+
+	for _, row := range tasks {
+		taskIds = append(taskIds, row.TaskID)
+		taskInsertedAts = append(taskInsertedAts, row.TaskInsertedAt)
+	}
+
+	tasksWithData, err := r.queries.PopulateTaskRunData(ctx, tx, timescalev2.PopulateTaskRunDataParams{
+		Taskids:         taskIds,
+		Taskinsertedats: taskInsertedAts,
+		Tenantid:        sqlchelpers.UUIDFromStr(tenantId),
+	})
+
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+
+	return tasksWithData, nil
 }
 
 func (r *olapEventRepository) ListTaskRuns(ctx context.Context, tenantId string, opts ListTaskRunOpts) ([]*olap.TaskRunDataRow, int, error) {
@@ -735,6 +881,10 @@ func (r *olapEventRepository) GetTaskPointMetrics(ctx context.Context, tenantId 
 	}
 
 	return rows, nil
+}
+
+func (r *olapEventRepository) ReadDAG(ctx context.Context, dagExternalId string) (*timescalev2.V2DagsOlap, error) {
+	return r.queries.ReadDAGByExternalID(ctx, r.pool, sqlchelpers.UUIDFromStr(dagExternalId))
 }
 
 func durationToPgInterval(d time.Duration) pgtype.Interval {

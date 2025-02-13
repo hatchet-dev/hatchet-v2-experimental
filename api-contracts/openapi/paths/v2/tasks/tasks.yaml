@@ -120,7 +120,10 @@ listTasksByDAGId:
         content:
           application/json:
             schema:
-              $ref: "../../../components/schemas/_index.yaml#/V2TaskSummaryList"
+              type: array
+              items:
+                $ref: "../../../components/schemas/_index.yaml#/V2TaskSummary"
+              description: The list of tasks
         description: Successfully listed the tasks
       "400":
         content:

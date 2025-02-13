@@ -19,7 +19,7 @@ func jsonToMap(jsonBytes []byte) map[string]interface{} {
 	return result
 }
 
-func WorkflowRunRowToTaskSummaryUnit(task *timescalev2.ListWorkflowRunsRow) gen.V2TaskSummarySingle {
+func ToTaskSummary(task *timescalev2.PopulateTaskRunDataRow) gen.V2TaskSummary {
 	additionalMetadata := jsonToMap(task.AdditionalMetadata)
 
 	var finishedAt *time.Time
@@ -39,94 +39,30 @@ func WorkflowRunRowToTaskSummaryUnit(task *timescalev2.ListWorkflowRunsRow) gen.
 	if task.FinishedAt.Valid && task.StartedAt.Valid {
 		duration := int(task.FinishedAt.Time.Sub(task.StartedAt.Time).Milliseconds())
 		durationPtr = &duration
-	}
-
-	output := jsonToMap(task.Output)
-
-	return gen.V2TaskSummarySingle{
-		Metadata: gen.APIResourceMeta{
-			Id:        sqlchelpers.UUIDToStr(task.ExternalID),
-			CreatedAt: task.InsertedAt.Time,
-			UpdatedAt: task.InsertedAt.Time,
-		},
-		TaskId:             int(task.RunID),
-		TaskInsertedAt:     task.InsertedAt.Time,
-		DisplayName:        task.DisplayName,
-		Duration:           durationPtr,
-		StartedAt:          startedAt,
-		FinishedAt:         finishedAt,
-		AdditionalMetadata: &additionalMetadata,
-		Status:             gen.V2TaskStatus(task.ReadableStatus),
-		TenantId:           uuid.MustParse(sqlchelpers.UUIDToStr(task.TenantID)),
-		WorkflowId:         uuid.MustParse(sqlchelpers.UUIDToStr(task.WorkflowID)),
-		Output:             output,
-		ErrorMessage:       &task.ErrorMessage.String,
-	}
-}
-
-func WorkflowRunChildToTaskSummaryUnit(task *timescalev2.ListDAGChildrenRow) gen.V2TaskSummarySingle {
-	additionalMetadata := jsonToMap(task.AdditionalMetadata)
-
-	var finishedAt *time.Time
-
-	if task.FinishedAt.Valid {
-		finishedAt = &task.FinishedAt.Time
-	}
-
-	var startedAt *time.Time
-
-	if task.StartedAt.Valid {
-		startedAt = &task.StartedAt.Time
-	}
-
-	var durationPtr *int
-
-	if task.FinishedAt.Valid && task.StartedAt.Valid {
-		duration := int(task.FinishedAt.Time.Sub(task.StartedAt.Time).Milliseconds())
-		durationPtr = &duration
-	}
-
-	return gen.V2TaskSummarySingle{
-		Metadata: gen.APIResourceMeta{
-			Id:        sqlchelpers.UUIDToStr(task.ExternalID),
-			CreatedAt: task.InsertedAt.Time,
-			UpdatedAt: task.InsertedAt.Time,
-		},
-		TaskId:             int(task.RunID),
-		TaskInsertedAt:     task.InsertedAt.Time,
-		DisplayName:        task.DisplayName,
-		Duration:           durationPtr,
-		StartedAt:          startedAt,
-		FinishedAt:         finishedAt,
-		AdditionalMetadata: &additionalMetadata,
-		Status:             gen.V2TaskStatus(task.ReadableStatus),
-		TenantId:           uuid.MustParse(sqlchelpers.UUIDToStr(task.TenantID)),
-		WorkflowId:         uuid.MustParse(sqlchelpers.UUIDToStr(task.WorkflowID)),
-	}
-}
-
-func ToTaskSummary(task *olap.TaskRunDataRow) gen.V2TaskSummary {
-	parent := WorkflowRunRowToTaskSummaryUnit(task.Parent)
-
-	children := make([]gen.V2TaskSummarySingle, len(task.Children))
-
-	for i, child := range task.Children {
-		children[i] = WorkflowRunChildToTaskSummaryUnit(child)
 	}
 
 	return gen.V2TaskSummary{
 		Metadata: gen.APIResourceMeta{
-			Id:        sqlchelpers.UUIDToStr(task.Parent.ExternalID),
-			CreatedAt: task.Parent.InsertedAt.Time,
-			UpdatedAt: task.Parent.InsertedAt.Time,
+			Id:        sqlchelpers.UUIDToStr(task.ExternalID),
+			CreatedAt: task.InsertedAt.Time,
+			UpdatedAt: task.InsertedAt.Time,
 		},
-		Parent:   parent,
-		Children: children,
+		DisplayName:        task.DisplayName,
+		Duration:           durationPtr,
+		StartedAt:          startedAt,
+		FinishedAt:         finishedAt,
+		AdditionalMetadata: &additionalMetadata,
+		ErrorMessage:       &task.ErrorMessage.String,
+		Status:             gen.V2TaskStatus(task.Status),
+		TenantId:           uuid.MustParse(sqlchelpers.UUIDToStr(task.TenantID)),
+		WorkflowId:         uuid.MustParse(sqlchelpers.UUIDToStr(task.WorkflowID)),
+		TaskId:             int(task.ID),
+		TaskInsertedAt:     task.InsertedAt.Time,
 	}
 }
 
 func ToTaskSummaryMany(
-	tasks []*olap.TaskRunDataRow,
+	tasks []*timescalev2.PopulateTaskRunDataRow,
 	total int, limit, offset int64,
 ) gen.V2TaskSummaryList {
 	toReturn := make([]gen.V2TaskSummary, len(tasks))

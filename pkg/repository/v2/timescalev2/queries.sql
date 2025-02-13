@@ -207,6 +207,33 @@ JOIN
     v2_task_events_olap e ON (e.tenant_id, e.task_id, e.readable_status, e.retry_count) = (t.tenant_id, t.id, t.readable_status, t.latest_retry_count)
 ;
 
+-- name: ListTasksByDAGId :many
+SELECT
+    *
+FROM
+    v2_dag_to_task_olap dt
+WHERE
+    dt.dag_id = @dagId::bigint
+    AND dt.dag_inserted_at = @dagInsertedAt::timestamptz;
+
+-- name: ReadDAGByExternalID :one
+WITH lookup_task AS (
+    SELECT
+        tenant_id,
+        dag_id,
+        inserted_at
+    FROM
+        v2_lookup_table
+    WHERE
+        external_id = @externalId::uuid
+)
+SELECT
+    d.*
+FROM
+    v2_dags_olap d
+JOIN
+    lookup_task lt ON lt.tenant_id = t.tenant_id AND lt.task_id = d.id AND lt.inserted_at = d.inserted_at;
+
 -- name: ListTaskEvents :many
 WITH aggregated_events AS (
   SELECT
@@ -253,12 +280,17 @@ ORDER BY a.time_first_seen DESC, t.event_timestamp DESC;
 
 -- name: ListTasks :many
 SELECT
-    *
+    id,
+    inserted_at
 FROM
     v2_tasks_olap
 WHERE
     tenant_id = @tenantId::uuid
-    AND inserted_at >= @insertedAfter::timestamptz
+    AND inserted_at >= @since::timestamptz
+    AND (
+        sqlc.narg('until')::timestamptz IS NULL
+        OR inserted_at <= sqlc.narg('until')::timestamptz
+    )
     AND (
         sqlc.narg('statuses')::text[] IS NULL OR readable_status = ANY(cast(sqlc.narg('statuses')::text[] as v2_readable_status_olap[]))
     )
@@ -268,9 +300,59 @@ WHERE
     AND (
         sqlc.narg('workerId')::uuid IS NULL OR latest_worker_id = sqlc.narg('workerId')::uuid
     )
+    AND (
+        sqlc.narg('keys')::text[] IS NULL
+        OR sqlc.narg('values')::text[] IS NULL
+        OR additional_metadata IS NULL
+        OR EXISTS (
+            SELECT 1 FROM jsonb_each_text(additional_metadata) kv
+            JOIN LATERAL (
+                SELECT unnest(sqlc.narg('keys')::text[]) AS k,
+                    unnest(sqlc.narg('values')::text[]) AS v
+            ) AS u ON kv.key = u.k AND kv.value = u.v
+        )
+    )
 ORDER BY
     inserted_at DESC
-LIMIT @taskLimit::integer;
+LIMIT @taskLimit::integer
+OFFSET @taskOffset::integer;
+
+-- name: CountTasks :one
+SELECT
+    COUNT(*)
+FROM
+    v2_tasks_olap
+WHERE
+    tenant_id = @tenantId::uuid
+    AND inserted_at >= @since::timestamptz
+    AND (
+        sqlc.narg('until')::timestamptz IS NULL
+        OR inserted_at <= sqlc.narg('until')::timestamptz
+    )
+    AND (
+        sqlc.narg('statuses')::text[] IS NULL OR readable_status = ANY(cast(sqlc.narg('statuses')::text[] as v2_readable_status_olap[]))
+    )
+    AND (
+        sqlc.narg('workflowIds')::uuid[] IS NULL OR workflow_id = ANY(sqlc.narg('workflowIds')::uuid[])
+    )
+    AND (
+        sqlc.narg('workerId')::uuid IS NULL OR latest_worker_id = sqlc.narg('workerId')::uuid
+    )
+    AND (
+        sqlc.narg('keys')::text[] IS NULL
+        OR sqlc.narg('values')::text[] IS NULL
+        OR additional_metadata IS NULL
+        OR EXISTS (
+            SELECT 1 FROM jsonb_each_text(additional_metadata) kv
+            JOIN LATERAL (
+                SELECT unnest(sqlc.narg('keys')::text[]) AS k,
+                    unnest(sqlc.narg('values')::text[]) AS v
+            ) AS u ON kv.key = u.k AND kv.value = u.v
+        )
+    )
+ORDER BY
+    inserted_at DESC
+LIMIT 20000;
 
 -- name: PopulateSingleTaskRunData :one
 WITH latest_retry_count AS (
@@ -359,11 +441,8 @@ WHERE
 -- name: PopulateTaskRunData :many
 WITH input AS (
     SELECT
-        UNNEST(@tenantIds::uuid[]) AS tenant_id,
         UNNEST(@taskIds::bigint[]) AS id,
-        UNNEST(@taskInsertedAts::timestamptz[]) AS inserted_at,
-        UNNEST(@retryCounts::int[]) AS retry_count,
-        unnest(cast(@statuses::text[] as v2_readable_status_olap[])) AS status
+        UNNEST(@taskInsertedAts::timestamptz[]) AS inserted_at
 ), tasks AS (
     SELECT
         DISTINCT ON(t.tenant_id, t.id, t.inserted_at)
@@ -382,21 +461,46 @@ WITH input AS (
         t.external_id,
         t.display_name,
         t.input,
-        t.additional_metadata,
-        i.retry_count,
-        i.status
+        t.additional_metadata
     FROM
         v2_tasks_olap t
     JOIN
-        input i ON i.tenant_id = t.tenant_id AND i.id = t.id AND i.inserted_at = t.inserted_at
+        input i ON i.id = t.id AND i.inserted_at = t.inserted_at
+    WHERE
+        t.tenant_id = @tenantId::uuid
+), relevant_events AS (
+    SELECT
+        e.*
+    FROM
+        v2_task_events_olap e
+    JOIN
+        tasks t ON t.id = e.task_id AND t.tenant_id = e.tenant_id AND t.inserted_at = e.task_inserted_at
+    WHERE
+        e.tenant_id = @tenantId::uuid
+        AND e.task_id = ANY(@taskIds::bigint[])
+        AND e.task_inserted_at = ANY(@taskInsertedAts::timestamptz[])
+), max_retry_counts AS (
+    SELECT
+        e.tenant_id,
+        e.task_id,
+        e.task_inserted_at,
+        MAX(e.retry_count) AS max_retry_count
+    FROM
+        relevant_events e
+    GROUP BY
+        e.tenant_id, e.task_id, e.task_inserted_at
 ), finished_ats AS (
     SELECT
         e.task_id::bigint,
         MAX(e.event_timestamp) AS finished_at
     FROM
-        v2_task_events_olap e
+        relevant_events e
     JOIN
-        tasks t ON t.id = e.task_id AND t.tenant_id = e.tenant_id AND t.inserted_at = e.task_inserted_at AND t.retry_count = e.retry_count
+        max_retry_counts mrc ON
+            e.tenant_id = mrc.tenant_id
+            AND e.task_id = mrc.task_id
+            AND e.task_inserted_at = mrc.task_inserted_at
+            AND e.retry_count = mrc.max_retry_count
     WHERE
         e.readable_status = ANY(ARRAY['COMPLETED', 'FAILED', 'CANCELLED']::v2_readable_status_olap[])
     GROUP BY e.task_id
@@ -405,12 +509,33 @@ WITH input AS (
         e.task_id::bigint,
         MAX(e.event_timestamp) AS started_at
     FROM
-        v2_task_events_olap e
+        relevant_events e
     JOIN
-        tasks t ON t.id = e.task_id AND t.tenant_id = e.tenant_id AND t.inserted_at = e.task_inserted_at AND t.retry_count = e.retry_count
+        max_retry_counts mrc ON
+            e.tenant_id = mrc.tenant_id
+            AND e.task_id = mrc.task_id
+            AND e.task_inserted_at = mrc.task_inserted_at
+            AND e.retry_count = mrc.max_retry_count
     WHERE
         e.event_type = 'STARTED'
     GROUP BY e.task_id
+), error_message AS (
+    SELECT
+        e.task_id::bigint,
+        e.error_message
+    FROM
+        relevant_events e
+    JOIN
+        max_retry_counts mrc ON
+            e.tenant_id = mrc.tenant_id
+            AND e.task_id = mrc.task_id
+            AND e.task_inserted_at = mrc.task_inserted_at
+            AND e.retry_count = mrc.max_retry_count
+    WHERE
+        e.readable_status = 'FAILED'
+    ORDER BY
+        e.event_timestamp DESC
+    LIMIT 1
 )
 SELECT
     t.tenant_id,
@@ -426,19 +551,20 @@ SELECT
     t.priority,
     t.sticky,
     t.display_name,
-    t.retry_count,
     t.additional_metadata,
     t.status::v2_readable_status_olap as status,
     f.finished_at::timestamptz as finished_at,
-    s.started_at::timestamptz as started_at
+    s.started_at::timestamptz as started_at,
+    e.error_message as error_message
 FROM
     tasks t
 LEFT JOIN
     finished_ats f ON f.task_id = t.id
 LEFT JOIN
     started_ats s ON s.task_id = t.id
-ORDER BY t.inserted_at DESC, t.id DESC
-LIMIT @taskLimit::int;
+LEFT JOIN
+    error_message e ON e.task_id = t.id
+ORDER BY t.inserted_at DESC, t.id DESC;
 
 -- name: GetTaskPointMetrics :many
 SELECT
