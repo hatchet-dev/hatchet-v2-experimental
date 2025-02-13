@@ -1,4 +1,4 @@
-V2TaskSummarySingle:
+V2TaskSummary:
   properties:
     metadata:
       $ref: ".././metadata.yaml#/APIResourceMeta"
@@ -54,22 +54,6 @@ V2TaskSummarySingle:
     - displayName
     - workflowId
     - output
-
-V2TaskSummary:
-  properties:
-    metadata:
-      $ref: ".././metadata.yaml#/APIResourceMeta"
-    parent:
-      $ref: "#/V2TaskSummarySingle"
-    children:
-      type: array
-      items:
-        $ref: "#/V2TaskSummarySingle"
-      description: The list of child tasks
-  required:
-    - metadata
-    - parent
-    - children
 
 V2TaskSummaryList:
   type: object

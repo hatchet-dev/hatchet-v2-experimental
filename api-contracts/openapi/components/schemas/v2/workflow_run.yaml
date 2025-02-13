@@ -1,0 +1,21 @@
+V2WorkflowRun:
+  properties:
+    metadata:
+      $ref: ".././metadata.yaml#/APIResourceMeta"
+    # TODO: MATT
+  required:
+    - metadata
+
+V2WorkflowRunList:
+  type: object
+  properties:
+    pagination:
+      $ref: ".././metadata.yaml#/PaginationResponse"
+    rows:
+      type: array
+      items:
+        $ref: "#/V2WorkflowRun"
+      description: The list of workflow runs
+  required:
+    - pagination
+    - rows
