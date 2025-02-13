@@ -61,15 +61,23 @@ func ToTaskSummary(task *timescalev2.PopulateTaskRunDataRow) gen.V2TaskSummary {
 	}
 }
 
-func ToTaskSummaryMany(
+func ToTaskSummaryRows(
 	tasks []*timescalev2.PopulateTaskRunDataRow,
-	total int, limit, offset int64,
-) gen.V2TaskSummaryList {
+) []gen.V2TaskSummary {
 	toReturn := make([]gen.V2TaskSummary, len(tasks))
 
 	for i, task := range tasks {
 		toReturn[i] = ToTaskSummary(task)
 	}
+
+	return toReturn
+}
+
+func ToTaskSummaryMany(
+	tasks []*timescalev2.PopulateTaskRunDataRow,
+	total int, limit, offset int64,
+) gen.V2TaskSummaryList {
+	toReturn := ToTaskSummaryRows(tasks)
 
 	currentPage := (offset / limit) + 1
 	nextPage := currentPage + 1

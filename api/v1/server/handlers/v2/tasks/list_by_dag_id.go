@@ -24,10 +24,10 @@ func (t *TasksService) V2DagListTasks(ctx echo.Context, request gen.V2DagListTas
 		return nil, err
 	}
 
-	result := transformers.ToTaskSummaryMany(tasks, 0, 0, 0)
+	result := transformers.ToTaskSummaryRows(tasks)
 
 	// Search for api errors to see how we handle errors in other cases
 	return gen.V2DagListTasks200JSONResponse(
-		result.Rows,
+		result,
 	), nil
 }

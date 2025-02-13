@@ -244,7 +244,7 @@ SELECT
 FROM
     v2_dags_olap d
 JOIN
-    lookup_task lt ON lt.tenant_id = t.tenant_id AND lt.task_id = d.id AND lt.inserted_at = d.inserted_at;
+    lookup_task lt ON lt.tenant_id = d.tenant_id AND lt.dag_id = d.id AND lt.inserted_at = d.inserted_at;
 
 -- name: ListTaskEvents :many
 WITH aggregated_events AS (
