@@ -183,7 +183,7 @@ WITH match_counts AS (
     GROUP BY v2_match_id
 ), result_matches AS (
     SELECT
-        m.*, 
+        m.*,
         mc.aggregated_data::jsonb as mc_aggregated_data
     FROM
         v2_match m

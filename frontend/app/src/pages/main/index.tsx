@@ -1,10 +1,8 @@
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import {
-  AdjustmentsHorizontalIcon,
   CalendarDaysIcon,
   CpuChipIcon,
-  QueueListIcon,
   ScaleIcon,
   ServerStackIcon,
   Squares2X2Icon,
@@ -61,8 +59,24 @@ interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {
   currTenant: Tenant;
 }
 
+function useSidebarButtonSelected() {
+  const location = useLocation();
+
+  function getSelectedAndOpenStates(prefix: string, to: string) {
+    return {
+      open: location.pathname.startsWith(prefix || to),
+      selected: !prefix && location.pathname === to,
+    };
+  }
+
+  return {
+    getSelectedAndOpenStates,
+  };
+}
+
 function Sidebar({ className, memberships, currTenant }: SidebarProps) {
   const { sidebarOpen, setSidebarOpen } = useSidebar();
+  const { getSelectedAndOpenStates } = useSidebarButtonSelected();
 
   const meta = useCloudApiMeta();
   const featureFlags = useCloudFeatureFlags(currTenant.metadata.id);
@@ -104,25 +118,29 @@ function Sidebar({ className, memberships, currTenant }: SidebarProps) {
       <div className="flex flex-col justify-between items-start space-y-4 px-4 py-4 h-full pb-16 md:pb-4">
         <div className="grow w-full">
           <div className="py-2">
-            <h2 className="mb-2 text-lg font-semibold tracking-tight">
-              Activity
-            </h2>
-            <div className="space-y-1">
-              <SidebarButtonPrimary
-                key={1}
-                onNavLinkClick={onNavLinkClick}
-                to="/workflow-runs"
-                name="Workflow Runs"
-                icon={<AdjustmentsHorizontalIcon className="mr-2 h-4 w-4" />}
-              />
-              <SidebarButtonPrimary
+            <Link to={'/tasks'} onClick={onNavLinkClick}>
+              <Button
+                variant="ghost"
+                className={cn(
+                  'w-full justify-start flex flex-row items-center px-0 mx-0 hover:px-2',
+                  getSelectedAndOpenStates('', '/tasks').selected &&
+                    'bg-slate-200 dark:bg-slate-800  px-2',
+                )}
+              >
+                {/* <PlayIcon className="mr-2 size-6" /> */}
+                <h2 className="text-lg font-semibold tracking-tight">
+                  Activity
+                </h2>
+              </Button>
+            </Link>
+            {/* <h2 className="mb-2 text-lg font-semibold tracking-tight">Runs</h2> */}
+            {/* <SidebarButtonPrimary
                 key={2}
                 onNavLinkClick={onNavLinkClick}
-                to="/events"
-                name="Events"
-                icon={<QueueListIcon className="mr-2 h-4 w-4" />}
-              />
-            </div>
+                to="/workflow-runs"
+                name="Workflows"
+                icon={<Squares2X2Icon className="mr-2 w-4" />}
+              /> */}
           </div>
           <div className="py-2">
             <h2 className="mb-2 text-lg font-semibold tracking-tight">
@@ -130,19 +148,26 @@ function Sidebar({ className, memberships, currTenant }: SidebarProps) {
             </h2>
             <div className="space-y-1">
               <SidebarButtonPrimary
-                key={4}
+                key={3}
                 onNavLinkClick={onNavLinkClick}
                 to="/scheduled"
                 name="Scheduled Runs"
                 icon={<CalendarDaysIcon className="mr-2 h-4 w-4" />}
               />
               <SidebarButtonPrimary
-                key={5}
+                key={4}
                 onNavLinkClick={onNavLinkClick}
                 to="/cron-jobs"
                 name="Cron Jobs"
                 icon={<ClockIcon className="mr-2 h-4 w-4" />}
               />
+              {/* <SidebarButtonPrimary
+                key={5}
+                onNavLinkClick={onNavLinkClick}
+                to="/events"
+                name="Events"
+                icon={<QueueListIcon className="mr-2 h-4 w-4" />}
+              /> */}
             </div>
           </div>
           <div className="py-2">

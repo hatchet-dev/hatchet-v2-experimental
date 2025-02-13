@@ -1,5 +1,5 @@
 import { DataTable } from '@/components/molecules/data-table/data-table.tsx';
-import { columns } from './v2/workflow-runs-columns';
+import { columns } from './v2/task-runs-columns';
 import { useEffect, useMemo, useState } from 'react';
 import {
   ColumnFiltersState,
@@ -14,7 +14,7 @@ import api, {
   queries,
   ReplayWorkflowRunsRequest,
   V2TaskStatus,
-  V2TaskSummary,
+  V2TaskSummarySingle,
 } from '@/lib/api';
 import { TenantContextType } from '@/lib/outlet';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
@@ -30,7 +30,7 @@ import {
   XCircleIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline';
-import { V2WorkflowRunsMetricsView } from './workflow-runs-metrics';
+import { V2WorkflowRunsMetricsView } from './task-runs-metrics';
 import queryClient from '@/query-client';
 import { useApiError } from '@/lib/hooks';
 import {
@@ -58,7 +58,7 @@ import {
 import { DateTimePicker } from '@/components/molecules/time-picker/date-time-picker';
 import { AdditionalMetadataClick } from '../../events/components/additional-metadata';
 
-export interface WorkflowRunsTableProps {
+export interface TaskRunsTableProps {
   createdAfter?: string;
   createdBefore?: string;
   workflowId?: string;
@@ -73,7 +73,7 @@ export interface WorkflowRunsTableProps {
 }
 
 // TODO: Clean this up
-export type ListableWorkflowRun = V2TaskSummary & {
+export type ListableWorkflowRun = V2TaskSummarySingle & {
   workflowName: string | undefined;
   triggeredBy: string;
   workflowVersionId: string;
@@ -92,7 +92,7 @@ export const getCreatedAfterFromTimeRange = (timeRange?: string) => {
   }
 };
 
-export function WorkflowRunsTable({
+export function TaskRunsTable({
   workflowId,
   workerId,
   createdAfter: createdAfterProp,
@@ -101,7 +101,7 @@ export function WorkflowRunsTable({
   refetchInterval = 5000,
   showMetrics = false,
   showCounts = true,
-}: WorkflowRunsTableProps) {
+}: TaskRunsTableProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const { tenant } = useOutletContext<TenantContextType>();
   invariant(tenant);
@@ -272,6 +272,9 @@ export function WorkflowRunsTable({
       since:
         createdAfter ||
         new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+      until: finishedBefore,
+      additional_metadata: columnFilters.find((f) => f.id === 'Metadata')
+        ?.value as string[],
     }),
     placeholderData: (prev) => prev,
     refetchInterval,
@@ -489,12 +492,20 @@ export function WorkflowRunsTable({
 
   const data: ListableWorkflowRun[] = (listTasksQuery.data?.rows || []).map(
     (row) => ({
-      ...row,
+      ...row.parent,
       workflowVersionId: 'first version',
       triggeredBy: 'manual',
       workflowName: workflowKeys?.rows?.find(
         (r) => r.metadata.id == row.parent.workflowId,
       )?.name,
+      subRows: row.children.map((child) => ({
+        ...child,
+        workflowVersionId: 'first version',
+        triggeredBy: 'manual',
+        workflowName: workflowKeys?.rows?.find(
+          (r2) => r2.metadata.id == child.workflowId,
+        )?.name,
+      })),
     }),
   );
 
@@ -648,8 +659,7 @@ export function WorkflowRunsTable({
         columns={columns(onAdditionalMetadataClick)}
         columnVisibility={columnVisibility}
         setColumnVisibility={setColumnVisibility}
-        // TODO: This is a hack - fix this type
-        data={data as any}
+        data={data}
         filters={filters}
         actions={actions}
         sorting={sorting}

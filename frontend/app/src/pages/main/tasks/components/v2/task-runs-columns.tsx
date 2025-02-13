@@ -1,14 +1,18 @@
 import { ColumnDef } from '@tanstack/react-table';
 import { DataTableColumnHeader } from '../../../../../components/molecules/data-table/data-table-column-header';
 import { Link } from 'react-router-dom';
-import { V2RunStatus } from '.././run-statuses';
+import { V2RunStatus } from '../run-statuses';
 import {
   AdditionalMetadata,
   AdditionalMetadataClick,
 } from '../../../events/components/additional-metadata';
 import RelativeDate from '@/components/molecules/relative-date';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ListableWorkflowRun } from '../workflow-runs-table';
+import { ListableWorkflowRun } from '../task-runs-table';
+import { ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+import { DataTableRowActions } from '@/components/molecules/data-table/data-table-row-actions';
 
 export const columns: (
   onAdditionalMetadataClick?: (click: AdditionalMetadataClick) => void,
@@ -27,25 +31,64 @@ export const columns: (
       />
     ),
     cell: ({ row }) => (
-      <Checkbox
-        checked={row.getIsSelected()}
-        onCheckedChange={(value) => row.toggleSelected(!!value)}
-        aria-label="Select row"
-        className="translate-y-[2px]"
-      />
+      <div
+        className={cn(
+          `pl-${row.depth * 4}`,
+          'flex flex-row items-center justify-start gap-x-2',
+        )}
+      >
+        <Checkbox
+          checked={row.getIsSelected()}
+          onCheckedChange={(value) => row.toggleSelected(!!value)}
+          aria-label="Select row"
+        />
+        {row.getCanExpand() && (
+          <Button
+            onClick={() => row.toggleExpanded()}
+            variant="ghost"
+            className="cursor-pointer px-2"
+            hoverText="Show tasks"
+          >
+            {row.getIsExpanded() ? (
+              <ChevronDownIcon className="size-4" />
+            ) : (
+              <ChevronRightIcon className="size-4" />
+            )}
+          </Button>
+        )}
+      </div>
     ),
     enableSorting: false,
     enableHiding: false,
   },
+  // {
+  //   accessorKey: 'task_id',
+  //   header: ({ column }) => (
+  //     <DataTableColumnHeader column={column} title="Id" />
+  //   ),
+  //   cell: ({ row }) => (
+  //     <div
+  //       className="cursor-pointer hover:underline min-w-fit whitespace-nowrap items-center flex-row flex gap-x-1"
+  //       onClick={() => {
+  //         navigator.clipboard.writeText(row.original.taskId.toString());
+  //       }}
+  //     >
+  //       {row.original.taskId}
+  //       <ClipboardDocumentIcon className="size-4 ml-1" />
+  //     </div>
+  //   ),
+  //   enableSorting: false,
+  //   enableHiding: true,
+  // },
   {
-    accessorKey: 'id',
+    accessorKey: 'task_name',
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Run Id" />
+      <DataTableColumnHeader column={column} title="Task" />
     ),
     cell: ({ row }) => (
       <Link to={'/workflow-runs/' + row.original.metadata.id}>
         <div className="cursor-pointer hover:underline min-w-fit whitespace-nowrap">
-          {row.original.parent.displayName || row.original.metadata.id}
+          {row.original.displayName}
         </div>
       </Link>
     ),
@@ -57,7 +100,7 @@ export const columns: (
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Status" />
     ),
-    cell: ({ row }) => <V2RunStatus status={row.original.parent.status} />,
+    cell: ({ row }) => <V2RunStatus status={row.original.status} />,
     enableSorting: false,
     enableHiding: false,
   },
@@ -67,7 +110,7 @@ export const columns: (
       <DataTableColumnHeader column={column} title="Workflow" />
     ),
     cell: ({ row }) => {
-      const workflowId = row.original?.parent.workflowId;
+      const workflowId = row.original?.workflowId;
       const workflowName = row.original.workflowName;
 
       return (
@@ -83,16 +126,13 @@ export const columns: (
     enableSorting: false,
     enableHiding: true,
   },
-  // TODO: Add this back
   // {
   //   accessorKey: 'Triggered by',
   //   header: ({ column }) => (
   //     <DataTableColumnHeader column={column} title="Triggered by" />
   //   ),
-  //   cell: () => {
-  //     const eventKey = 'N/A'; // FIXME: add back event keys, crons, etc
-
-  //     return <div>{eventKey}</div>;
+  //   cell: ({ row }) => {
+  //     return <div>{row.original.triggeredBy}</div>;
   //   },
   //   enableSorting: false,
   //   enableHiding: true,
@@ -132,8 +172,8 @@ export const columns: (
     cell: ({ row }) => {
       return (
         <div className="whitespace-nowrap">
-          {row.original.parent.startedAt ? (
-            <RelativeDate date={row.original.parent.startedAt} />
+          {row.original.startedAt ? (
+            <RelativeDate date={row.original.startedAt} />
           ) : (
             'N/A'
           )}
@@ -153,8 +193,8 @@ export const columns: (
       />
     ),
     cell: ({ row }) => {
-      const finishedAt = row.original.parent.finishedAt ? (
-        <RelativeDate date={row.original.parent.finishedAt} />
+      const finishedAt = row.original.finishedAt ? (
+        <RelativeDate date={row.original.finishedAt} />
       ) : (
         'N/A'
       );
@@ -174,9 +214,7 @@ export const columns: (
       />
     ),
     cell: ({ row }) => {
-      return (
-        <div className="whitespace-nowrap">{row.original.parent.duration}</div>
-      );
+      return <div className="whitespace-nowrap">{row.original.duration}</div>;
     },
     enableSorting: true,
     enableHiding: true,
@@ -187,21 +225,35 @@ export const columns: (
       <DataTableColumnHeader column={column} title="Metadata" />
     ),
     cell: ({ row }) => {
-      if (!row.original.parent.additionalMetadata) {
+      if (!row.original.additionalMetadata) {
         return <div></div>;
       }
 
       return (
         <AdditionalMetadata
-          metadata={row.original.parent.additionalMetadata}
+          metadata={row.original.additionalMetadata}
           onClick={onAdditionalMetadataClick}
         />
       );
     },
     enableSorting: false,
   },
-  // {
-  //   id: "actions",
-  //   cell: ({ row }) => <DataTableRowActions row={row} labels={[]} />,
-  // },
+  {
+    id: 'actions',
+    cell: ({ row }) => {
+      return (
+        <DataTableRowActions
+          row={row}
+          actions={[
+            {
+              label: 'Copy Run Id',
+              onClick: () => {
+                navigator.clipboard.writeText(row.original.metadata.id);
+              },
+            },
+          ]}
+        />
+      );
+    },
+  },
 ];

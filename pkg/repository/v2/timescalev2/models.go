@@ -393,4 +393,6 @@ type V2TasksOlap struct {
 	LatestWorkerID     pgtype.UUID          `json:"latest_worker_id"`
 	DagID              pgtype.Int8          `json:"dag_id"`
 	DagInsertedAt      pgtype.Timestamptz   `json:"dag_inserted_at"`
+	ErrorMessage 	 pgtype.Text          `json:"error_message"`
+	Output			 []byte               `json:"output"`
 }
