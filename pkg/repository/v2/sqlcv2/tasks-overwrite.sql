@@ -25,6 +25,7 @@ WITH input AS (
                 unnest(@inputs::jsonb[]) AS input,
                 unnest(@retryCounts::integer[]) AS retry_count,
                 unnest(@additionalMetadatas::jsonb[]) AS additional_metadata,
+                unnest(cast(@initialStates::text[] as v2_task_initial_state[])) AS initial_state,
                 -- NOTE: these are nullable, so sqlc doesn't support casting to a type
                 unnest(@dagIds::bigint[]) AS dag_id,
                 unnest(@dagInsertedAts::timestamptz[]) AS dag_inserted_at
@@ -47,6 +48,7 @@ INSERT INTO v2_task (
     input,
     retry_count,
     additional_metadata,
+    initial_state,
     dag_id,
     dag_inserted_at
 )
@@ -67,6 +69,7 @@ SELECT
     i.input,
     i.retry_count,
     i.additional_metadata,
+    i.initial_state,
     i.dag_id,
     i.dag_inserted_at
 FROM

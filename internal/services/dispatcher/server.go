@@ -2153,7 +2153,7 @@ type stepResult struct {
 
 	StepReadableId string `json:"step_readable_id,omitempty"`
 
-	ErrorMsg string `json:"error_msg,omitempty"`
+	Error string `json:"error,omitempty"`
 }
 
 type signalEventData map[string][]stepResult
@@ -2175,18 +2175,35 @@ func (s *DispatcherImpl) taskEventsToWorkflowRunEvent(tenantId string, keyToId m
 		stepRunResults := []*contracts.StepRunResult{}
 
 		for signalKey, stepResults := range parsedEventData {
+			var taskExternalId string
+
 			if strings.HasPrefix(signalKey, "task.completed.") {
-				taskExternalId := strings.TrimPrefix(signalKey, "task.completed.")
+				taskExternalId = strings.TrimPrefix(signalKey, "task.completed.")
+			} else if strings.HasPrefix(signalKey, "task.failed.") {
+				taskExternalId = strings.TrimPrefix(signalKey, "task.failed.")
+			} else if strings.HasPrefix(signalKey, "task.cancelled.") {
+				taskExternalId = strings.TrimPrefix(signalKey, "task.cancelled.")
+			}
 
+			if taskExternalId != "" {
 				for _, stepResult := range stepResults {
-					out := string(stepResult.Output)
-
-					stepRunResults = append(stepRunResults, &contracts.StepRunResult{
+					res := &contracts.StepRunResult{
 						StepRunId:      taskExternalId,
 						StepReadableId: stepResult.StepReadableId,
 						JobRunId:       taskExternalId,
-						Output:         &out,
-					})
+					}
+
+					if stepResult.Output != nil {
+						out := string(stepResult.Output)
+
+						res.Output = &out
+					}
+
+					if stepResult.Error != "" {
+						res.Error = &stepResult.Error
+					}
+
+					stepRunResults = append(stepRunResults, res)
 				}
 			}
 		}

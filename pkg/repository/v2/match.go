@@ -46,6 +46,14 @@ type CreateMatchOpts struct {
 	SignalKey *string
 }
 
+type InternalEventMatchResults struct {
+	// The list of tasks which were created in a queued state
+	CreatedQueuedTasks []*sqlcv2.V2Task
+
+	// A list of tasks which are created in a directly cancelled state
+	CreatedCancelledTasks []*sqlcv2.V2Task
+}
+
 type GroupMatchCondition struct {
 	GroupId string `validate:"required,uuid"`
 
@@ -54,10 +62,12 @@ type GroupMatchCondition struct {
 	EventKey string
 
 	Expression string
+
+	Action sqlcv2.V2MatchConditionAction
 }
 
 type MatchRepository interface {
-	ProcessInternalEventMatches(ctx context.Context, tenantId string, events []CandidateEventMatch) ([]*sqlcv2.V2Task, error)
+	ProcessInternalEventMatches(ctx context.Context, tenantId string, events []CandidateEventMatch) (*InternalEventMatchResults, error)
 }
 
 type MatchRepositoryImpl struct {
@@ -80,14 +90,18 @@ func newMatchRepository(s *sharedRepository) (MatchRepository, error) {
 }
 
 // ProcessInternalEventMatches processes a list of internal events
-func (m *MatchRepositoryImpl) ProcessInternalEventMatches(ctx context.Context, tenantId string, events []CandidateEventMatch) ([]*sqlcv2.V2Task, error) {
+func (m *MatchRepositoryImpl) ProcessInternalEventMatches(ctx context.Context, tenantId string, events []CandidateEventMatch) (*InternalEventMatchResults, error) {
 	start := time.Now()
+
+	res := &InternalEventMatchResults{}
 
 	eventKeys := make([]string, 0, len(events))
 	uniqueEventKeys := make(map[string]struct{})
 	idsToEvents := make(map[string]CandidateEventMatch)
 
 	for _, event := range events {
+		fmt.Println("!! PROCESSING EVENT", event.Key)
+
 		idsToEvents[event.ID] = event
 
 		if _, ok := uniqueEventKeys[event.Key]; ok {
@@ -121,7 +135,7 @@ func (m *MatchRepositoryImpl) ProcessInternalEventMatches(ctx context.Context, t
 	}
 
 	if len(matches) == 0 {
-		return []*sqlcv2.V2Task{}, nil
+		return res, nil
 	}
 
 	matchIds := make([]int64, 0, len(matches))
@@ -232,8 +246,21 @@ func (m *MatchRepositoryImpl) ProcessInternalEventMatches(ctx context.Context, t
 				opt := CreateTaskOpts{
 					ExternalId:         sqlchelpers.UUIDToStr(match.TriggerExternalID),
 					StepId:             sqlchelpers.UUIDToStr(match.TriggerStepID),
-					Input:              m.newTaskInput(input, match.McAggregatedData),
 					AdditionalMetadata: additionalMetadata,
+				}
+
+				action, data, err := m.parseTriggerData(match.McAggregatedData)
+
+				if err != nil {
+					return nil, err
+				}
+
+				switch *action {
+				case sqlcv2.V2MatchConditionActionCREATE:
+					opt.Input = m.newTaskInput(input, data)
+					opt.InitialState = sqlcv2.V2TaskInitialStateQUEUED
+				case sqlcv2.V2MatchConditionActionCANCEL:
+					opt.InitialState = sqlcv2.V2TaskInitialStateCANCELLED
 				}
 
 				if match.TriggerDagID.Valid && match.TriggerDagInsertedAt.Valid {
@@ -250,6 +277,14 @@ func (m *MatchRepositoryImpl) ProcessInternalEventMatches(ctx context.Context, t
 
 		if err != nil {
 			return nil, err
+		}
+
+		for _, task := range tasks {
+			if task.InitialState == sqlcv2.V2TaskInitialStateQUEUED {
+				res.CreatedQueuedTasks = append(res.CreatedQueuedTasks, task)
+			} else if task.InitialState == sqlcv2.V2TaskInitialStateCANCELLED {
+				res.CreatedCancelledTasks = append(res.CreatedCancelledTasks, task)
+			}
 		}
 	}
 
@@ -288,7 +323,7 @@ func (m *MatchRepositoryImpl) ProcessInternalEventMatches(ctx context.Context, t
 		m.l.Warn().Msgf("processing internal event matches took %s", end.Sub(start))
 	}
 
-	return tasks, nil
+	return res, nil
 }
 
 func (m *MatchRepositoryImpl) processCELExpressions(ctx context.Context, events []CandidateEventMatch, conditions []*sqlcv2.ListMatchConditionsForEventRow) (map[string][]*sqlcv2.ListMatchConditionsForEventRow, error) {
@@ -437,6 +472,7 @@ func (m *sharedRepository) createEventMatches(ctx context.Context, tx sqlcv2.DBT
 				EventKey:   condition.EventKey,
 				OrGroupID:  sqlchelpers.UUIDFromStr(condition.GroupId),
 				Expression: sqlchelpers.TextFromStr(condition.Expression),
+				Action:     condition.Action,
 			})
 		}
 	}

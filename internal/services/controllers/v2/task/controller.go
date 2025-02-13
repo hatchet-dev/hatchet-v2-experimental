@@ -628,17 +628,29 @@ func (tc *TasksControllerImpl) processInternalEvents(ctx context.Context, tenant
 		})
 	}
 
-	tasks, err := tc.repov2.Matches().ProcessInternalEventMatches(ctx, tenantId, candidateMatches)
+	matchResult, err := tc.repov2.Matches().ProcessInternalEventMatches(ctx, tenantId, candidateMatches)
 
 	if err != nil {
 		return fmt.Errorf("could not process internal event matches: %w", err)
 	}
 
-	if len(tasks) == 0 {
-		return nil
+	if len(matchResult.CreatedQueuedTasks) > 0 {
+		err = tc.signalTasksCreated(ctx, tenantId, matchResult.CreatedQueuedTasks, nil)
+
+		if err != nil {
+			return fmt.Errorf("could not signal created tasks: %w", err)
+		}
 	}
 
-	return tc.signalTasksCreated(ctx, tenantId, tasks, nil)
+	if len(matchResult.CreatedCancelledTasks) > 0 {
+		err = tc.signalTasksCreatedAndCancelled(ctx, tenantId, matchResult.CreatedCancelledTasks)
+
+		if err != nil {
+			return fmt.Errorf("could not signal cancelled tasks: %w", err)
+		}
+	}
+
+	return nil
 }
 
 func (tc *TasksControllerImpl) signalTasksCreated(ctx context.Context, tenantId string, tasks []*sqlcv2.V2Task, dags []*v2.DAGWithData) error {
@@ -732,6 +744,86 @@ func (tc *TasksControllerImpl) signalTasksCreated(ctx context.Context, tenantId 
 	for _, dag := range dags {
 		dagCp := dag
 		msg, err := tasktypes.CreatedDAGMessage(tenantId, dagCp)
+
+		if err != nil {
+			tc.l.Err(err).Msg("could not create message for olap queue")
+			continue
+		}
+
+		err = tc.pubBuffer.Pub(
+			ctx,
+			msgqueue.OLAP_QUEUE,
+			msg,
+			false,
+		)
+
+		if err != nil {
+			tc.l.Err(err).Msg("could not add message to olap queue")
+			continue
+		}
+	}
+
+	return nil
+}
+
+func (tc *TasksControllerImpl) signalTasksCreatedAndCancelled(ctx context.Context, tenantId string, tasks []*sqlcv2.V2Task) error {
+	internalEvents := make([]internalEvent, 0)
+
+	for _, task := range tasks {
+		taskExternalId := sqlchelpers.UUIDToStr(task.ExternalID)
+
+		data := v2.FailedData{
+			StepReadableId: task.StepReadableID,
+			Error:          "task was cancelled",
+		}
+
+		dataBytes, _ := json.Marshal(data)
+
+		internalEvents = append(internalEvents, internalEvent{
+			EventTimestamp: time.Now(),
+			EventKey:       v2.GetTaskCancelledEventKey(taskExternalId),
+			EventData:      dataBytes,
+		})
+	}
+
+	// TODO: MOVE THIS TO THE DATA LAYER?
+	// !! FIXME: RECURSION HERE
+	err := tc.processInternalEvents(ctx, tenantId, internalEvents)
+
+	if err != nil {
+		return err
+	}
+
+	// notify that tasks have been cancelled
+	// TODO: make this transactionally safe?
+	for _, task := range tasks {
+		taskCp := task
+
+		msg, err := tasktypes.CreatedTaskMessage(tenantId, taskCp)
+
+		if err != nil {
+			tc.l.Err(err).Msg("could not create message for olap queue")
+			continue
+		}
+
+		err = tc.pubBuffer.Pub(
+			ctx,
+			msgqueue.OLAP_QUEUE,
+			msg,
+			false,
+		)
+
+		if err != nil {
+			tc.l.Err(err).Msg("could not add message to olap queue")
+			continue
+		}
+
+		msg, err = tasktypes.MonitoringEventMessageFromInternal(tenantId, tasktypes.CreateMonitoringEventPayload{
+			TaskId:         taskCp.ID,
+			RetryCount:     taskCp.RetryCount,
+			EventType:      timescalev2.V2EventTypeOlapCANCELLED,
+			EventTimestamp: time.Now(),
+		})
 
 		if err != nil {
 			tc.l.Err(err).Msg("could not create message for olap queue")

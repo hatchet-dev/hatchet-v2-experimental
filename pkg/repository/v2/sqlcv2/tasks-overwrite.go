@@ -9,7 +9,7 @@ import (
 const createTasks = `-- name: CreateTasks :many
 WITH input AS (
     SELECT
-        tenant_id, queue, action_id, step_id, step_readable_id, workflow_id, schedule_timeout, step_timeout, priority, sticky, desired_worker_id, external_id, display_name, input, retry_count, additional_metadata, dag_id, dag_inserted_at
+        tenant_id, queue, action_id, step_id, step_readable_id, workflow_id, schedule_timeout, step_timeout, priority, sticky, desired_worker_id, external_id, display_name, input, retry_count, additional_metadata, initial_state, dag_id, dag_inserted_at
     FROM
         (
             SELECT
@@ -29,9 +29,10 @@ WITH input AS (
                 unnest($14::jsonb[]) AS input,
                 unnest($15::integer[]) AS retry_count,
                 unnest($16::jsonb[]) AS additional_metadata,
+				unnest(cast($17::text[] as v2_task_initial_state[])) AS initial_state,
                 -- NOTE: these are nullable, so sqlc doesn't support casting to a type
-                unnest($17::bigint[]) AS dag_id,
-                unnest($18::timestamptz[]) AS dag_inserted_at
+                unnest($18::bigint[]) AS dag_id,
+                unnest($19::timestamptz[]) AS dag_inserted_at
         ) AS subquery
 )
 INSERT INTO v2_task (
@@ -51,6 +52,7 @@ INSERT INTO v2_task (
     input,
     retry_count,
     additional_metadata,
+	initial_state,
     dag_id,
     dag_inserted_at
 )
@@ -71,12 +73,13 @@ SELECT
     i.input,
     i.retry_count,
     i.additional_metadata,
+	i.initial_state,
     i.dag_id,
     i.dag_inserted_at
 FROM
     input i
 RETURNING
-    id, inserted_at, tenant_id, queue, action_id, step_id, step_readable_id, workflow_id, schedule_timeout, step_timeout, priority, sticky, desired_worker_id, external_id, display_name, input, retry_count, internal_retry_count, app_retry_count, additional_metadata, dag_id, dag_inserted_at
+    id, inserted_at, tenant_id, queue, action_id, step_id, step_readable_id, workflow_id, schedule_timeout, step_timeout, priority, sticky, desired_worker_id, external_id, display_name, input, retry_count, internal_retry_count, app_retry_count, additional_metadata, initial_state, dag_id, dag_inserted_at
 `
 
 type CreateTasksParams struct {
@@ -96,6 +99,7 @@ type CreateTasksParams struct {
 	Inputs              [][]byte             `json:"inputs"`
 	Retrycounts         []int32              `json:"retrycounts"`
 	Additionalmetadatas [][]byte             `json:"additionalmetadatas"`
+	InitialStates       []string             `json:"initialstates"`
 	Dagids              []pgtype.Int8        `json:"dagids"`
 	Daginsertedats      []pgtype.Timestamptz `json:"daginsertedats"`
 }
@@ -118,6 +122,7 @@ func (q *Queries) CreateTasks(ctx context.Context, db DBTX, arg CreateTasksParam
 		arg.Inputs,
 		arg.Retrycounts,
 		arg.Additionalmetadatas,
+		arg.InitialStates,
 		arg.Dagids,
 		arg.Daginsertedats,
 	)
@@ -149,6 +154,7 @@ func (q *Queries) CreateTasks(ctx context.Context, db DBTX, arg CreateTasksParam
 			&i.InternalRetryCount,
 			&i.AppRetryCount,
 			&i.AdditionalMetadata,
+			&i.InitialState,
 			&i.DagID,
 			&i.DagInsertedAt,
 		); err != nil {

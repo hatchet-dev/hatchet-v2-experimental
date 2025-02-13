@@ -12,12 +12,13 @@ import (
 )
 
 type CreateMatchConditionsParams struct {
-	V2MatchID  int64       `json:"v2_match_id"`
-	TenantID   pgtype.UUID `json:"tenant_id"`
-	EventType  V2EventType `json:"event_type"`
-	EventKey   string      `json:"event_key"`
-	OrGroupID  pgtype.UUID `json:"or_group_id"`
-	Expression pgtype.Text `json:"expression"`
+	V2MatchID  int64                  `json:"v2_match_id"`
+	TenantID   pgtype.UUID            `json:"tenant_id"`
+	EventType  V2EventType            `json:"event_type"`
+	EventKey   string                 `json:"event_key"`
+	OrGroupID  pgtype.UUID            `json:"or_group_id"`
+	Expression pgtype.Text            `json:"expression"`
+	Action     V2MatchConditionAction `json:"action"`
 }
 
 const createMatchesForDAGTriggers = `-- name: CreateMatchesForDAGTriggers :many
@@ -321,17 +322,23 @@ const saveSatisfiedMatchConditions = `-- name: SaveSatisfiedMatchConditions :man
 WITH match_counts AS (
     SELECT
         v2_match_id,
-        COUNT(DISTINCT or_group_id) AS total_groups,
-        COUNT(DISTINCT CASE WHEN is_satisfied THEN or_group_id END) AS satisfied_groups,
+        COUNT(DISTINCT CASE WHEN action = 'CREATE' THEN or_group_id END) AS total_create_groups,
+        COUNT(DISTINCT CASE WHEN is_satisfied AND action = 'CREATE' THEN or_group_id END) AS satisfied_create_groups,
+        COUNT(DISTINCT CASE WHEN action = 'CANCEL' THEN or_group_id END) AS total_cancel_groups,
+        COUNT(DISTINCT CASE WHEN is_satisfied AND action = 'CANCEL' THEN or_group_id END) AS satisfied_cancel_groups,
         (
-            SELECT jsonb_object_agg(event_key, data_array)
+            SELECT jsonb_object_agg(action, aggregated_1)
             FROM (
-                SELECT event_key, jsonb_agg(data) AS data_array
-                FROM v2_match_condition sub
-                WHERE sub.v2_match_id = ANY($1::bigint[])
-                AND is_satisfied
-                GROUP BY event_key
-            ) aggregated
+                SELECT action, jsonb_object_agg(event_key, data_array) AS aggregated_1
+                FROM (
+                    SELECT action, event_key, jsonb_agg(data) AS data_array
+                    FROM v2_match_condition sub
+                    WHERE sub.v2_match_id = ANY($1::bigint[])
+                    AND is_satisfied
+                    GROUP BY action, event_key
+                ) t
+                GROUP BY action
+            ) s
         ) AS aggregated_data
     FROM v2_match_condition main
     WHERE v2_match_id = ANY($1::bigint[])
@@ -345,7 +352,10 @@ WITH match_counts AS (
     JOIN
         match_counts mc ON m.id = mc.v2_match_id
     WHERE
-        mc.total_groups = mc.satisfied_groups
+        (
+            mc.total_create_groups = mc.satisfied_create_groups
+            OR mc.total_cancel_groups = mc.satisfied_cancel_groups
+        )
 ), deleted_matches AS (
     DELETE FROM
         v2_match

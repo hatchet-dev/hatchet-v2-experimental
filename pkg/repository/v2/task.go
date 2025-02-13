@@ -31,6 +31,9 @@ type CreateTaskOpts struct {
 
 	// (optional) the DAG inserted at for the task
 	DagInsertedAt pgtype.Timestamptz
+
+	// (required) the initial state for the task
+	InitialState sqlcv2.V2TaskInitialState
 }
 
 type TaskIdRetryCount struct {
@@ -634,6 +637,7 @@ func (r *sharedRepository) insertTasks(
 	inputs := make([][]byte, len(tasks))
 	retryCounts := make([]int32, len(tasks))
 	additionalMetadatas := make([][]byte, len(tasks))
+	initialStates := make([]string, len(tasks))
 	dagIds := make([]pgtype.Int8, len(tasks))
 	dagInsertedAts := make([]pgtype.Timestamptz, len(tasks))
 	unix := time.Now().UnixMilli()
@@ -660,6 +664,8 @@ func (r *sharedRepository) insertTasks(
 		desiredWorkerIds[i] = pgtype.UUID{
 			Valid: false,
 		}
+
+		initialStates[i] = string(task.InitialState)
 
 		if len(task.AdditionalMetadata) > 0 {
 			additionalMetadatas[i] = task.AdditionalMetadata
@@ -698,6 +704,7 @@ func (r *sharedRepository) insertTasks(
 		Inputs:              inputs,
 		Retrycounts:         retryCounts,
 		Additionalmetadatas: additionalMetadatas,
+		InitialStates:       initialStates,
 		Dagids:              dagIds,
 		Daginsertedats:      dagInsertedAts,
 	})

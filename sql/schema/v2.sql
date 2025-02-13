@@ -10,6 +10,8 @@ CREATE TABLE v2_queue (
 
 CREATE TYPE v2_sticky_strategy AS ENUM ('NONE', 'SOFT', 'HARD');
 
+CREATE TYPE v2_task_initial_state AS ENUM ('QUEUED', 'CANCELLED', 'SKIPPED');
+
 -- CreateTable
 CREATE TABLE v2_task (
     id bigint GENERATED ALWAYS AS IDENTITY,
@@ -34,6 +36,10 @@ CREATE TABLE v2_task (
     additional_metadata JSONB,
     dag_id BIGINT,
     dag_inserted_at TIMESTAMPTZ,
+    parent_external_id UUID,
+    child_index INTEGER,
+    child_key TEXT,
+    initial_state v2_task_initial_state NOT NULL DEFAULT 'QUEUED',
     CONSTRAINT v2_task_pkey PRIMARY KEY (id, inserted_at)
 ) PARTITION BY RANGE(inserted_at);
 
@@ -203,6 +209,12 @@ CREATE TABLE v2_match (
 
 CREATE TYPE v2_event_type AS ENUM ('USER', 'INTERNAL');
 
+-- Provides information to the caller about the action to take. This is used to differentiate
+-- negative conditions from positive conditions. For example, if a task is waiting for a set of
+-- tasks to fail, the success of all tasks would be a CANCEL condition, and the failure of any
+-- task would be a CREATE condition. Different actions are implicitly different groups of conditions.
+CREATE TYPE v2_match_condition_action AS ENUM ('CREATE', 'CANCEL');
+
 CREATE TABLE v2_match_condition (
     v2_match_id bigint NOT NULL,
     id bigint GENERATED ALWAYS AS IDENTITY,
@@ -211,6 +223,7 @@ CREATE TABLE v2_match_condition (
     event_type v2_event_type NOT NULL,
     event_key TEXT NOT NULL,
     is_satisfied BOOLEAN NOT NULL DEFAULT FALSE,
+    action v2_match_condition_action NOT NULL DEFAULT 'CREATE',
     or_group_id UUID NOT NULL,
     expression TEXT,
     data JSONB,
@@ -270,46 +283,47 @@ BEGIN
         is_queued,
         retry_count
     )
-    VALUES (
-        NEW.tenant_id,
-        NEW.queue,
-        NEW.id,
-        NEW.action_id,
-        NEW.step_id,
-        NEW.workflow_id,
-        CURRENT_TIMESTAMP + convert_duration_to_interval(NEW.schedule_timeout),
-        NEW.step_timeout,
-        COALESCE(NEW.priority, 1),
-        NEW.sticky,
-        NEW.desired_worker_id,
+    SELECT
+        tenant_id,
+        queue,
+        id,
+        action_id,
+        step_id,
+        workflow_id,
+        CURRENT_TIMESTAMP + convert_duration_to_interval(schedule_timeout),
+        step_timeout,
+        COALESCE(priority, 1),
+        sticky,
+        desired_worker_id,
         TRUE,
-        NEW.retry_count
-    );
+        retry_count
+    FROM new_table
+    WHERE 
+        initial_state = 'QUEUED';
 
-    -- Create an entry in the v2_dag_to_task table if the task has a dag_id and dag_inserted_at
-    IF NEW.dag_id IS NOT NULL AND NEW.dag_inserted_at IS NOT NULL THEN
-        INSERT INTO v2_dag_to_task (
-            dag_id,
-            dag_inserted_at,
-            task_id,
-            task_inserted_at
-        )
-        VALUES (
-            NEW.dag_id,
-            NEW.dag_inserted_at,
-            NEW.id,
-            NEW.inserted_at
-        );
-    END IF;
+    INSERT INTO v2_dag_to_task (
+        dag_id,
+        dag_inserted_at,
+        task_id,
+        task_inserted_at
+    )
+    SELECT
+        dag_id,
+        dag_inserted_at,
+        id,
+        inserted_at
+    FROM new_table
+    WHERE dag_id IS NOT NULL AND dag_inserted_at IS NOT NULL;
 
-    RETURN NEW;
+    RETURN NULL;
 END;
 $$
 LANGUAGE plpgsql;
 
 CREATE TRIGGER v2_task_insert_trigger
 AFTER INSERT ON v2_task
-FOR EACH ROW
+REFERENCING NEW TABLE AS new_table
+FOR EACH STATEMENT
 EXECUTE PROCEDURE v2_task_insert_function();
 
 CREATE OR REPLACE FUNCTION v2_task_to_v2_queue_item_update_retry_count_function()
