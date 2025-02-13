@@ -213,7 +213,7 @@ CREATE TYPE v2_event_type AS ENUM ('USER', 'INTERNAL');
 -- negative conditions from positive conditions. For example, if a task is waiting for a set of
 -- tasks to fail, the success of all tasks would be a CANCEL condition, and the failure of any
 -- task would be a CREATE condition. Different actions are implicitly different groups of conditions.
-CREATE TYPE v2_match_condition_action AS ENUM ('CREATE', 'CANCEL');
+CREATE TYPE v2_match_condition_action AS ENUM ('CREATE', 'CANCEL', 'SKIP');
 
 CREATE TABLE v2_match_condition (
     v2_match_id bigint NOT NULL,

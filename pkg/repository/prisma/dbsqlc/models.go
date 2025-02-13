@@ -814,6 +814,7 @@ type V2MatchConditionAction string
 const (
 	V2MatchConditionActionCREATE V2MatchConditionAction = "CREATE"
 	V2MatchConditionActionCANCEL V2MatchConditionAction = "CANCEL"
+	V2MatchConditionActionSKIP   V2MatchConditionAction = "SKIP"
 )
 
 func (e *V2MatchConditionAction) Scan(src interface{}) error {
