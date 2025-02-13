@@ -262,5 +262,6 @@ func ToTask(taskWithData *timescalev2.PopulateSingleTaskRunDataRow) gen.V2Task {
 		Input:              string(taskWithData.Input),
 		TenantId:           uuid.MustParse(sqlchelpers.UUIDToStr(taskWithData.TenantID)),
 		WorkflowId:         uuid.MustParse(sqlchelpers.UUIDToStr(taskWithData.WorkflowID)),
+		ErrorMessage:       &taskWithData.ErrorMessage.String,
 	}
 }
