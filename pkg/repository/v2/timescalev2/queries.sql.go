@@ -11,6 +11,72 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countRuns = `-- name: CountRuns :one
+SELECT COUNT(*)
+FROM v2_runs_olap r
+LEFT JOIN v2_dags_olap d ON (r.tenant_id, r.external_id, r.inserted_at) = (d.tenant_id, d.external_id, d.inserted_at)
+LEFT JOIN v2_tasks_olap t ON (r.tenant_id, r.external_id, r.inserted_at) = (t.tenant_id, t.external_id, t.inserted_at)
+WHERE
+    (
+        (r.kind = 'TASK' AND d.id IS NULL)
+        OR r.kind = 'DAG'
+    )
+    AND (
+        $1::uuid[] IS NULL
+        OR r.workflow_id = ANY($1::uuid[])
+    )
+    AND (
+        $2::text[] IS NULL
+        OR r.readable_status = ANY(cast($2::text[] as v2_readable_status_olap[]))
+    )
+    AND r.inserted_at >= $3::timestamptz
+    AND (
+        $4::timestamptz IS NULL
+        OR r.inserted_at <= $4::timestamptz
+    )
+    AND (
+        $5::text[] IS NULL
+        OR $6::text[] IS NULL
+        OR COALESCE(d.additional_metadata, t.additional_metadata) IS NULL
+        OR EXISTS (
+            SELECT 1 FROM jsonb_each_text(COALESCE(d.additional_metadata, t.additional_metadata)) kv
+            JOIN LATERAL (
+                SELECT unnest($5::text[]) AS k,
+                    unnest($6::text[]) AS v
+            ) AS u ON kv.key = u.k AND kv.value = u.v
+        )
+    )
+    AND (
+        $7::uuid IS NULL
+        OR t.latest_worker_id = $7::uuid
+    )
+`
+
+type CountRunsParams struct {
+	WorkflowIds []pgtype.UUID      `json:"workflowIds"`
+	Statuses    []string           `json:"statuses"`
+	Since       pgtype.Timestamptz `json:"since"`
+	Until       pgtype.Timestamptz `json:"until"`
+	Keys        []string           `json:"keys"`
+	Values      []string           `json:"values"`
+	WorkerId    pgtype.UUID        `json:"workerId"`
+}
+
+func (q *Queries) CountRuns(ctx context.Context, db DBTX, arg CountRunsParams) (int64, error) {
+	row := db.QueryRow(ctx, countRuns,
+		arg.WorkflowIds,
+		arg.Statuses,
+		arg.Since,
+		arg.Until,
+		arg.Keys,
+		arg.Values,
+		arg.WorkerId,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 type CreateDAGsOLAPParams struct {
 	TenantID           pgtype.UUID        `json:"tenant_id"`
 	ID                 int64              `json:"id"`
@@ -712,6 +778,8 @@ type ListWorkflowRunsRow struct {
 	ErrorMessage       pgtype.Text          `json:"error_message"`
 }
 
+// NOTE: This is a bug - it only populates errors for tasks, but not dags or their children
+// NOTE: JOIN v2_tasks_olap t ON (d.tenant_id, d.id) = (t.tenant_id, t.dag_id) is not going to be performant because the task's dag_id is not indexed. Use v2_dag_to_task_olap which indexes the dag_id which we can use instead
 func (q *Queries) ListWorkflowRuns(ctx context.Context, db DBTX, arg ListWorkflowRunsParams) ([]*ListWorkflowRunsRow, error) {
 	rows, err := db.Query(ctx, listWorkflowRuns,
 		arg.WorkflowIds,

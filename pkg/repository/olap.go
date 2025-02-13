@@ -407,7 +407,19 @@ func (r *olapEventRepository) ListTaskRuns(ctx context.Context, tenantId string,
 		records = append(records, record)
 	}
 
-	return records, len(rows), nil
+	countParams := timescalev2.CountRunsParams{
+		WorkflowIds: workflowIdParams,
+		Statuses:    statuses,
+		Since:       sqlchelpers.TimestamptzFromTime(opts.CreatedAfter),
+	}
+
+	count, err := r.queries.CountRuns(ctx, r.pool, countParams)
+
+	if err != nil {
+		count = int64(len(records))
+	}
+
+	return records, int(count), nil
 }
 
 func (r *olapEventRepository) ListTaskRunEvents(ctx context.Context, tenantId string, taskId int64, taskInsertedAt pgtype.Timestamptz, limit, offset int64) ([]*timescalev2.ListTaskEventsRow, error) {
