@@ -771,6 +771,8 @@ SELECT
     e.error_message
 FROM tasks t
 LEFT JOIN metadata m ON t.run_id = m.run_id
+-- NOTE: This is a bug - it only populates errors for tasks, but not dags or their children
+-- NOTE: JOIN v2_tasks_olap t ON (d.tenant_id, d.id) = (t.tenant_id, t.dag_id) is not going to be performant because the task's dag_id is not indexed. Use v2_dag_to_task_olap which indexes the dag_id which we can use instead
 LEFT JOIN v2_task_events_olap e ON (e.tenant_id, e.task_id, e.retry_count, e.readable_status) = (t.tenant_id, t.task_id, t.latest_retry_count, t.readable_status)
 ORDER BY t.inserted_at DESC
 ;

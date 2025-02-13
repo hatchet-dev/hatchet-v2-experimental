@@ -126,41 +126,6 @@ export function RunStatus({
   );
 }
 
-export function V2RunStatus({
-  status,
-  reason,
-  className,
-}: {
-  status: V2TaskStatus;
-  reason?: string;
-  className?: string;
-}) {
-  const { text, variant } = createV2RunStatusVariant(status);
-  const { text: overrideText, variant: overrideVariant } =
-    (reason && RUN_STATUS_VARIANTS_REASON_OVERRIDES[reason]) || {};
-
-  const StatusBadge = () => (
-    <Badge variant={overrideVariant || variant} className={className}>
-      {capitalize(overrideText || text)}
-    </Badge>
-  );
-
-  if (!reason) {
-    return <StatusBadge />;
-  }
-
-  return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger>
-          <StatusBadge />
-        </TooltipTrigger>
-        <TooltipContent>{RUN_STATUS_REASONS[reason] || reason}</TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  );
-}
-
 const indicatorVariants = {
   successful: 'border-transparent rounded-full bg-green-500',
   failed: 'border-transparent rounded-full bg-red-500',
