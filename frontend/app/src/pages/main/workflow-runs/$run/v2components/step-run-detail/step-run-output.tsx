@@ -1,5 +1,12 @@
 import { CodeHighlighter } from '@/components/ui/code-highlighter';
-import { queries, StepRun, StepRunStatus, WorkflowRunShape } from '@/lib/api';
+import {
+  queries,
+  StepRun,
+  StepRunStatus,
+  V2Task,
+  V2TaskStatus,
+  WorkflowRunShape,
+} from '@/lib/api';
 import React from 'react';
 import StepRunCodeText from './step-run-error';
 import LoggingComponent from '@/components/cloud/logging/logs';
@@ -102,6 +109,19 @@ const OUTPUT_STATE_MAP: Record<StepRunStatus, React.FC<StepRunOutputProps>> = {
   [StepRunStatus.CANCELLING]: StepRunOutputCancelling,
 };
 
+function parseJSONOutput(output: string | undefined) {
+  return output ? JSON.stringify(JSON.parse(output), null, 2) : '{}';
+}
+
+function formatOutputData(data: V2Task) {
+  switch (data.status) {
+    case V2TaskStatus.FAILED:
+      return data.errorMessage || parseJSONOutput(data.output);
+    default:
+      return parseJSONOutput(data.output);
+  }
+}
+
 const StepRunOutput: React.FC<StepRunOutputProps> = (props) => {
   const Component = OUTPUT_STATE_MAP[props.stepRun.status];
   return <Component {...props} />;
@@ -119,9 +139,7 @@ export const V2StepRunOutput = (props: { taskRunId: string }) => {
     return null;
   }
 
-  const outputData = data.output
-    ? JSON.stringify(JSON.parse(data.output), null, 2)
-    : '{}';
+  const outputData = formatOutputData(data);
 
   return (
     <CodeHighlighter

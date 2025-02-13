@@ -323,13 +323,24 @@ WITH latest_retry_count AS (
     ORDER BY
         readable_status DESC
     LIMIT 1
+), error_message AS (
+    SELECT
+        error_message
+    FROM
+        relevant_events
+    WHERE
+        readable_status = 'FAILED'
+    ORDER BY
+        event_timestamp DESC
+    LIMIT 1
 )
 SELECT
     t.*,
     st.readable_status::v2_readable_status_olap as status,
     f.finished_at::timestamptz as finished_at,
     s.started_at::timestamptz as started_at,
-    o.output::jsonb as output
+    o.output::jsonb as output,
+    e.error_message as error_message
 FROM
     v2_tasks_olap t
 LEFT JOIN
@@ -340,6 +351,8 @@ LEFT JOIN
     task_output o ON true
 LEFT JOIN
     status st ON true
+LEFT JOIN
+    error_message e ON true
 WHERE
     (t.tenant_id, t.id, t.inserted_at) = (@tenantId::uuid, @taskId::bigint, @taskInsertedAt::timestamptz);
 
