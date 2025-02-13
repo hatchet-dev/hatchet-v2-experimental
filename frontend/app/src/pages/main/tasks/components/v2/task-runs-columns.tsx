@@ -1,7 +1,6 @@
 import { ColumnDef } from '@tanstack/react-table';
 import { DataTableColumnHeader } from '../../../../../components/molecules/data-table/data-table-column-header';
 import { Link } from 'react-router-dom';
-import { V2RunStatus } from '../run-statuses';
 import {
   AdditionalMetadata,
   AdditionalMetadataClick,
@@ -13,6 +12,7 @@ import { ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { DataTableRowActions } from '@/components/molecules/data-table/data-table-row-actions';
+import { V2RunStatus } from '@/pages/main/workflow-runs/components/run-statuses';
 
 export const columns: (
   onAdditionalMetadataClick?: (click: AdditionalMetadataClick) => void,
@@ -100,7 +100,12 @@ export const columns: (
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Status" />
     ),
-    cell: ({ row }) => <V2RunStatus status={row.original.status} />,
+    cell: ({ row }) => (
+      <V2RunStatus
+        status={row.original.status}
+        errorMessage={row.original.errorMessage}
+      />
+    ),
     enableSorting: false,
     enableHiding: false,
   },

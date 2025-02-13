@@ -771,8 +771,51 @@ SELECT
     e.error_message
 FROM tasks t
 LEFT JOIN metadata m ON t.run_id = m.run_id
+-- NOTE: This is a bug - it only populates errors for tasks, but not dags or their children
+-- NOTE: JOIN v2_tasks_olap t ON (d.tenant_id, d.id) = (t.tenant_id, t.dag_id) is not going to be performant because the task's dag_id is not indexed. Use v2_dag_to_task_olap which indexes the dag_id which we can use instead
 LEFT JOIN v2_task_events_olap e ON (e.tenant_id, e.task_id, e.retry_count, e.readable_status) = (t.tenant_id, t.task_id, t.latest_retry_count, t.readable_status)
 ORDER BY t.inserted_at DESC
+;
+
+-- name: CountRuns :one
+SELECT COUNT(*)
+FROM v2_runs_olap r
+LEFT JOIN v2_dags_olap d ON (r.tenant_id, r.external_id, r.inserted_at) = (d.tenant_id, d.external_id, d.inserted_at)
+LEFT JOIN v2_tasks_olap t ON (r.tenant_id, r.external_id, r.inserted_at) = (t.tenant_id, t.external_id, t.inserted_at)
+WHERE
+    (
+        (r.kind = 'TASK' AND d.id IS NULL)
+        OR r.kind = 'DAG'
+    )
+    AND (
+        sqlc.narg('workflowIds')::uuid[] IS NULL
+        OR r.workflow_id = ANY(sqlc.narg('workflowIds')::uuid[])
+    )
+    AND (
+        sqlc.narg('statuses')::text[] IS NULL
+        OR r.readable_status = ANY(cast(sqlc.narg('statuses')::text[] as v2_readable_status_olap[]))
+    )
+    AND r.inserted_at >= @since::timestamptz
+    AND (
+        sqlc.narg('until')::timestamptz IS NULL
+        OR r.inserted_at <= sqlc.narg('until')::timestamptz
+    )
+    AND (
+        sqlc.narg('keys')::text[] IS NULL
+        OR sqlc.narg('values')::text[] IS NULL
+        OR COALESCE(d.additional_metadata, t.additional_metadata) IS NULL
+        OR EXISTS (
+            SELECT 1 FROM jsonb_each_text(COALESCE(d.additional_metadata, t.additional_metadata)) kv
+            JOIN LATERAL (
+                SELECT unnest(sqlc.narg('keys')::text[]) AS k,
+                    unnest(sqlc.narg('values')::text[]) AS v
+            ) AS u ON kv.key = u.k AND kv.value = u.v
+        )
+    )
+    AND (
+        sqlc.narg('workerId')::uuid IS NULL
+        OR t.latest_worker_id = sqlc.narg('workerId')::uuid
+    )
 ;
 
 -- name: ListDAGChildren :many
