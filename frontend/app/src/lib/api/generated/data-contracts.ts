@@ -61,7 +61,7 @@ export interface APIResourceMeta {
   updatedAt: string;
 }
 
-export interface V2TaskSummarySingle {
+export interface V2TaskSummary {
   metadata: APIResourceMeta;
   /** The ID of the task. */
   taskId: number;
@@ -101,13 +101,6 @@ export interface V2TaskSummarySingle {
   output: object;
   /** The error message of the task run (for the latest run) */
   errorMessage?: string;
-}
-
-export interface V2TaskSummary {
-  metadata: APIResourceMeta;
-  parent: V2TaskSummarySingle;
-  /** The list of child tasks */
-  children: V2TaskSummarySingle[];
 }
 
 export interface V2TaskSummaryList {

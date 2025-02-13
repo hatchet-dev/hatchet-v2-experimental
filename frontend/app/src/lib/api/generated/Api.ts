@@ -117,6 +117,62 @@ import { ContentType, HttpClient, RequestParams } from './http-client';
 
 export class Api<SecurityDataType = unknown> extends HttpClient<SecurityDataType> {
   /**
+   * @description Lists all activity (task runs and workflow runs) for a tenant.
+   *
+   * @tags Task
+   * @name V2ActivityList
+   * @summary List tasks
+   * @request GET:/api/v2/tenants/{tenant}/activity
+   * @secure
+   */
+  v2ActivityList = (
+    tenant: string,
+    query: {
+      /**
+       * The number to skip
+       * @format int64
+       */
+      offset?: number;
+      /**
+       * The number to limit by
+       * @format int64
+       */
+      limit?: number;
+      /** A list of task statuses to filter by */
+      statuses?: V2TaskStatus[];
+      /**
+       * The earliest date to filter by
+       * @format date-time
+       */
+      since: string;
+      /**
+       * The earliest date to filter by
+       * @format date-time
+       */
+      until?: string;
+      /** Additional metadata k-v pairs to filter by */
+      additional_metadata?: string[];
+      /** The workflow ids to find runs for */
+      workflow_ids?: string[];
+      /**
+       * The worker id to filter by
+       * @format uuid
+       * @minLength 36
+       * @maxLength 36
+       */
+      worker_id?: string;
+    },
+    params: RequestParams = {},
+  ) =>
+    this.request<V2TaskSummaryList, APIErrors>({
+      path: `/api/v2/tenants/${tenant}/activity`,
+      method: 'GET',
+      query: query,
+      secure: true,
+      format: 'json',
+      ...params,
+    });
+  /**
    * @description Lists all tasks for a tenant.
    *
    * @tags Task
