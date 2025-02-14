@@ -448,7 +448,10 @@ func (r *olapEventRepository) ListTasksByDAGId(ctx context.Context, tenantId str
 
 	defer tx.Rollback(ctx)
 
-	tasks, err := r.queries.ListTasksByDAGIds(ctx, tx, dagids)
+	tasks, err := r.queries.ListTasksByDAGIds(ctx, tx, timescalev2.ListTasksByDAGIdsParams{
+		Dagids:   dagids,
+		Tenantid: sqlchelpers.UUIDFromStr(tenantId),
+	})
 
 	if err != nil {
 		return nil, err
@@ -458,7 +461,7 @@ func (r *olapEventRepository) ListTasksByDAGId(ctx context.Context, tenantId str
 	taskInsertedAts := make([]pgtype.Timestamptz, 0)
 
 	for _, row := range tasks {
-		taskIds = append(taskIds, row.TaskID.Int64)
+		taskIds = append(taskIds, row.TaskID)
 		taskInsertedAts = append(taskInsertedAts, row.TaskInsertedAt)
 	}
 
@@ -467,8 +470,6 @@ func (r *olapEventRepository) ListTasksByDAGId(ctx context.Context, tenantId str
 		Taskinsertedats: taskInsertedAts,
 		Tenantid:        sqlchelpers.UUIDFromStr(tenantId),
 	})
-
-	fmt.Println("Tasks with data", tasksWithData)
 
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return nil, err

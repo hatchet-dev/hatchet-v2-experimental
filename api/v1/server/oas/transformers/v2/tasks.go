@@ -79,7 +79,7 @@ func ToDagChildren(
 	dagIdToTasks := make(map[string][]gen.V2TaskSummary)
 
 	for _, task := range tasks {
-		dagId := sqlchelpers.UUIDToStr(task.WorkflowID)
+		dagId := sqlchelpers.UUIDToStr(task.DagExternalID)
 		dagIdToTasks[dagId] = append(dagIdToTasks[dagId], ToTaskSummary(task))
 	}
 
