@@ -164,7 +164,7 @@ export function DataTable<TData extends IDGetter<TData>, TValue>({
     getSubRows: getSubRows,
     onExpandedChange: setExpanded,
     // TODO: Figure this out
-    getRowCanExpand: (row) => [].length > 0,
+    getRowCanExpand: (row) => row.subRows.length > 0,
     manualSorting,
     manualFiltering,
     manualPagination: true,

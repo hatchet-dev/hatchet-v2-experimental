@@ -281,12 +281,10 @@ export function TaskRunsTable({
 
   const dagIds = listTasksQuery.data?.rows?.map((r) => r.metadata.id) || [];
 
-  const { data: dagChildren } = useQuery({
+  const { data: dagChildrenRaw } = useQuery({
     ...queries.v2Tasks.getByDagId(tenant.metadata.id, dagIds),
     enabled: !!dagIds.length,
   });
-
-  console.log(dagChildren, dagIds);
 
   const metricsQuery = useQuery({
     ...queries.v2TaskRuns.metrics(tenant.metadata.id, {
@@ -506,16 +504,20 @@ export function TaskRunsTable({
       workflowName: workflowKeys?.rows?.find(
         (r) => r.metadata.id == row.workflowId,
       )?.name,
-      // subRows: row.children.map((child) => ({
-      //   ...child,
-      //   workflowVersionId: 'first version',
-      //   triggeredBy: 'manual',
-      //   workflowName: workflowKeys?.rows?.find(
-      //     (r2) => r2.metadata.id == child.workflowId,
-      //   )?.name,
-      // })),
     }),
   );
+
+  const dagChildren = (dagChildrenRaw || []).map((dag) => ({
+    dagId: dag.dagId,
+    children: dag.children?.map((child) => ({
+      ...child,
+      workflowVersionId: 'first version',
+      triggeredBy: 'manual',
+      workflowName: workflowKeys?.rows?.find(
+        (r2) => r2.metadata.id == child.workflowId,
+      )?.name,
+    })),
+  }));
 
   return (
     <>
@@ -681,6 +683,9 @@ export function TaskRunsTable({
         setRowSelection={setRowSelection}
         pageCount={listTasksQuery.data?.pagination?.num_pages || 0}
         showColumnToggle={true}
+        getSubRows={(row) =>
+          dagChildren.find((c) => c.dagId === row.metadata.id)?.children || []
+        }
       />
     </>
   );
