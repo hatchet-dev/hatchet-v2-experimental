@@ -1941,6 +1941,9 @@ type WorkflowVersionGetParams struct {
 type V2DagListTasksParams struct {
 	// DagIds The external id of the DAG
 	DagIds []openapi_types.UUID `form:"dag_ids" json:"dag_ids"`
+
+	// Tenant The tenant id
+	Tenant openapi_types.UUID `form:"tenant" json:"tenant"`
 }
 
 // V2TaskEventListParams defines parameters for V2TaskEventList.
@@ -4783,6 +4786,13 @@ func (w *ServerInterfaceWrapper) V2DagListTasks(ctx echo.Context) error {
 	err = runtime.BindQueryParameter("form", true, true, "dag_ids", ctx.QueryParams(), &params.DagIds)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter dag_ids: %s", err))
+	}
+
+	// ------------- Required query parameter "tenant" -------------
+
+	err = runtime.BindQueryParameter("form", true, true, "tenant", ctx.QueryParams(), &params.Tenant)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter tenant: %s", err))
 	}
 
 	// Invoke the callback with all the unmarshaled arguments
@@ -12090,16 +12100,16 @@ var swaggerSpec = []string{
 	"IbFk7m55qdSm795Ca2KhfOGNBJfMK2OMDZEpEZpmelkowctWSq5rDbvsO4MJ827jhFIH9LqMq3xAICYp",
 	"TyHsTCBxZ9AzZZPOBP+WG1KCDBbMGvNmuWIUeBsliWlTw7SpYdaQGqaRaBayAVvcauU0uZVYFrE1O+SC",
 	"+RXk8pqlnAyYWs4UbOXdVpmAGSkuawIeH3hgig8IwA9WLzxoO4fMAHHG0A+DqQMcHEEXTZCbRlnQEUtC",
-	"5o/jMzBlb93ZVBYCBj4TGAfAd5Anw+XOel8NzOmB6T3ycKWsSQsdLMW1K696YA5XIQJVVhUaGIJPZ8j3",
-	"Yk6yBTDt37WwWVuPUeGtitiL9NkrwA9VzOaBaZ7P2AAHP+l/6oJSaBtn/MI1a5GN6MS2GdPpOMb0bHQB",
-	"u3k7wpHQUKWx9bZqbENqLCW/J4CZ8WXSaZzaGzAWa27kLPaPPVZ3s1qf8VqeaX0zDoOO1/q0nXVdszfk",
-	"uF++ptn6RUq2181ki6C3Vrpsk3QxcvkSkqaYuZVJm8Z1lBno1iWUOWnS1fALi10vosySffEqq6K+noIG",
-	"0yUPClxoB2jjeq+Fgn8TFHhpxb+agn/iyLH1R4x6yTdMgsUujYq03B4c8vYNw0/5yqZa9lgInShEAbEU",
-	"PXMUJATSE4X8K4bgwQufglQaNZBEXyG5opPvuhwqVKZO9cn2V6TOQJWPQRcFdoIChGfbWYyaU1uO1BYQ",
-	"TYxPWuFUIZzyGFqdiLL3J6pCZ7/C/mkrS29jZelezl+5oXq0nCiMlWi1aIEg9hHExOGRfBbgrdHqbAxM",
-	"EhDkr0Ch9NICxUo95L1HfSXk6grH9/PVljguWON4W83xbuXLKRsc8sb3yOvsksd1xJVH40RZ7YXC0hcK",
-	"1epWLbVYp3ZzhTdrVa8SLNNq4O3XwK3ytaIGEfvRqt6dU73rVXJFadcquSWVXL7Ksz40DldqvWKGqjEE",
-	"MYzTDFVdbc4qlvKI66ck9jsnnc7r3ev/CwAA//9hKLmaXj0CAA==",
+	"5o/jMzBlb93ZVBYCBj4TGAfAd5Anw+XOel8NzOmB6T3ycKWsSQsdLMW1lmWvirmxCvCuPTnWsrLFHERD",
+	"xAZa1Y1g2346Q74Xc0YqIM/+tQ2btfVjFV7QiL1IH+MC/JBnb9bi4Cf9T10sDG3jjF840Ra5l45sm6id",
+	"jmPMCkch3M1LGY6EhpqUrbfVnhvSnin5PQHMbD6TKuXUXuIcs/IklZzF/rHHyn1Wq1FeQjQtq8Zh0PFa",
+	"n7azLqf2hhz3y5dSW79Iyfa6mWwR9NZKl22SLkYuX0LSFBPGMmnTuHwzA926cjMnTboafk+y67WbWY4x",
+	"XtxVlPVT0GC6W0KBC+0AbVxmtlBncIICLy00WFNnUJx01n6yWb/kGybBYndVRVpuTwZ5+4bhp3xTVC17",
+	"LIROFKKAWIqeOQoSAumJQv4VQ/DghU9BKo0aSKKvkFzRyXddDhUKYqf6ZPsLYWegyjeoiwI7QQHCs+2s",
+	"gc2pLUdqC4gmxietcKoQTnkMrU5E2bsxVaGzX2H/tAWtt7GgdS/nkNxQGVxOFMYCuFq0QBD7CGLi8ABC",
+	"C/DWaHU2BiYJCPJXoFB6aV1kpQzz3qO+AHN1YeX7+WorKxescbyt5ni38sGWDQ5543vkdXbJ4zriyqNx",
+	"fq72xsD6xmAxdatWeKxTu7l6n7WqV4nRaTXw9mvgVvlaUYMIOWlV786p3vUquaK0a5XckkouX1xaH5GH",
+	"K7VeMTHWGIIYxmlirK42VRbLtMT1UxL7nZNO5/Xu9f8FAAD//wE+28rVPQIA",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

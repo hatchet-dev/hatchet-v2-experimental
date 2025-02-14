@@ -91,36 +91,6 @@ export const getCreatedAfterFromTimeRange = (timeRange?: string) => {
       return new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
   }
 };
-function useDagChildren() {
-  const queryClient = useQueryClient();
-
-  const query = useQuery({
-    queryKey: ['v2-task:get-by-dag-id'],
-    queryFn: async ({ queryKey }) => {
-      const dagId = queryKey[1];
-      if (!dagId) throw new Error('No dagId provided');
-
-      return (await api.v2DagListTasks(dagId)).data;
-    },
-    enabled: false,
-  });
-
-  type ReturnType = (typeof query)['data'];
-
-  const fetchChildren = useCallback(
-    async (dagId: string) => {
-      return await queryClient.fetchQuery<ReturnType>({
-        queryKey: ['v2-task:get-by-dag-id', dagId],
-        queryFn: async () => (await api.v2DagListTasks(dagId)).data,
-      });
-    },
-    [queryClient],
-  );
-
-  return {
-    fetch: fetchChildren,
-  };
-}
 
 export function WorkflowRunsTable({
   workflowId,
@@ -530,12 +500,6 @@ export function WorkflowRunsTable({
     }),
   );
 
-  const { fetch: fetchDagChildren } = useDagChildren();
-
-  const getSubRows = async (row: ListableWorkflowRun) => {
-    return await fetchDagChildren(row.workflowId);
-  };
-
   return (
     <>
       {showMetrics && (
@@ -701,7 +665,7 @@ export function WorkflowRunsTable({
         setRowSelection={setRowSelection}
         pageCount={listTasksQuery.data?.pagination?.num_pages || 0}
         showColumnToggle={true}
-        getSubRows={getSubRows}
+        getSubRows={(row) => []}
       />
     </>
   );

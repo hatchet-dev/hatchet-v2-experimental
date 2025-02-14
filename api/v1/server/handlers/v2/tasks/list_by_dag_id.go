@@ -6,12 +6,11 @@ import (
 
 	"github.com/hatchet-dev/hatchet/api/v1/server/oas/gen"
 	"github.com/hatchet-dev/hatchet/api/v1/server/oas/transformers/v2"
-	"github.com/hatchet-dev/hatchet/pkg/repository/prisma/db"
 	"github.com/hatchet-dev/hatchet/pkg/repository/prisma/sqlchelpers"
 )
 
 func (t *TasksService) V2DagListTasks(ctx echo.Context, request gen.V2DagListTasksRequestObject) (gen.V2DagListTasksResponseObject, error) {
-	tenant := ctx.Get("tenant").(*db.TenantModel)
+	tenant := request.Params.Tenant
 	dagIds := request.Params.DagIds
 
 	pguuids := make([]pgtype.UUID, 0)
@@ -21,7 +20,7 @@ func (t *TasksService) V2DagListTasks(ctx echo.Context, request gen.V2DagListTas
 
 	tasks, err := t.config.EngineRepository.OLAP().ListTasksByDAGId(
 		ctx.Request().Context(),
-		tenant.ID,
+		tenant.String(),
 		pguuids,
 	)
 

@@ -1938,6 +1938,9 @@ type WorkflowVersionGetParams struct {
 type V2DagListTasksParams struct {
 	// DagIds The external id of the DAG
 	DagIds []openapi_types.UUID `form:"dag_ids" json:"dag_ids"`
+
+	// Tenant The tenant id
+	Tenant openapi_types.UUID `form:"tenant" json:"tenant"`
 }
 
 // V2TaskEventListParams defines parameters for V2TaskEventList.
@@ -8834,6 +8837,18 @@ func NewV2DagListTasksRequest(server string, params *V2DagListTasksParams) (*htt
 		queryValues := queryURL.Query()
 
 		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "dag_ids", runtime.ParamLocationQuery, params.DagIds); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "tenant", runtime.ParamLocationQuery, params.Tenant); err != nil {
 			return nil, err
 		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
 			return nil, err

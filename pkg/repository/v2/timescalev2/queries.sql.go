@@ -731,7 +731,13 @@ JOIN
     v2_dag_to_task_olap dt ON lt.dag_id = dt.dag_id
 WHERE
     lt.external_id = ANY($1::uuid[])
+    AND tenant_id = $2::uuid
 `
+
+type ListTasksByDAGIdsParams struct {
+	Dagids   []pgtype.UUID `json:"dagids"`
+	Tenantid pgtype.UUID   `json:"tenantid"`
+}
 
 type ListTasksByDAGIdsRow struct {
 	TenantID       pgtype.UUID        `json:"tenant_id"`
@@ -745,8 +751,8 @@ type ListTasksByDAGIdsRow struct {
 	TaskInsertedAt pgtype.Timestamptz `json:"task_inserted_at"`
 }
 
-func (q *Queries) ListTasksByDAGIds(ctx context.Context, db DBTX, dagids []pgtype.UUID) ([]*ListTasksByDAGIdsRow, error) {
-	rows, err := db.Query(ctx, listTasksByDAGIds, dagids)
+func (q *Queries) ListTasksByDAGIds(ctx context.Context, db DBTX, arg ListTasksByDAGIdsParams) ([]*ListTasksByDAGIdsRow, error) {
+	rows, err := db.Query(ctx, listTasksByDAGIds, arg.Dagids, arg.Tenantid)
 	if err != nil {
 		return nil, err
 	}

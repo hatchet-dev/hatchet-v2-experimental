@@ -237,6 +237,13 @@ export class Api<SecurityDataType = unknown> extends HttpClient<SecurityDataType
     query: {
       /** The external id of the DAG */
       dag_ids: string[];
+      /**
+       * The tenant id
+       * @format uuid
+       * @minLength 36
+       * @maxLength 36
+       */
+      tenant: string;
     },
     params: RequestParams = {},
   ) =>

@@ -228,6 +228,7 @@ JOIN
     v2_dag_to_task_olap dt ON lt.dag_id = dt.dag_id
 WHERE
     lt.external_id = ANY(@dagIds::uuid[])
+    AND tenant_id = @tenantId::uuid
 ;
 
 -- name: ReadDAGByExternalID :one

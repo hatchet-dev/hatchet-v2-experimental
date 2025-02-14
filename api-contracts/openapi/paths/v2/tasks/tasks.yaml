@@ -102,7 +102,6 @@ listTasks:
 
 listTasksByDAGIds:
   get:
-    x-resources: ["tenant", "dag"]
     description: Lists all tasks that belong a specific list of dags
     operationId: v2-dag:list:tasks
     parameters:
@@ -117,6 +116,15 @@ listTasksByDAGIds:
             format: uuid
             minLength: 36
             maxLength: 36
+      - description: The tenant id
+        in: query
+        name: tenant
+        required: true
+        schema:
+          type: string
+          format: uuid
+          minLength: 36
+          maxLength: 36
     responses:
       "200":
         content:

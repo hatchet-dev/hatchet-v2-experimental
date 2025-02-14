@@ -351,18 +351,18 @@ func (t *APIServer) registerSpec(g *echo.Group, spec *openapi3.T) (*populator.Po
 		return task, sqlchelpers.UUIDToStr(task.TenantID), nil
 	})
 
-	populatorMW.RegisterGetter("dag", func(config *server.ServerConfig, parentId, id string) (result interface{}, uniqueParentId string, err error) {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
+	// populatorMW.RegisterGetter("dag", func(config *server.ServerConfig, parentId, id string) (result interface{}, uniqueParentId string, err error) {
+	// 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	// 	defer cancel()
 
-		dag, err := config.OLAPRepository.ReadDAG(ctx, id)
+	// 	dag, err := config.OLAPRepository.ReadDAG(ctx, id)
 
-		if err != nil {
-			return nil, "", err
-		}
+	// 	if err != nil {
+	// 		return nil, "", err
+	// 	}
 
-		return dag, sqlchelpers.UUIDToStr(dag.TenantID), nil
-	})
+	// 	return dag, sqlchelpers.UUIDToStr(dag.TenantID), nil
+	// })
 
 	authnMW := authn.NewAuthN(t.config)
 	authzMW := authz.NewAuthZ(t.config)

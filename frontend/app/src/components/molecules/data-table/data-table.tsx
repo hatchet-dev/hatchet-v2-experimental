@@ -76,7 +76,7 @@ interface DataTableProps<TData extends IDGetter<TData>, TValue> {
     | undefined;
   manualSorting?: boolean;
   manualFiltering?: boolean;
-  getSubRows?: (row: TData) => Promise<TData[]>;
+  getSubRows?: (row: TData) => TData[];
 }
 
 interface ExtraDataTableProps {

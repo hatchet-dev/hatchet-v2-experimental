@@ -279,6 +279,15 @@ export function TaskRunsTable({
     refetchInterval,
   });
 
+  const dagIds = listTasksQuery.data?.rows?.map((r) => r.metadata.id) || [];
+
+  const { data: dagChildren } = useQuery({
+    ...queries.v2Tasks.getByDagId(tenant.metadata.id, dagIds),
+    enabled: !!dagIds.length,
+  });
+
+  console.log(dagChildren, dagIds);
+
   const metricsQuery = useQuery({
     ...queries.v2TaskRuns.metrics(tenant.metadata.id, {
       since:
