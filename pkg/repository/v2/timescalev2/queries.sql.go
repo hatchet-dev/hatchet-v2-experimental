@@ -1601,8 +1601,19 @@ WITH locked_events AS (
         updatable_events e
     WHERE
         (t.tenant_id, t.id, t.inserted_at) = (e.tenant_id, e.task_id, e.task_inserted_at)
-        AND e.retry_count >= t.latest_retry_count
-        AND e.max_readable_status > t.readable_status
+        AND 
+            (
+                -- if the retry count is greater than the latest retry count, update the status
+                (
+                    e.retry_count > t.latest_retry_count
+                    AND e.max_readable_status != t.readable_status
+                ) OR
+                -- if the retry count is equal to the latest retry count, update the status if the status is greater
+                (
+                    e.retry_count = t.latest_retry_count
+                    AND e.max_readable_status > t.readable_status
+                )
+            )
     RETURNING
         t.tenant_id, t.id, t.inserted_at
 ), events_to_requeue AS (
