@@ -227,10 +227,13 @@ export const queries = createQueryKeyStore({
     }),
     getByDagId: (tenant: string, dagIds: string[]) => ({
       queryKey: ['v2-task:get-by-dag-id', dagIds],
-      queryFn: async () => (await api.v2DagListTasks({
-        dag_ids: dagIds,
-        tenant,
-      })).data,
+      queryFn: async () =>
+        (
+          await api.v2DagListTasks({
+            dag_ids: dagIds,
+            tenant,
+          })
+        ).data,
     }),
   },
   v2TaskEvents: {

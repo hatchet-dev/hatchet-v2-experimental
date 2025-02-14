@@ -1,6 +1,6 @@
 import { DataTable } from '@/components/molecules/data-table/data-table.tsx';
 import { columns } from './v2/workflow-runs-columns';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ColumnFiltersState,
   PaginationState,
@@ -8,7 +8,7 @@ import {
   SortingState,
   VisibilityState,
 } from '@tanstack/react-table';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import invariant from 'tiny-invariant';
 import api, {
   queries,
@@ -665,7 +665,6 @@ export function WorkflowRunsTable({
         setRowSelection={setRowSelection}
         pageCount={listTasksQuery.data?.pagination?.num_pages || 0}
         showColumnToggle={true}
-        getSubRows={(row) => []}
       />
     </>
   );
