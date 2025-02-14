@@ -223,6 +223,12 @@ export interface V2TaskEventList {
   rows?: V2TaskEvent[];
 }
 
+export interface V2DagChildren {
+  /** @format uuid */
+  dagId?: string;
+  children?: V2TaskSummary[];
+}
+
 export interface V2WorkflowRun {
   metadata: APIResourceMeta;
   status: V2TaskStatus;

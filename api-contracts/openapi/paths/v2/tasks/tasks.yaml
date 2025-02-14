@@ -100,21 +100,23 @@ listTasks:
     tags:
       - Task
 
-listTasksByDAGId:
+listTasksByDAGIds:
   get:
     x-resources: ["tenant", "dag"]
-    description: Lists all tasks that belong to DAG
+    description: Lists all tasks that belong a specific list of dags
     operationId: v2-dag:list:tasks
     parameters:
       - description: The external id of the DAG
-        in: path
-        name: dag
+        in: query
+        name: dag_ids
         required: true
         schema:
-          type: string
-          format: uuid
-          minLength: 36
-          maxLength: 36
+          type: array
+          items:
+            type: string
+            format: uuid
+            minLength: 36
+            maxLength: 36
     responses:
       "200":
         content:
@@ -122,7 +124,7 @@ listTasksByDAGId:
             schema:
               type: array
               items:
-                $ref: "../../../components/schemas/_index.yaml#/V2TaskSummary"
+                $ref: "../../../components/schemas/_index.yaml#/V2DagChildren"
               description: The list of tasks
         description: Successfully listed the tasks
       "400":

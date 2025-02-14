@@ -219,14 +219,16 @@ WHERE
     external_id = ANY(@externalIds::uuid[])
     AND tenant_id = @tenantId::uuid;
 
--- name: ListTasksByDAGId :many
+-- name: ListTasksByDAGIds :many
 SELECT
     *
 FROM
-    v2_dag_to_task_olap dt
+    v2_lookup_table lt
+JOIN
+    v2_dag_to_task_olap dt ON lt.dag_id = dt.dag_id
 WHERE
-    dt.dag_id = @dagId::bigint
-    AND dt.dag_inserted_at = @dagInsertedAt::timestamptz;
+    lt.external_id = ANY(@dagIds::uuid[])
+;
 
 -- name: ReadDAGByExternalID :one
 WITH lookup_task AS (

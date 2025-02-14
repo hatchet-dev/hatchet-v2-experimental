@@ -94,7 +94,6 @@ export const getCreatedAfterFromTimeRange = (timeRange?: string) => {
 
 export function TaskRunsTable({
   workflowId,
-  workerId,
   createdAfter: createdAfterProp,
   initColumnVisibility = {},
   filterVisibility = {},

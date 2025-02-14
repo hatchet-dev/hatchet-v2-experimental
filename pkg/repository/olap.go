@@ -101,7 +101,7 @@ type OLAPEventRepository interface {
 	UpdateTaskStatuses(ctx context.Context, tenantId string) (bool, error)
 	UpdateDAGStatuses(ctx context.Context, tenantId string) (bool, error)
 	ReadDAG(ctx context.Context, dagExternalId string) (*timescalev2.V2DagsOlap, error)
-	ListTasksByDAGId(ctx context.Context, tenantId string, dagId int64, dagInsertedAt pgtype.Timestamptz) ([]*timescalev2.PopulateTaskRunDataRow, error)
+	ListTasksByDAGId(ctx context.Context, tenantId string, dagIds []pgtype.UUID) ([]*timescalev2.PopulateTaskRunDataRow, error)
 }
 
 type olapEventRepository struct {
@@ -439,7 +439,7 @@ func (r *olapEventRepository) ListTasks(ctx context.Context, tenantId string, op
 	return tasksWithData, int(count), nil
 }
 
-func (r *olapEventRepository) ListTasksByDAGId(ctx context.Context, tenantId string, dagId int64, dagInsertedAt pgtype.Timestamptz) ([]*timescalev2.PopulateTaskRunDataRow, error) {
+func (r *olapEventRepository) ListTasksByDAGId(ctx context.Context, tenantId string, dagids []pgtype.UUID) ([]*timescalev2.PopulateTaskRunDataRow, error) {
 	tx, err := r.pool.Begin(ctx)
 
 	if err != nil {
@@ -448,10 +448,7 @@ func (r *olapEventRepository) ListTasksByDAGId(ctx context.Context, tenantId str
 
 	defer tx.Rollback(ctx)
 
-	tasks, err := r.queries.ListTasksByDAGId(ctx, tx, timescalev2.ListTasksByDAGIdParams{
-		Dagid:         dagId,
-		Daginsertedat: dagInsertedAt,
-	})
+	tasks, err := r.queries.ListTasksByDAGIds(ctx, tx, dagids)
 
 	if err != nil {
 		return nil, err
@@ -461,7 +458,7 @@ func (r *olapEventRepository) ListTasksByDAGId(ctx context.Context, tenantId str
 	taskInsertedAts := make([]pgtype.Timestamptz, 0)
 
 	for _, row := range tasks {
-		taskIds = append(taskIds, row.TaskID)
+		taskIds = append(taskIds, row.TaskID.Int64)
 		taskInsertedAts = append(taskInsertedAts, row.TaskInsertedAt)
 	}
 
@@ -470,6 +467,8 @@ func (r *olapEventRepository) ListTasksByDAGId(ctx context.Context, tenantId str
 		Taskinsertedats: taskInsertedAts,
 		Tenantid:        sqlchelpers.UUIDFromStr(tenantId),
 	})
+
+	fmt.Println("Tasks with data", tasksWithData)
 
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return nil, err

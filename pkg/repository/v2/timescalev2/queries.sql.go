@@ -722,34 +722,47 @@ func (q *Queries) ListTasks(ctx context.Context, db DBTX, arg ListTasksParams) (
 	return items, nil
 }
 
-const listTasksByDAGId = `-- name: ListTasksByDAGId :many
+const listTasksByDAGIds = `-- name: ListTasksByDAGIds :many
 SELECT
-    dag_id, dag_inserted_at, task_id, task_inserted_at
+    tenant_id, external_id, lt.task_id, lt.dag_id, inserted_at, dt.dag_id, dag_inserted_at, dt.task_id, task_inserted_at
 FROM
-    v2_dag_to_task_olap dt
+    v2_lookup_table lt
+JOIN
+    v2_dag_to_task_olap dt ON lt.dag_id = dt.dag_id
 WHERE
-    dt.dag_id = $1::bigint
-    AND dt.dag_inserted_at = $2::timestamptz
+    lt.external_id = ANY($1::uuid[])
 `
 
-type ListTasksByDAGIdParams struct {
-	Dagid         int64              `json:"dagid"`
-	Daginsertedat pgtype.Timestamptz `json:"daginsertedat"`
+type ListTasksByDAGIdsRow struct {
+	TenantID       pgtype.UUID        `json:"tenant_id"`
+	ExternalID     pgtype.UUID        `json:"external_id"`
+	TaskID         pgtype.Int8        `json:"task_id"`
+	DagID          pgtype.Int8        `json:"dag_id"`
+	InsertedAt     pgtype.Timestamptz `json:"inserted_at"`
+	DagID_2        int64              `json:"dag_id_2"`
+	DagInsertedAt  pgtype.Timestamptz `json:"dag_inserted_at"`
+	TaskID_2       int64              `json:"task_id_2"`
+	TaskInsertedAt pgtype.Timestamptz `json:"task_inserted_at"`
 }
 
-func (q *Queries) ListTasksByDAGId(ctx context.Context, db DBTX, arg ListTasksByDAGIdParams) ([]*V2DagToTaskOlap, error) {
-	rows, err := db.Query(ctx, listTasksByDAGId, arg.Dagid, arg.Daginsertedat)
+func (q *Queries) ListTasksByDAGIds(ctx context.Context, db DBTX, dagids []pgtype.UUID) ([]*ListTasksByDAGIdsRow, error) {
+	rows, err := db.Query(ctx, listTasksByDAGIds, dagids)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []*V2DagToTaskOlap
+	var items []*ListTasksByDAGIdsRow
 	for rows.Next() {
-		var i V2DagToTaskOlap
+		var i ListTasksByDAGIdsRow
 		if err := rows.Scan(
-			&i.DagID,
-			&i.DagInsertedAt,
+			&i.TenantID,
+			&i.ExternalID,
 			&i.TaskID,
+			&i.DagID,
+			&i.InsertedAt,
+			&i.DagID_2,
+			&i.DagInsertedAt,
+			&i.TaskID_2,
 			&i.TaskInsertedAt,
 		); err != nil {
 			return nil, err

@@ -1143,6 +1143,12 @@ type UserTenantPublic struct {
 	Name *string `json:"name,omitempty"`
 }
 
+// V2DagChildren defines model for V2DagChildren.
+type V2DagChildren struct {
+	Children *[]V2TaskSummary    `json:"children,omitempty"`
+	DagId    *openapi_types.UUID `json:"dagId,omitempty"`
+}
+
 // V2Task defines model for V2Task.
 type V2Task struct {
 	// AdditionalMetadata Additional metadata for the task run.
@@ -1928,6 +1934,12 @@ type WorkflowVersionGetParams struct {
 	Version *openapi_types.UUID `form:"version,omitempty" json:"version,omitempty"`
 }
 
+// V2DagListTasksParams defines parameters for V2DagListTasks.
+type V2DagListTasksParams struct {
+	// DagIds The external id of the DAG
+	DagIds []openapi_types.UUID `form:"dag_ids" json:"dag_ids"`
+}
+
 // V2TaskEventListParams defines parameters for V2TaskEventList.
 type V2TaskEventListParams struct {
 	// Offset The number to skip
@@ -2492,7 +2504,7 @@ type ClientInterface interface {
 	WorkflowVersionGet(ctx context.Context, workflow openapi_types.UUID, params *WorkflowVersionGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// V2DagListTasks request
-	V2DagListTasks(ctx context.Context, dag openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	V2DagListTasks(ctx context.Context, params *V2DagListTasksParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// V2TaskGet request
 	V2TaskGet(ctx context.Context, task openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -3953,8 +3965,8 @@ func (c *Client) WorkflowVersionGet(ctx context.Context, workflow openapi_types.
 	return c.Client.Do(req)
 }
 
-func (c *Client) V2DagListTasks(ctx context.Context, dag openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewV2DagListTasksRequest(c.Server, dag)
+func (c *Client) V2DagListTasks(ctx context.Context, params *V2DagListTasksParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewV2DagListTasksRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -8800,22 +8812,15 @@ func NewWorkflowVersionGetRequest(server string, workflow openapi_types.UUID, pa
 }
 
 // NewV2DagListTasksRequest generates requests for V2DagListTasks
-func NewV2DagListTasksRequest(server string, dag openapi_types.UUID) (*http.Request, error) {
+func NewV2DagListTasksRequest(server string, params *V2DagListTasksParams) (*http.Request, error) {
 	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "dag", runtime.ParamLocationPath, dag)
-	if err != nil {
-		return nil, err
-	}
 
 	serverURL, err := url.Parse(server)
 	if err != nil {
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/api/v2/dags/%s/tasks", pathParam0)
+	operationPath := fmt.Sprintf("/api/v2/dags/tasks")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -8823,6 +8828,24 @@ func NewV2DagListTasksRequest(server string, dag openapi_types.UUID) (*http.Requ
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "dag_ids", runtime.ParamLocationQuery, params.DagIds); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
 	}
 
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
@@ -9769,7 +9792,7 @@ type ClientWithResponsesInterface interface {
 	WorkflowVersionGetWithResponse(ctx context.Context, workflow openapi_types.UUID, params *WorkflowVersionGetParams, reqEditors ...RequestEditorFn) (*WorkflowVersionGetResponse, error)
 
 	// V2DagListTasksWithResponse request
-	V2DagListTasksWithResponse(ctx context.Context, dag openapi_types.UUID, reqEditors ...RequestEditorFn) (*V2DagListTasksResponse, error)
+	V2DagListTasksWithResponse(ctx context.Context, params *V2DagListTasksParams, reqEditors ...RequestEditorFn) (*V2DagListTasksResponse, error)
 
 	// V2TaskGetWithResponse request
 	V2TaskGetWithResponse(ctx context.Context, task openapi_types.UUID, reqEditors ...RequestEditorFn) (*V2TaskGetResponse, error)
@@ -12052,7 +12075,7 @@ func (r WorkflowVersionGetResponse) StatusCode() int {
 type V2DagListTasksResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *[]V2TaskSummary
+	JSON200      *[]V2DagChildren
 	JSON400      *APIErrors
 	JSON403      *APIErrors
 }
@@ -13274,8 +13297,8 @@ func (c *ClientWithResponses) WorkflowVersionGetWithResponse(ctx context.Context
 }
 
 // V2DagListTasksWithResponse request returning *V2DagListTasksResponse
-func (c *ClientWithResponses) V2DagListTasksWithResponse(ctx context.Context, dag openapi_types.UUID, reqEditors ...RequestEditorFn) (*V2DagListTasksResponse, error) {
-	rsp, err := c.V2DagListTasks(ctx, dag, reqEditors...)
+func (c *ClientWithResponses) V2DagListTasksWithResponse(ctx context.Context, params *V2DagListTasksParams, reqEditors ...RequestEditorFn) (*V2DagListTasksResponse, error) {
+	rsp, err := c.V2DagListTasks(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -17072,7 +17095,7 @@ func ParseV2DagListTasksResponse(rsp *http.Response) (*V2DagListTasksResponse, e
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest []V2TaskSummary
+		var dest []V2DagChildren
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

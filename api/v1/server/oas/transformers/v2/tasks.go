@@ -73,6 +73,29 @@ func ToTaskSummaryRows(
 	return toReturn
 }
 
+func ToDagChildren(
+	tasks []*timescalev2.PopulateTaskRunDataRow,
+) []gen.V2DagChildren {
+	dagIdToTasks := make(map[string][]gen.V2TaskSummary)
+
+	for _, task := range tasks {
+		dagId := sqlchelpers.UUIDToStr(task.WorkflowID)
+		dagIdToTasks[dagId] = append(dagIdToTasks[dagId], ToTaskSummary(task))
+	}
+
+	toReturn := make([]gen.V2DagChildren, 0, len(dagIdToTasks))
+
+	for dagId, tasks := range dagIdToTasks {
+		parsedUUID := types.UUID(uuid.MustParse(dagId))
+		toReturn = append(toReturn, gen.V2DagChildren{
+			DagId:    &parsedUUID,
+			Children: &tasks,
+		})
+	}
+
+	return toReturn
+}
+
 func ToTaskSummaryMany(
 	tasks []*timescalev2.PopulateTaskRunDataRow,
 	total int, limit, offset int64,

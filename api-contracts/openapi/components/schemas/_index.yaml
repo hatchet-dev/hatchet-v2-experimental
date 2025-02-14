@@ -298,6 +298,8 @@ V2TaskSummaryList:
   $ref: "./v2/task.yaml#/V2TaskSummaryList"
 V2TaskSummary:
   $ref: "./v2/task.yaml#/V2TaskSummary"
+V2DagChildren:
+  $ref: "./v2/task.yaml#/V2DagChildren"
 V2Task:
   $ref: "./v2/task.yaml#/V2Task"
 V2TaskEventList:

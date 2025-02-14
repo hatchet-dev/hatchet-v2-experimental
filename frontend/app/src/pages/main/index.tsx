@@ -60,24 +60,8 @@ interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {
   currTenant: Tenant;
 }
 
-function useSidebarButtonSelected() {
-  const location = useLocation();
-
-  function getSelectedAndOpenStates(prefix: string, to: string) {
-    return {
-      open: location.pathname.startsWith(prefix || to),
-      selected: !prefix && location.pathname === to,
-    };
-  }
-
-  return {
-    getSelectedAndOpenStates,
-  };
-}
-
 function Sidebar({ className, memberships, currTenant }: SidebarProps) {
   const { sidebarOpen, setSidebarOpen } = useSidebar();
-  const { getSelectedAndOpenStates } = useSidebarButtonSelected();
 
   const meta = useCloudApiMeta();
   const featureFlags = useCloudFeatureFlags(currTenant.metadata.id);

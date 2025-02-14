@@ -55,6 +55,17 @@ V2TaskSummary:
     - workflowId
     - output
 
+V2DagChildren:
+  type: object
+  properties:
+    dagId:
+      type: string
+      format: uuid
+    children:
+      type: array
+      items:
+        $ref: "#/V2TaskSummary"
+
 V2TaskSummaryList:
   type: object
   properties:

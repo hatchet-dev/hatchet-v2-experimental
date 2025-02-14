@@ -83,12 +83,12 @@ import {
   UserLoginRequest,
   UserRegisterRequest,
   UserTenantMembershipsList,
+  V2DagChildren,
   V2Task,
   V2TaskEventList,
   V2TaskPointMetrics,
   V2TaskRunMetrics,
   V2TaskStatus,
-  V2TaskSummary,
   V2TaskSummaryList,
   V2WorkflowRunList,
   WebhookWorkerCreateRequest,
@@ -225,18 +225,25 @@ export class Api<SecurityDataType = unknown> extends HttpClient<SecurityDataType
       ...params,
     });
   /**
-   * @description Lists all tasks that belong to DAG
+   * @description Lists all tasks that belong a specific list of dags
    *
    * @tags Task
    * @name V2DagListTasks
    * @summary List tasks
-   * @request GET:/api/v2/dags/{dag}/tasks
+   * @request GET:/api/v2/dags/tasks
    * @secure
    */
-  v2DagListTasks = (dag: string, params: RequestParams = {}) =>
-    this.request<V2TaskSummary[], APIErrors>({
-      path: `/api/v2/dags/${dag}/tasks`,
+  v2DagListTasks = (
+    query: {
+      /** The external id of the DAG */
+      dag_ids: string[];
+    },
+    params: RequestParams = {},
+  ) =>
+    this.request<V2DagChildren[], APIErrors>({
+      path: `/api/v2/dags/tasks`,
       method: 'GET',
+      query: query,
       secure: true,
       format: 'json',
       ...params,

@@ -225,6 +225,10 @@ export const queries = createQueryKeyStore({
       queryKey: ['v2-task:get', task],
       queryFn: async () => (await api.v2TaskGet(task)).data,
     }),
+    getByDagId: (dagId: string) => ({
+      queryKey: ['v2-task:get-by-dag-id', dagId],
+      queryFn: async () => (await api.v2DagListTasks(dagId)).data,
+    }),
   },
   v2TaskEvents: {
     list: (tenant: string, task: string, query: ListWorkflowRunsQuery) => ({
