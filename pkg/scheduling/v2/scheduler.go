@@ -369,7 +369,7 @@ func (s *Scheduler) replenish(ctx context.Context, mustReplenish bool) error {
 }
 
 func (s *Scheduler) loopReplenish(ctx context.Context) {
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(200 * time.Second)
 	defer ticker.Stop()
 
 	for {
