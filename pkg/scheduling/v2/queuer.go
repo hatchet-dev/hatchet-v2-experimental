@@ -456,7 +456,7 @@ func (q *Queuer) flushToDatabase(ctx context.Context, r *assignResults) int {
 
 	q.l.Debug().Int("succeeded", len(succeeded)).Int("failed", len(failed)).Msg("flushed to database")
 
-	return len(succeeded)
+	return len(succeeded) + len(r.schedulingTimedOut)
 }
 
 func getLargerDuration(s1, s2 string) (string, error) {
