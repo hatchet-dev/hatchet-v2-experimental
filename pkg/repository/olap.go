@@ -829,7 +829,7 @@ func (r *olapEventRepository) UpdateTaskStatuses(ctx context.Context, tenantId s
 		partitionNumber := i
 
 		eg.Go(func() error {
-			tx, commit, rollback, err := sqlchelpers.PrepareTx(ctx, r.pool, r.l, 5000)
+			tx, commit, rollback, err := sqlchelpers.PrepareTx(ctx, r.pool, r.l, 15000)
 
 			if err != nil {
 				return err
