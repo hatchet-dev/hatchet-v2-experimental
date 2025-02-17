@@ -143,9 +143,9 @@ func (p *SchedulingPool) RefreshAll(ctx context.Context, tenantId string) {
 }
 
 func (p *SchedulingPool) Replenish(ctx context.Context, tenantId string) {
-	// if tm := p.getTenantManager(tenantId, false); tm != nil {
-	// 	tm.replenish(ctx)
-	// }
+	if tm := p.getTenantManager(tenantId, false); tm != nil {
+		tm.replenish(ctx)
+	}
 }
 
 func (p *SchedulingPool) Queue(ctx context.Context, tenantId string, queueName string) {
