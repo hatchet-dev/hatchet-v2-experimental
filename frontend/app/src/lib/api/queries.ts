@@ -242,11 +242,11 @@ export const queries = createQueryKeyStore({
     }),
   },
   v2TaskEvents: {
-    list: (tenant: string, query: ListWorkflowRunsQuery, task?: string | undefined, workflowRunId?: string | undefined) => ({
-      queryKey: ['v2:workflow-run:list', tenant, task, query],
+    list: (tenant: string, query: ListWorkflowRunsQuery, taskRunId?: string | undefined, workflowRunId?: string | undefined) => ({
+      queryKey: ['v2:workflow-run:list', tenant, taskRunId, workflowRunId, query],
       queryFn: async () => {
-        if (task) {
-          return (await api.v2TaskEventList(task, query)).data
+        if (taskRunId) {
+          return (await api.v2TaskEventList(taskRunId, query)).data
         } else if (workflowRunId) {
           return (await api.v2WorkflowRunTaskEventsList(tenant, workflowRunId)).data
         } else {
