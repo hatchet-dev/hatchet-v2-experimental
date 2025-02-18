@@ -263,6 +263,11 @@ export interface V2WorkflowRun {
   output: object;
   /** The error message of the task run (for the latest run) */
   errorMessage?: string;
+  /**
+   * The ID of the workflow version.
+   * @format uuid
+   */
+  workflowVersionId?: string;
 }
 
 export interface V2WorkflowRunList {

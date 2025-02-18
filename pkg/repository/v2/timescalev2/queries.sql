@@ -838,7 +838,8 @@ WITH input AS (
         r.workflow_id,
         d.display_name,
         d.input,
-        d.additional_metadata
+        d.additional_metadata,
+        d.workflow_version_id
     FROM v2_runs_olap r
     JOIN v2_dags_olap d ON (r.tenant_id, r.external_id, r.inserted_at) = (d.tenant_id, d.external_id, d.inserted_at)
     WHERE

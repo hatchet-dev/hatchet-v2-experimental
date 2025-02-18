@@ -654,7 +654,8 @@ WITH input AS (
         r.workflow_id,
         d.display_name,
         d.input,
-        d.additional_metadata
+        d.additional_metadata,
+        d.workflow_version_id
     FROM v2_runs_olap r
     JOIN v2_dags_olap d ON (r.tenant_id, r.external_id, r.inserted_at) = (d.tenant_id, d.external_id, d.inserted_at)
     WHERE
@@ -689,7 +690,7 @@ WITH input AS (
         e.run_id, e.retry_count DESC
 )
 SELECT
-    r.dag_id, r.run_id, r.tenant_id, r.inserted_at, r.external_id, r.readable_status, r.kind, r.workflow_id, r.display_name, r.input, r.additional_metadata,
+    r.dag_id, r.run_id, r.tenant_id, r.inserted_at, r.external_id, r.readable_status, r.kind, r.workflow_id, r.display_name, r.input, r.additional_metadata, r.workflow_version_id,
     m.created_at,
     m.started_at,
     m.finished_at,
@@ -718,6 +719,7 @@ type PopulateDAGMetadataRow struct {
 	DisplayName        string               `json:"display_name"`
 	Input              []byte               `json:"input"`
 	AdditionalMetadata []byte               `json:"additional_metadata"`
+	WorkflowVersionID  pgtype.UUID          `json:"workflow_version_id"`
 	CreatedAt          pgtype.Timestamptz   `json:"created_at"`
 	StartedAt          pgtype.Timestamptz   `json:"started_at"`
 	FinishedAt         pgtype.Timestamptz   `json:"finished_at"`
@@ -745,6 +747,7 @@ func (q *Queries) PopulateDAGMetadata(ctx context.Context, db DBTX, arg Populate
 			&i.DisplayName,
 			&i.Input,
 			&i.AdditionalMetadata,
+			&i.WorkflowVersionID,
 			&i.CreatedAt,
 			&i.StartedAt,
 			&i.FinishedAt,

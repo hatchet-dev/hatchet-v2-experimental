@@ -1306,6 +1306,9 @@ type V2WorkflowRun struct {
 	// TenantId The ID of the tenant.
 	TenantId   openapi_types.UUID `json:"tenantId"`
 	WorkflowId openapi_types.UUID `json:"workflowId"`
+
+	// WorkflowVersionId The ID of the workflow version.
+	WorkflowVersionId *openapi_types.UUID `json:"workflowVersionId,omitempty"`
 }
 
 // V2WorkflowRunList defines model for V2WorkflowRunList.

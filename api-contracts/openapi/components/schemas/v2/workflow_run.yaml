@@ -37,6 +37,11 @@ V2WorkflowRun:
     errorMessage:
       type: string
       description: The error message of the task run (for the latest run)
+    workflowVersionId:
+      type: string
+      format: uuid
+      description: The ID of the workflow version.
+
   required:
     - metadata
     - id

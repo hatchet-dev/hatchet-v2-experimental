@@ -85,6 +85,7 @@ type WorkflowRunData struct {
 	StartedAt          pgtype.Timestamptz               `json:"started_at"`
 	FinishedAt         pgtype.Timestamptz               `json:"finished_at"`
 	ErrorMessage       string                           `json:"error_message"`
+	WorkflowVersionId  pgtype.UUID                      `json:"workflow_version_id"`
 }
 
 type OLAPEventRepository interface {
@@ -621,6 +622,7 @@ func (r *olapEventRepository) ListWorkflowRuns(ctx context.Context, tenantId str
 				FinishedAt:         dag.FinishedAt,
 				ErrorMessage:       dag.ErrorMessage.String,
 				Kind:               timescalev2.V2RunKindDAG,
+				WorkflowVersionId:  dag.WorkflowVersionID,
 			})
 		} else {
 			task, ok := tasksToPopulated[externalId]

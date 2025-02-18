@@ -32,6 +32,8 @@ func ToWorkflowRun(task *repository.WorkflowRunData) gen.V2WorkflowRun {
 		durationPtr = &duration
 	}
 
+	workflowVersionId := uuid.MustParse(sqlchelpers.UUIDToStr(task.WorkflowVersionId))
+
 	return gen.V2WorkflowRun{
 		Metadata: gen.APIResourceMeta{
 			Id:        sqlchelpers.UUIDToStr(task.ExternalID),
@@ -47,6 +49,7 @@ func ToWorkflowRun(task *repository.WorkflowRunData) gen.V2WorkflowRun {
 		Status:             gen.V2TaskStatus(task.ReadableStatus),
 		TenantId:           uuid.MustParse(sqlchelpers.UUIDToStr(task.TenantID)),
 		WorkflowId:         uuid.MustParse(sqlchelpers.UUIDToStr(task.WorkflowID)),
+		WorkflowVersionId:  &workflowVersionId,
 	}
 }
 
