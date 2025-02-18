@@ -304,6 +304,8 @@ V2Task:
   $ref: "./v2/task.yaml#/V2Task"
 V2TaskEventList:
   $ref: "./v2/task.yaml#/V2TaskEventList"
+V2WorkflowRunTaskEventList:
+  $ref: "./v2/task.yaml#/V2WorkflowRunTaskEventList"
 V2TaskStatus:
   $ref: "./v2/task.yaml#/V2TaskStatus"
 V2TaskRunMetrics:

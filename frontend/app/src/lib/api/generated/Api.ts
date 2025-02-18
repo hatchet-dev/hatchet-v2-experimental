@@ -91,6 +91,7 @@ import {
   V2TaskStatus,
   V2TaskSummaryList,
   V2WorkflowRunList,
+  V2WorkflowRunTaskEventList,
   WebhookWorkerCreateRequest,
   WebhookWorkerCreated,
   WebhookWorkerListResponse,
@@ -330,7 +331,7 @@ export class Api<SecurityDataType = unknown> extends HttpClient<SecurityDataType
     },
     params: RequestParams = {},
   ) =>
-    this.request<V2TaskEventList, APIErrors>({
+    this.request<V2WorkflowRunTaskEventList, APIErrors>({
       path: `/api/v2/tenants/${tenant}/workflow-runs/${workflowRunId}/task-events`,
       method: 'GET',
       query: query,

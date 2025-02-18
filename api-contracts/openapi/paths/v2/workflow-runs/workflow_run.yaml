@@ -135,7 +135,7 @@ listTaskEventsForWorkflowRun:
         content:
           application/json:
             schema:
-              $ref: "../../../components/schemas/_index.yaml#/V2TaskEventList"
+              $ref: "../../../components/schemas/_index.yaml#/V2WorkflowRunTaskEventList"
         description: Successfully listed the tasks
       "400":
         content:
