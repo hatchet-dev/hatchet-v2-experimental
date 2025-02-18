@@ -159,23 +159,6 @@ func ToWorkflowRunTaskRunEventsMany(
 	toReturn := make([]gen.V2WorkflowRunTaskEvent, len(events))
 
 	for i, event := range events {
-		// data := jsonToMap(event.Data)
-		// taskInput := jsonToMap(event.TaskInput)
-		// additionalMetadata := jsonToMap(event.AdditionalMetadata)
-
-		var workerId *uuid.UUID
-		var tenantId *uuid.UUID
-
-		if event.WorkerID.Valid {
-			workerUUid := uuid.MustParse(sqlchelpers.UUIDToStr(event.WorkerID))
-			workerId = (*types.UUID)(&workerUUid)
-		}
-
-		if event.TenantID.Valid {
-			tenantUUid := uuid.MustParse(sqlchelpers.UUIDToStr(event.TenantID))
-			tenantId = (*uuid.UUID)(&tenantUUid)
-		}
-
 		toReturn[i] = gen.V2WorkflowRunTaskEvent{
 			AdditionalEventData:    &event.AdditionalEventData.String,
 			AdditionalEventMessage: &event.AdditionalEventMessage.String,
@@ -189,12 +172,11 @@ func ToWorkflowRunTaskRunEventsMany(
 			RetryCount:             int32(event.RetryCount),
 			TaskId:                 int64(event.TaskID),
 			TaskInsertedAt:         event.TaskInsertedAt.Time,
-			TenantId:               *tenantId,
+			TenantId:               uuid.MustParse(sqlchelpers.UUIDToStr(event.TenantID)),
 			TimeFirstSeen:          event.TimeFirstSeen.Time,
 			TimeLastSeen:           event.TimeLastSeen.Time,
-			WorkerId:               *workerId,
+			WorkerId:               uuid.MustParse(sqlchelpers.UUIDToStr(event.WorkerID)),
 		}
-
 	}
 
 	return gen.V2WorkflowRunTaskEventList{
