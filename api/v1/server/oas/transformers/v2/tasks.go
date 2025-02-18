@@ -155,31 +155,27 @@ func ToTaskRunEventMany(
 func ToWorkflowRunTaskRunEventsMany(
 	events []*timescalev2.ListTaskEventsForWorkflowRunRow,
 	taskExternalId string,
-) gen.V2WorkflowRunTaskEventList {
-	toReturn := make([]gen.V2WorkflowRunTaskEvent, len(events))
+) gen.V2TaskEventList {
+	toReturn := make([]gen.V2TaskEvent, len(events))
 
 	for i, event := range events {
-		toReturn[i] = gen.V2WorkflowRunTaskEvent{
-			AdditionalEventData:    &event.AdditionalEventData.String,
-			AdditionalEventMessage: &event.AdditionalEventMessage.String,
-			Count:                  event.Count,
-			ErrorMessage:           &event.ErrorMessage.String,
-			EventTimestamp:         event.EventTimestamp.Time,
-			EventType:              gen.V2TaskEventType(event.EventType),
-			Id:                     int64(event.ID),
-			Output:                 &event.Output,
-			ReadableStatus:         gen.V2TaskStatus(event.ReadableStatus),
-			RetryCount:             int32(event.RetryCount),
-			TaskId:                 int64(event.TaskID),
-			TaskInsertedAt:         event.TaskInsertedAt.Time,
-			TenantId:               uuid.MustParse(sqlchelpers.UUIDToStr(event.TenantID)),
-			TimeFirstSeen:          event.TimeFirstSeen.Time,
-			TimeLastSeen:           event.TimeLastSeen.Time,
-			WorkerId:               uuid.MustParse(sqlchelpers.UUIDToStr(event.WorkerID)),
+		workerId := uuid.MustParse(sqlchelpers.UUIDToStr(event.WorkerID))
+		output := string(event.Output)
+
+		toReturn[i] = gen.V2TaskEvent{
+			ErrorMessage:    &event.ErrorMessage.String,
+			EventType:       gen.V2TaskEventType(event.EventType),
+			Id:              int(event.ID),
+			Message:         event.AdditionalEventMessage.String,
+			Output:          &output,
+			TaskDisplayName: &event.DisplayName,
+			TaskId:          uuid.MustParse(taskExternalId),
+			Timestamp:       event.EventTimestamp.Time,
+			WorkerId:        &workerId,
 		}
 	}
 
-	return gen.V2WorkflowRunTaskEventList{
+	return gen.V2TaskEventList{
 		Rows:       &toReturn,
 		Pagination: &gen.PaginationResponse{},
 	}
