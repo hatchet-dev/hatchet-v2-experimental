@@ -171,6 +171,8 @@ V2TaskEvent:
     workerId:
       type: string
       format: uuid
+    taskDisplayName:
+      type: string
   required:
     - id
     - taskId

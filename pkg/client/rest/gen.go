@@ -1190,14 +1190,15 @@ type V2Task struct {
 
 // V2TaskEvent defines model for V2TaskEvent.
 type V2TaskEvent struct {
-	ErrorMessage *string             `json:"errorMessage,omitempty"`
-	EventType    V2TaskEventType     `json:"eventType"`
-	Id           int                 `json:"id"`
-	Message      string              `json:"message"`
-	Output       *string             `json:"output,omitempty"`
-	TaskId       openapi_types.UUID  `json:"taskId"`
-	Timestamp    time.Time           `json:"timestamp"`
-	WorkerId     *openapi_types.UUID `json:"workerId,omitempty"`
+	ErrorMessage    *string             `json:"errorMessage,omitempty"`
+	EventType       V2TaskEventType     `json:"eventType"`
+	Id              int                 `json:"id"`
+	Message         string              `json:"message"`
+	Output          *string             `json:"output,omitempty"`
+	TaskDisplayName *string             `json:"taskDisplayName,omitempty"`
+	TaskId          openapi_types.UUID  `json:"taskId"`
+	Timestamp       time.Time           `json:"timestamp"`
+	WorkerId        *openapi_types.UUID `json:"workerId,omitempty"`
 }
 
 // V2TaskEventList defines model for V2TaskEventList.
@@ -1313,59 +1314,6 @@ type V2WorkflowRunList struct {
 
 	// Rows The list of workflow runs
 	Rows []V2WorkflowRun `json:"rows"`
-}
-
-// V2WorkflowRunTaskEvent defines model for V2WorkflowRunTaskEvent.
-type V2WorkflowRunTaskEvent struct {
-	// AdditionalEventData Additional data associated with the event.
-	AdditionalEventData *string `json:"additionalEventData"`
-
-	// AdditionalEventMessage Additional message associated with the event.
-	AdditionalEventMessage *string `json:"additionalEventMessage"`
-
-	// Count Count of events.
-	Count int64 `json:"count"`
-
-	// ErrorMessage Error message if any.
-	ErrorMessage *string `json:"errorMessage"`
-
-	// EventTimestamp Timestamp when the event occurred.
-	EventTimestamp time.Time       `json:"eventTimestamp"`
-	EventType      V2TaskEventType `json:"eventType"`
-
-	// Id Unique identifier for the event.
-	Id int64 `json:"id"`
-
-	// Output Binary output data.
-	Output         *[]byte      `json:"output,omitempty"`
-	ReadableStatus V2TaskStatus `json:"readableStatus"`
-
-	// RetryCount Number of retry attempts.
-	RetryCount int32 `json:"retryCount"`
-
-	// TaskId The ID of the task.
-	TaskId int64 `json:"taskId"`
-
-	// TaskInsertedAt The timestamp when the task was inserted.
-	TaskInsertedAt time.Time `json:"taskInsertedAt"`
-
-	// TenantId The ID of the tenant.
-	TenantId openapi_types.UUID `json:"tenantId"`
-
-	// TimeFirstSeen Timestamp when the event was first seen.
-	TimeFirstSeen time.Time `json:"timeFirstSeen"`
-
-	// TimeLastSeen Timestamp when the event was last seen.
-	TimeLastSeen time.Time `json:"timeLastSeen"`
-
-	// WorkerId ID of the worker processing the task.
-	WorkerId openapi_types.UUID `json:"workerId"`
-}
-
-// V2WorkflowRunTaskEventList defines model for V2WorkflowRunTaskEventList.
-type V2WorkflowRunTaskEventList struct {
-	Pagination *PaginationResponse       `json:"pagination,omitempty"`
-	Rows       *[]V2WorkflowRunTaskEvent `json:"rows,omitempty"`
 }
 
 // WebhookWorker defines model for WebhookWorker.
@@ -12419,7 +12367,7 @@ func (r V2WorkflowRunListResponse) StatusCode() int {
 type V2WorkflowRunTaskEventsListResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *V2WorkflowRunTaskEventList
+	JSON200      *V2TaskEventList
 	JSON400      *APIErrors
 	JSON403      *APIErrors
 }
@@ -17596,7 +17544,7 @@ func ParseV2WorkflowRunTaskEventsListResponse(rsp *http.Response) (*V2WorkflowRu
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest V2WorkflowRunTaskEventList
+		var dest V2TaskEventList
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

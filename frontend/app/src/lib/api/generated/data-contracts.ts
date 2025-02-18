@@ -216,6 +216,7 @@ export interface V2TaskEvent {
   output?: string;
   /** @format uuid */
   workerId?: string;
+  taskDisplayName?: string;
 }
 
 export interface V2TaskEventList {
@@ -268,79 +269,6 @@ export interface V2WorkflowRunList {
   pagination: PaginationResponse;
   /** The list of workflow runs */
   rows: V2WorkflowRun[];
-}
-
-export interface V2WorkflowRunTaskEvent {
-  /**
-   * The ID of the tenant.
-   * @format uuid
-   */
-  tenantId: string;
-  /**
-   * The ID of the task.
-   * @format int64
-   */
-  taskId: number;
-  /**
-   * The timestamp when the task was inserted.
-   * @format date-time
-   */
-  taskInsertedAt: string;
-  /**
-   * Number of retry attempts.
-   * @format int32
-   */
-  retryCount: number;
-  /** Type of the event. */
-  eventType: V2TaskEventType;
-  /**
-   * Timestamp when the event was first seen.
-   * @format date-time
-   */
-  timeFirstSeen: string;
-  /**
-   * Timestamp when the event was last seen.
-   * @format date-time
-   */
-  timeLastSeen: string;
-  /**
-   * Count of events.
-   * @format int64
-   */
-  count: number;
-  /**
-   * Unique identifier for the event.
-   * @format int64
-   */
-  id: number;
-  /**
-   * Timestamp when the event occurred.
-   * @format date-time
-   */
-  eventTimestamp: string;
-  /** Human-readable status of the event. */
-  readableStatus: V2TaskStatus;
-  /** Error message if any. */
-  errorMessage?: string | null;
-  /**
-   * Binary output data.
-   * @format byte
-   */
-  output?: string;
-  /**
-   * ID of the worker processing the task.
-   * @format uuid
-   */
-  workerId: string;
-  /** Additional data associated with the event. */
-  additionalEventData?: string | null;
-  /** Additional message associated with the event. */
-  additionalEventMessage?: string | null;
-}
-
-export interface V2WorkflowRunTaskEventList {
-  pagination?: PaginationResponse;
-  rows?: V2WorkflowRunTaskEvent[];
 }
 
 export interface V2TaskRunMetric {
