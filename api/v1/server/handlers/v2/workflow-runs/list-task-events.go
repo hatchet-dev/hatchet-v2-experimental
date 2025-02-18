@@ -22,7 +22,7 @@ func (t *V2WorkflowRunsService) V2WorkflowRunTaskEventsList(ctx echo.Context, re
 		return nil, err
 	}
 
-	result := transformers.ToTaskRunEventMany(taskRunEvents, workflowRunId.String())
+	result := transformers.ToWorkflowRunTaskRunEventsMany(taskRunEvents, workflowRunId.String())
 
 	// Search for api errors to see how we handle errors in other cases
 	return gen.V2WorkflowRunTaskEventsList200JSONResponse(

@@ -275,51 +275,51 @@ export interface V2WorkflowRunTaskEvent {
    * The ID of the tenant.
    * @format uuid
    */
-  tenantId?: string;
+  tenantId: string;
   /**
    * The ID of the task.
    * @format int64
    */
-  taskId?: number;
+  taskId: number;
   /**
    * The timestamp when the task was inserted.
    * @format date-time
    */
-  taskInsertedAt?: string;
+  taskInsertedAt: string;
   /**
    * Number of retry attempts.
    * @format int32
    */
-  retryCount?: number;
+  retryCount: number;
   /** Type of the event. */
-  eventType?: V2TaskEventType;
+  eventType: V2TaskEventType;
   /**
    * Timestamp when the event was first seen.
    * @format date-time
    */
-  timeFirstSeen?: string | null;
+  timeFirstSeen: string;
   /**
    * Timestamp when the event was last seen.
    * @format date-time
    */
-  timeLastSeen?: string | null;
+  timeLastSeen: string;
   /**
    * Count of events.
    * @format int64
    */
-  count?: number;
+  count: number;
   /**
    * Unique identifier for the event.
    * @format int64
    */
-  id?: number;
+  id: number;
   /**
    * Timestamp when the event occurred.
    * @format date-time
    */
-  eventTimestamp?: string;
+  eventTimestamp: string;
   /** Human-readable status of the event. */
-  readableStatus?: V2TaskStatus;
+  readableStatus: V2TaskStatus;
   /** Error message if any. */
   errorMessage?: string | null;
   /**
@@ -331,7 +331,7 @@ export interface V2WorkflowRunTaskEvent {
    * ID of the worker processing the task.
    * @format uuid
    */
-  workerId?: string;
+  workerId: string;
   /** Additional data associated with the event. */
   additionalEventData?: string | null;
   /** Additional message associated with the event. */

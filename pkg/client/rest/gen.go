@@ -1324,42 +1324,42 @@ type V2WorkflowRunTaskEvent struct {
 	AdditionalEventMessage *string `json:"additionalEventMessage"`
 
 	// Count Count of events.
-	Count *int64 `json:"count,omitempty"`
+	Count int64 `json:"count"`
 
 	// ErrorMessage Error message if any.
 	ErrorMessage *string `json:"errorMessage"`
 
 	// EventTimestamp Timestamp when the event occurred.
-	EventTimestamp *time.Time       `json:"eventTimestamp,omitempty"`
-	EventType      *V2TaskEventType `json:"eventType,omitempty"`
+	EventTimestamp time.Time       `json:"eventTimestamp"`
+	EventType      V2TaskEventType `json:"eventType"`
 
 	// Id Unique identifier for the event.
-	Id *int64 `json:"id,omitempty"`
+	Id int64 `json:"id"`
 
 	// Output Binary output data.
-	Output         *[]byte       `json:"output,omitempty"`
-	ReadableStatus *V2TaskStatus `json:"readableStatus,omitempty"`
+	Output         *[]byte      `json:"output,omitempty"`
+	ReadableStatus V2TaskStatus `json:"readableStatus"`
 
 	// RetryCount Number of retry attempts.
-	RetryCount *int32 `json:"retryCount,omitempty"`
+	RetryCount int32 `json:"retryCount"`
 
 	// TaskId The ID of the task.
-	TaskId *int64 `json:"taskId,omitempty"`
+	TaskId int64 `json:"taskId"`
 
 	// TaskInsertedAt The timestamp when the task was inserted.
-	TaskInsertedAt *time.Time `json:"taskInsertedAt,omitempty"`
+	TaskInsertedAt time.Time `json:"taskInsertedAt"`
 
 	// TenantId The ID of the tenant.
-	TenantId *openapi_types.UUID `json:"tenantId,omitempty"`
+	TenantId openapi_types.UUID `json:"tenantId"`
 
 	// TimeFirstSeen Timestamp when the event was first seen.
-	TimeFirstSeen *time.Time `json:"timeFirstSeen"`
+	TimeFirstSeen time.Time `json:"timeFirstSeen"`
 
 	// TimeLastSeen Timestamp when the event was last seen.
-	TimeLastSeen *time.Time `json:"timeLastSeen"`
+	TimeLastSeen time.Time `json:"timeLastSeen"`
 
 	// WorkerId ID of the worker processing the task.
-	WorkerId *openapi_types.UUID `json:"workerId,omitempty"`
+	WorkerId openapi_types.UUID `json:"workerId"`
 }
 
 // V2WorkflowRunTaskEventList defines model for V2WorkflowRunTaskEventList.

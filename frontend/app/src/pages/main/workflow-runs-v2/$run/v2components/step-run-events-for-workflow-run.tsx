@@ -1,4 +1,4 @@
-import { queries, V2TaskEvent } from '@/lib/api';
+import { queries, V2TaskEvent, V2WorkflowRunTaskEvent } from '@/lib/api';
 import { useQuery } from '@tanstack/react-query';
 import { DataTable } from '@/components/molecules/data-table/data-table';
 import { columns } from './events-columns';
@@ -38,7 +38,7 @@ export function StepRunEvents({
     },
   });
 
-  type EventWithMetadata = V2TaskEvent & {
+  type EventWithMetadata = V2WorkflowRunTaskEvent & {
     metadata: {
       id: string;
     };

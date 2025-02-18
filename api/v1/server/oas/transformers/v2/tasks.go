@@ -152,6 +152,57 @@ func ToTaskRunEventMany(
 	}
 }
 
+func ToWorkflowRunTaskRunEventsMany(
+	events []*timescalev2.ListTaskEventsForWorkflowRunRow,
+	taskExternalId string,
+) gen.V2WorkflowRunTaskEventList {
+	toReturn := make([]gen.V2WorkflowRunTaskEvent, len(events))
+
+	for i, event := range events {
+		// data := jsonToMap(event.Data)
+		// taskInput := jsonToMap(event.TaskInput)
+		// additionalMetadata := jsonToMap(event.AdditionalMetadata)
+
+		var workerId *uuid.UUID
+		var tenantId *uuid.UUID
+
+		if event.WorkerID.Valid {
+			workerUUid := uuid.MustParse(sqlchelpers.UUIDToStr(event.WorkerID))
+			workerId = (*types.UUID)(&workerUUid)
+		}
+
+		if event.TenantID.Valid {
+			tenantUUid := uuid.MustParse(sqlchelpers.UUIDToStr(event.TenantID))
+			tenantId = (*uuid.UUID)(&tenantUUid)
+		}
+
+		toReturn[i] = gen.V2WorkflowRunTaskEvent{
+			AdditionalEventData:    &event.AdditionalEventData.String,
+			AdditionalEventMessage: &event.AdditionalEventMessage.String,
+			Count:                  event.Count,
+			ErrorMessage:           &event.ErrorMessage.String,
+			EventTimestamp:         event.EventTimestamp.Time,
+			EventType:              gen.V2TaskEventType(event.EventType),
+			Id:                     int64(event.ID),
+			Output:                 &event.Output,
+			ReadableStatus:         gen.V2TaskStatus(event.ReadableStatus),
+			RetryCount:             int32(event.RetryCount),
+			TaskId:                 int64(event.TaskID),
+			TaskInsertedAt:         event.TaskInsertedAt.Time,
+			TenantId:               *tenantId,
+			TimeFirstSeen:          event.TimeFirstSeen.Time,
+			TimeLastSeen:           event.TimeLastSeen.Time,
+			WorkerId:               *workerId,
+		}
+
+	}
+
+	return gen.V2WorkflowRunTaskEventList{
+		Rows:       &toReturn,
+		Pagination: &gen.PaginationResponse{},
+	}
+}
+
 func ToTaskRunMetrics(metrics *[]olap.TaskRunMetric) gen.V2TaskRunMetrics {
 	statuses := []gen.V2TaskStatus{
 		gen.V2TaskStatusCANCELLED,

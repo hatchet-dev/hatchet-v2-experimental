@@ -309,8 +309,8 @@ WITH tasks AS (
     task_inserted_at,
     retry_count,
     event_type,
-    MIN(event_timestamp) AS time_first_seen,
-    MAX(event_timestamp) AS time_last_seen,
+    MIN(event_timestamp)::timestamptz AS time_first_seen,
+    MAX(event_timestamp)::timestamptz AS time_last_seen,
     COUNT(*) AS count,
     MIN(id) AS first_id
   FROM v2_task_events_olap

@@ -440,8 +440,8 @@ WITH tasks AS (
     task_inserted_at,
     retry_count,
     event_type,
-    MIN(event_timestamp) AS time_first_seen,
-    MAX(event_timestamp) AS time_last_seen,
+    MIN(event_timestamp)::timestamptz AS time_first_seen,
+    MAX(event_timestamp)::timestamptz AS time_last_seen,
     COUNT(*) AS count,
     MIN(id) AS first_id
   FROM v2_task_events_olap
@@ -487,8 +487,8 @@ type ListTaskEventsForWorkflowRunRow struct {
 	TaskInsertedAt         pgtype.Timestamptz   `json:"task_inserted_at"`
 	RetryCount             int32                `json:"retry_count"`
 	EventType              V2EventTypeOlap      `json:"event_type"`
-	TimeFirstSeen          interface{}          `json:"time_first_seen"`
-	TimeLastSeen           interface{}          `json:"time_last_seen"`
+	TimeFirstSeen          pgtype.Timestamptz   `json:"time_first_seen"`
+	TimeLastSeen           pgtype.Timestamptz   `json:"time_last_seen"`
 	Count                  int64                `json:"count"`
 	ID                     int64                `json:"id"`
 	EventTimestamp         pgtype.Timestamptz   `json:"event_timestamp"`

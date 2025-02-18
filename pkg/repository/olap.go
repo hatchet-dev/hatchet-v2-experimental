@@ -93,7 +93,7 @@ type OLAPEventRepository interface {
 	ListTasks(ctx context.Context, tenantId string, opts ListTaskRunOpts) ([]*timescalev2.PopulateTaskRunDataRow, int, error)
 	ListWorkflowRuns(ctx context.Context, tenantId string, opts ListWorkflowRunOpts) ([]*WorkflowRunData, int, error)
 	ListTaskRunEvents(ctx context.Context, tenantId string, taskId int64, taskInsertedAt pgtype.Timestamptz, limit, offset int64) ([]*timescalev2.ListTaskEventsRow, error)
-	ListTaskRunEventsByWorkflowRunId(ctx context.Context, tenantId string, workflowRunId uuid.UUID) ([]*timescalev2.ListTaskEventsRow, error)
+	ListTaskRunEventsByWorkflowRunId(ctx context.Context, tenantId string, workflowRunId uuid.UUID) ([]*timescalev2.ListTaskEventsForWorkflowRunRow, error)
 	ReadTaskRunMetrics(ctx context.Context, tenantId string, opts ReadTaskRunMetricsOpts) ([]olap.TaskRunMetric, error)
 	CreateTasks(ctx context.Context, tenantId string, tasks []*sqlcv2.V2Task) error
 	CreateTaskEvents(ctx context.Context, tenantId string, events []timescalev2.CreateTaskEventsOLAPParams) error
@@ -664,7 +664,7 @@ func (r *olapEventRepository) ListTaskRunEvents(ctx context.Context, tenantId st
 	return rows, nil
 }
 
-func (r *olapEventRepository) ListTaskRunEventsByWorkflowRunId(ctx context.Context, tenantId string, workflowRunId uuid.UUID) ([]*timescalev2.ListTaskEventsRow, error) {
+func (r *olapEventRepository) ListTaskRunEventsByWorkflowRunId(ctx context.Context, tenantId string, workflowRunId uuid.UUID) ([]*timescalev2.ListTaskEventsForWorkflowRunRow, error) {
 	rows, err := r.queries.ListTaskEventsForWorkflowRun(ctx, r.pool, timescalev2.ListTaskEventsForWorkflowRunParams{
 		Tenantid:      sqlchelpers.UUIDFromStr(tenantId),
 		Workflowrunid: sqlchelpers.UUIDFromStr(workflowRunId.String()),
@@ -674,30 +674,7 @@ func (r *olapEventRepository) ListTaskRunEventsByWorkflowRunId(ctx context.Conte
 		return nil, err
 	}
 
-	listTaskEventsRows := make([]*timescalev2.ListTaskEventsRow, len(rows))
-
-	for i, row := range rows {
-		listTaskEventsRows[i] = &timescalev2.ListTaskEventsRow{
-			TenantID:               row.TenantID,
-			TaskID:                 row.TaskID,
-			TaskInsertedAt:         row.TaskInsertedAt,
-			RetryCount:             row.RetryCount,
-			EventType:              row.EventType,
-			TimeFirstSeen:          row.TimeFirstSeen,
-			TimeLastSeen:           row.TimeLastSeen,
-			Count:                  row.Count,
-			ID:                     row.ID,
-			EventTimestamp:         row.EventTimestamp,
-			ReadableStatus:         row.ReadableStatus,
-			ErrorMessage:           row.ErrorMessage,
-			Output:                 row.Output,
-			WorkerID:               row.WorkerID,
-			AdditionalEventData:    row.AdditionalEventData,
-			AdditionalEventMessage: row.AdditionalEventMessage,
-		}
-	}
-
-	return listTaskEventsRows, nil
+	return rows, nil
 }
 
 func (r *olapEventRepository) ReadTaskRunMetrics(ctx context.Context, tenantId string, opts ReadTaskRunMetricsOpts) ([]olap.TaskRunMetric, error) {

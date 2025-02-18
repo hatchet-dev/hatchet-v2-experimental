@@ -184,12 +184,10 @@ V2WorkflowRunTaskEvent:
       type: string
       format: date-time
       description: Timestamp when the event was first seen.
-      nullable: true
     timeLastSeen:
       type: string
       format: date-time
       description: Timestamp when the event was last seen.
-      nullable: true
     count:
       type: integer
       format: int64
@@ -225,6 +223,19 @@ V2WorkflowRunTaskEvent:
       type: string
       description: Additional message associated with the event.
       nullable: true
+  required:
+    - tenantId
+    - taskId
+    - taskInsertedAt
+    - retryCount
+    - eventType
+    - timeFirstSeen
+    - timeLastSeen
+    - count
+    - id
+    - eventTimestamp
+    - readableStatus
+    - workerId
 
 V2WorkflowRunTaskEventList:
   properties:
