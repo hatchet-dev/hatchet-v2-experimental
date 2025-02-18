@@ -66,7 +66,9 @@ export const columns = ({
               onClick={() => onRowClick(row.original)}
             >
               <ArrowLeftEndOnRectangleIcon className="w-4 h-4 mr-1" />
-              <div className="truncate max-w-[150px]">{taskDisplayName}</div>
+              <div className="truncate max-w-[150px]">
+                {row.original.taskDisplayName || taskDisplayName}
+              </div>
             </Badge>
           </div>
         );
