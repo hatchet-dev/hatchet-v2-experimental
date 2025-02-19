@@ -9,11 +9,7 @@ import {
 import { cn, formatDuration } from '@/lib/utils';
 import { memo, useState } from 'react';
 import { Handle, Position } from 'reactflow';
-import {
-  RunIndicator,
-  RunStatus,
-  V2RunIndicator,
-} from '../../components/run-statuses';
+import { RunStatus, V2RunIndicator } from '../../components/run-statuses';
 import RelativeDate from '@/components/molecules/relative-date';
 import { TabOption } from './step-run-detail/step-run-detail';
 

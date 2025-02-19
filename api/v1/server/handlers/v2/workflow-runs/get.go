@@ -38,6 +38,10 @@ func (t *V2WorkflowRunsService) V2WorkflowRunGet(ctx echo.Context, request gen.V
 		taskMetadata,
 	)
 
+	if err != nil {
+		return nil, err
+	}
+
 	stepIdToTaskExternalId := make(map[pgtype.UUID]pgtype.UUID)
 	for _, task := range tasks {
 		stepIdToTaskExternalId[task.StepID] = task.ExternalID

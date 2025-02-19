@@ -6,7 +6,7 @@ import invariant from 'tiny-invariant';
 import { WorkflowRunInputDialog } from './v2components/workflow-run-input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { StepRunEvents } from './v2components/step-run-events-for-workflow-run';
-import { useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import StepRunDetail, {
   TabOption,
 } from './v2components/step-run-detail/step-run-detail';
@@ -24,12 +24,6 @@ export const WORKFLOW_RUN_TERMINAL_STATUSES = [
   WorkflowRunStatus.SUCCEEDED,
 ];
 
-interface WorkflowRunSidebarState {
-  workflowRunId?: string;
-  stepRunId?: string;
-  defaultOpenTab?: TabOption;
-}
-
 function statusToBadgeVariant(status: V2TaskStatus) {
   switch (status) {
     case V2TaskStatus.COMPLETED:
@@ -43,22 +37,18 @@ function statusToBadgeVariant(status: V2TaskStatus) {
 }
 
 export default function ExpandedWorkflowRun() {
-  const [sidebarState, setSidebarState] = useState<WorkflowRunSidebarState>();
   const { tenant } = useOutletContext<TenantContextType>();
   const params = useParams();
+  const [selectedTaskRunId, setSelectedTaskRunId] = useState<string>();
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  const handleTaskRunExpand = useCallback((taskRunId: string) => {
+    setSelectedTaskRunId(taskRunId);
+    setIsSidebarOpen(true);
+  }, []);
 
   invariant(tenant);
   invariant(params.run);
-
-  useEffect(() => {
-    if (
-      sidebarState?.workflowRunId &&
-      params.run &&
-      params.run !== sidebarState?.workflowRunId
-    ) {
-      setSidebarState(undefined);
-    }
-  }, [params.run, sidebarState]);
 
   const { data, isLoading, isError } = useQuery({
     ...queries.v2WorkflowRuns.details(tenant.metadata.id, params.run),
@@ -78,7 +68,7 @@ export default function ExpandedWorkflowRun() {
   }
 
   // FIXME: This is a bug
-  const inputData = JSON.stringify(workflowRun.additionalMetadata || {});
+  const inputData = JSON.stringify(workflowRun.input || {});
   const additionalMetadata = workflowRun.additionalMetadata;
 
   return (
@@ -93,7 +83,7 @@ export default function ExpandedWorkflowRun() {
           </Badge>
         </div>
         <div className="w-full h-fit flex overflow-auto relative bg-slate-100 dark:bg-slate-900">
-          <WorkflowRunVisualizer />
+          <WorkflowRunVisualizer setSelectedTaskRunId={handleTaskRunExpand} />
           {shape && <ViewToggle shape={shape} />}
         </div>
         <div className="h-4" />
@@ -116,13 +106,7 @@ export default function ExpandedWorkflowRun() {
               <StepRunEvents
                 workflowRunId={params.run}
                 fallbackTaskDisplayName={workflowRun.displayName}
-                onClick={(stepRunId) => {
-                  setSidebarState(
-                    stepRunId == sidebarState?.stepRunId
-                      ? undefined
-                      : { stepRunId, workflowRunId: params.run },
-                  );
-                }}
+                onClick={handleTaskRunExpand}
               />
             }
           </TabsContent>
@@ -142,16 +126,14 @@ export default function ExpandedWorkflowRun() {
       </div>
       {inputData && (
         <Sheet
-          open={!!sidebarState}
-          onOpenChange={(open) =>
-            open ? undefined : setSidebarState(undefined)
-          }
+          open={isSidebarOpen}
+          onOpenChange={(open) => setIsSidebarOpen(open)}
         >
           <SheetContent className="w-fit min-w-[56rem] max-w-4xl sm:max-w-2xl z-[60]">
-            {sidebarState?.stepRunId && (
+            {selectedTaskRunId && (
               <StepRunDetail
-                taskRunId={params.run}
-                defaultOpenTab={sidebarState?.defaultOpenTab}
+                taskRunId={selectedTaskRunId}
+                defaultOpenTab={TabOption.Output}
               />
             )}
           </SheetContent>

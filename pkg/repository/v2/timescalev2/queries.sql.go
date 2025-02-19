@@ -467,7 +467,8 @@ SELECT
   t.worker_id,
   t.additional__event_data,
   t.additional__event_message,
-  tsk.display_name
+  tsk.display_name,
+  tsk.external_id AS task_external_id
 FROM aggregated_events a
 JOIN v2_task_events_olap t
   ON t.tenant_id = a.tenant_id
@@ -502,6 +503,7 @@ type ListTaskEventsForWorkflowRunRow struct {
 	AdditionalEventData    pgtype.Text          `json:"additional__event_data"`
 	AdditionalEventMessage pgtype.Text          `json:"additional__event_message"`
 	DisplayName            string               `json:"display_name"`
+	TaskExternalID         pgtype.UUID          `json:"task_external_id"`
 }
 
 func (q *Queries) ListTaskEventsForWorkflowRun(ctx context.Context, db DBTX, arg ListTaskEventsForWorkflowRunParams) ([]*ListTaskEventsForWorkflowRunRow, error) {
@@ -531,6 +533,7 @@ func (q *Queries) ListTaskEventsForWorkflowRun(ctx context.Context, db DBTX, arg
 			&i.AdditionalEventData,
 			&i.AdditionalEventMessage,
 			&i.DisplayName,
+			&i.TaskExternalID,
 		); err != nil {
 			return nil, err
 		}
@@ -1282,6 +1285,7 @@ WITH dags AS (
     ORDER BY
         e.run_id, e.retry_count DESC
 )
+
 SELECT
     r.dag_id, r.run_id, r.tenant_id, r.inserted_at, r.external_id, r.readable_status, r.kind, r.workflow_id, r.display_name, r.input, r.additional_metadata, r.workflow_version_id,
     m.created_at,

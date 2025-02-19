@@ -87,6 +87,7 @@ type WorkflowRunData struct {
 	FinishedAt         pgtype.Timestamptz               `json:"finished_at"`
 	ErrorMessage       string                           `json:"error_message"`
 	WorkflowVersionId  pgtype.UUID                      `json:"workflow_version_id"`
+	Input              []byte                           `json:"input"`
 }
 
 type OLAPEventRepository interface {
@@ -329,6 +330,10 @@ func (r *olapEventRepository) ReadWorkflowRun(ctx context.Context, tenantId, wor
 
 	taskMetadata, err := ParseTaskMetadata(row.TaskMetadata)
 
+	if err != nil {
+		return nil, nil, err
+	}
+
 	return &WorkflowRunData{
 		TenantID:           row.TenantID,
 		InsertedAt:         row.InsertedAt,
@@ -343,6 +348,7 @@ func (r *olapEventRepository) ReadWorkflowRun(ctx context.Context, tenantId, wor
 		FinishedAt:         row.FinishedAt,
 		ErrorMessage:       row.ErrorMessage.String,
 		WorkflowVersionId:  row.WorkflowVersionID,
+		Input:              row.Input,
 	}, taskMetadata, nil
 }
 

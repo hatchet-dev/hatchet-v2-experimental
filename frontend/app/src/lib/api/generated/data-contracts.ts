@@ -66,6 +66,13 @@ export interface V2TaskSummary {
   /** The ID of the task. */
   taskId: number;
   /**
+   * The external ID of the task.
+   * @format uuid
+   * @minLength 36
+   * @maxLength 36
+   */
+  taskExternalId?: string;
+  /**
    * The timestamp the task was inserted.
    * @format date-time
    */
@@ -268,6 +275,8 @@ export interface V2WorkflowRun {
    * @format uuid
    */
   workflowVersionId?: string;
+  /** The input of the task run. */
+  input: object;
 }
 
 export interface V2WorkflowRunList {

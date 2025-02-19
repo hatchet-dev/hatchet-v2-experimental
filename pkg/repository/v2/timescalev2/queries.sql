@@ -336,7 +336,8 @@ SELECT
   t.worker_id,
   t.additional__event_data,
   t.additional__event_message,
-  tsk.display_name
+  tsk.display_name,
+  tsk.external_id AS task_external_id
 FROM aggregated_events a
 JOIN v2_task_events_olap t
   ON t.tenant_id = a.tenant_id
@@ -941,6 +942,7 @@ WITH dags AS (
     ORDER BY
         e.run_id, e.retry_count DESC
 )
+
 SELECT
     r.*,
     m.created_at,

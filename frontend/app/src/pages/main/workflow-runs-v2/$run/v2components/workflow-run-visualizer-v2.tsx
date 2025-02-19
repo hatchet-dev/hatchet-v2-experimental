@@ -27,7 +27,13 @@ const edgeTypes = {
   smoothstep: SmoothStepEdge,
 };
 
-const WorkflowRunVisualizer = () => {
+const createNodeId = (taskId: string) => taskId;
+
+const WorkflowRunVisualizer = ({
+  setSelectedTaskRunId,
+}: {
+  setSelectedTaskRunId: (id: string) => void;
+}) => {
   const { theme } = useTheme();
   const { tenant } = useTenant();
   const params = useParams();
@@ -95,7 +101,7 @@ const WorkflowRunVisualizer = () => {
         };
 
         return {
-          id: task.metadata.id,
+          id: createNodeId(task.metadata.id),
           type: 'stepNode',
           position: { x: 0, y: 0 },
           data,
@@ -161,7 +167,10 @@ const WorkflowRunVisualizer = () => {
         proOptions={{
           hideAttribution: true,
         }}
-        onNodeClick={(_, node) => console.log(node)}
+        onNodeClick={(_, node) => {
+          console.log('Clicked on node', node);
+          setSelectedTaskRunId(node.id);
+        }}
         className="border rounded-lg"
         maxZoom={1}
       />

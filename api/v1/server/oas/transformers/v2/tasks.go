@@ -44,6 +44,8 @@ func ToTaskSummary(task *timescalev2.PopulateTaskRunDataRow) gen.V2TaskSummary {
 		durationPtr = &duration
 	}
 
+	taskExternalId := uuid.MustParse(sqlchelpers.UUIDToStr(task.ExternalID))
+
 	return gen.V2TaskSummary{
 		Metadata: gen.APIResourceMeta{
 			Id:        sqlchelpers.UUIDToStr(task.ExternalID),
@@ -61,6 +63,7 @@ func ToTaskSummary(task *timescalev2.PopulateTaskRunDataRow) gen.V2TaskSummary {
 		WorkflowId:         uuid.MustParse(sqlchelpers.UUIDToStr(task.WorkflowID)),
 		TaskId:             int(task.ID),
 		TaskInsertedAt:     task.InsertedAt.Time,
+		TaskExternalId:     &taskExternalId,
 	}
 }
 
@@ -157,13 +160,13 @@ func ToTaskRunEventMany(
 
 func ToWorkflowRunTaskRunEventsMany(
 	events []*timescalev2.ListTaskEventsForWorkflowRunRow,
-	taskExternalId string,
 ) gen.V2TaskEventList {
 	toReturn := make([]gen.V2TaskEvent, len(events))
 
 	for i, event := range events {
 		workerId := uuid.MustParse(sqlchelpers.UUIDToStr(event.WorkerID))
 		output := string(event.Output)
+		taskExternalId := uuid.MustParse(sqlchelpers.UUIDToStr(event.TaskExternalID))
 
 		toReturn[i] = gen.V2TaskEvent{
 			ErrorMessage:    &event.ErrorMessage.String,
@@ -172,7 +175,7 @@ func ToWorkflowRunTaskRunEventsMany(
 			Message:         event.AdditionalEventMessage.String,
 			Output:          &output,
 			TaskDisplayName: &event.DisplayName,
-			TaskId:          uuid.MustParse(taskExternalId),
+			TaskId:          taskExternalId,
 			Timestamp:       event.EventTimestamp.Time,
 			WorkerId:        &workerId,
 		}
@@ -274,6 +277,7 @@ func ToWorkflowRunDetails(
 ) (gen.V2WorkflowRunDetails, error) {
 	workflowVersionId := uuid.MustParse(sqlchelpers.UUIDToStr(workflowRun.WorkflowVersionId))
 	duration := int(workflowRun.FinishedAt.Time.Sub(workflowRun.StartedAt.Time).Milliseconds())
+	input := jsonToMap(workflowRun.Input)
 
 	parsedWorkflowRun := gen.V2WorkflowRun{
 		AdditionalMetadata: &map[string]interface{}{},
@@ -286,12 +290,12 @@ func ToWorkflowRunDetails(
 			CreatedAt: workflowRun.InsertedAt.Time,
 			UpdatedAt: workflowRun.InsertedAt.Time,
 		},
-		Output:            nil,
 		StartedAt:         &workflowRun.StartedAt.Time,
 		Status:            gen.V2TaskStatus(workflowRun.ReadableStatus),
 		TenantId:          uuid.MustParse(sqlchelpers.UUIDToStr(workflowRun.TenantID)),
 		WorkflowId:        uuid.MustParse(sqlchelpers.UUIDToStr(workflowRun.WorkflowID)),
 		WorkflowVersionId: &workflowVersionId,
+		Input:             input,
 	}
 
 	shapeRows := make([]gen.WorkflowRunShapeItemForWorkflowRunDetails, len(shape))
@@ -325,6 +329,7 @@ func ToWorkflowRunDetails(
 			TaskDisplayName: &event.DisplayName,
 			Timestamp:       event.EventTimestamp.Time,
 			WorkerId:        &workerId,
+			TaskId:          uuid.MustParse(sqlchelpers.UUIDToStr(event.TaskExternalID)),
 		}
 	}
 

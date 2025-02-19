@@ -5,6 +5,12 @@ V2TaskSummary:
     taskId:
       type: integer
       description: The ID of the task.
+    taskExternalId:
+      type: string
+      description: The external ID of the task.
+      format: uuid
+      minLength: 36
+      maxLength: 36
     taskInsertedAt:
       type: string
       format: date-time

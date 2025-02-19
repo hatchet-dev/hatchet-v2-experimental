@@ -13,7 +13,7 @@ export function StepRunEvents({
   taskRunId?: string | undefined;
   workflowRunId?: string | undefined;
   fallbackTaskDisplayName: string;
-  onClick: (stepRunId?: string) => void;
+  onClick: (stepRunId: string) => void;
 }) {
   const tenant = useTenant();
   const tenantId = tenant.tenant?.metadata.id;

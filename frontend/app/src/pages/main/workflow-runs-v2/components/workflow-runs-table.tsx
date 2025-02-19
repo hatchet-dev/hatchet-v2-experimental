@@ -537,6 +537,7 @@ export function TaskRunsTable({
       workflowName: workflowKeys?.rows?.find(
         (r2) => r2.metadata.id == child.workflowId,
       )?.name,
+      input: {},
     })),
   }));
 

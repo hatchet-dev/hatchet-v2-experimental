@@ -1259,6 +1259,9 @@ type V2TaskSummary struct {
 	StartedAt *time.Time   `json:"startedAt,omitempty"`
 	Status    V2TaskStatus `json:"status"`
 
+	// TaskExternalId The external ID of the task.
+	TaskExternalId *openapi_types.UUID `json:"taskExternalId,omitempty"`
+
 	// TaskId The ID of the task.
 	TaskId int `json:"taskId"`
 
@@ -1293,8 +1296,11 @@ type V2WorkflowRun struct {
 	ErrorMessage *string `json:"errorMessage,omitempty"`
 
 	// FinishedAt The timestamp the task run finished.
-	FinishedAt *time.Time      `json:"finishedAt,omitempty"`
-	Metadata   APIResourceMeta `json:"metadata"`
+	FinishedAt *time.Time `json:"finishedAt,omitempty"`
+
+	// Input The input of the task run.
+	Input    map[string]interface{} `json:"input"`
+	Metadata APIResourceMeta        `json:"metadata"`
 
 	// Output The output of the task run (for the latest run)
 	Output map[string]interface{} `json:"output"`

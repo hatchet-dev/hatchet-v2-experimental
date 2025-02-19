@@ -41,6 +41,9 @@ V2WorkflowRun:
       type: string
       format: uuid
       description: The ID of the workflow version.
+    input:
+      type: object
+      description: The input of the task run.
   required:
     - metadata
     - id
@@ -49,6 +52,7 @@ V2WorkflowRun:
     - displayName
     - workflowId
     - output
+    - input
 
 V2WorkflowRunList:
   type: object
