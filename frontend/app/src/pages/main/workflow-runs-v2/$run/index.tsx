@@ -15,6 +15,8 @@ import { CodeHighlighter } from '@/components/ui/code-highlighter';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { V2RunDetailHeader } from './v2components/header';
 import { Badge } from '@/components/ui/badge';
+import { ViewToggle } from './v2components/view-toggle';
+import WorkflowRunVisualizer from './v2components/workflow-run-visualizer-v2';
 
 export const WORKFLOW_RUN_TERMINAL_STATUSES = [
   WorkflowRunStatus.CANCELLED,
@@ -88,22 +90,20 @@ export default function ExpandedWorkflowRun() {
             {workflowRun.status}
           </Badge>
         </div>
-        {/* <div className="w-full h-fit flex overflow-auto relative bg-slate-100 dark:bg-slate-900">
-          {shape.data && view == 'graph' && hasChildSteps(shape.data) && (
-            <WorkflowRunVisualizer
-              shape={shape.data}
-              selectedStepRunId={sidebarState?.stepRunId}
-              setSelectedStepRunId={(stepRunId) => {
-                setSidebarState({
-                  stepRunId,
-                  defaultOpenTab: TabOption.Output,
-                  workflowRunId: params.run,
-                });
-              }}
-            />
-          )}
-          {shape.data && <ViewToggle shape={shape.data} />}
-        </div> */}
+        <div className="w-full h-fit flex overflow-auto relative bg-slate-100 dark:bg-slate-900">
+          <WorkflowRunVisualizer
+            shape={shape}
+            selectedStepRunId={sidebarState?.stepRunId}
+            setSelectedStepRunId={(stepRunId) => {
+              setSidebarState({
+                stepRunId,
+                defaultOpenTab: TabOption.Output,
+                workflowRunId: params.run,
+              });
+            }}
+          />
+          {shape && <ViewToggle shape={shape} />}
+        </div>
         <div className="h-4" />
         <Tabs defaultValue="activity">
           <TabsList layout="underlined">

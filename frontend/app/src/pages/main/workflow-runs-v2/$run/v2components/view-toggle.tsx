@@ -1,11 +1,14 @@
 import { Button } from '@/components/ui/button';
-import { WorkflowRunShape } from '@/lib/api';
+import {
+  WorkflowRunShape,
+  WorkflowRunShapeForWorkflowRunDetails,
+} from '@/lib/api';
 import { preferredWorkflowRunViewAtom } from '@/lib/atoms';
 import { useAtom } from 'jotai';
 import { BiExitFullscreen, BiExpand } from 'react-icons/bi';
 
 type Props = {
-  shape: WorkflowRunShape;
+  shape: WorkflowRunShapeForWorkflowRunDetails;
 };
 
 export const ViewToggle: React.FC<Props> = ({ shape }) => {
@@ -13,7 +16,7 @@ export const ViewToggle: React.FC<Props> = ({ shape }) => {
   const otherView = view === 'graph' ? 'minimap' : 'graph';
 
   // only render if there are at least two dependent steps, otherwise the view toggle is not needed
-  if (!hasChildSteps(shape)) {
+  if (shape.some((t) => t.children.length > 0)) {
     return null;
   }
 

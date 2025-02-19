@@ -17,6 +17,7 @@ export interface StepRunNodeProps {
 
 // eslint-disable-next-line react/display-name
 export default memo(({ data }: { data: StepRunNodeProps }) => {
+  console.log('Rendering step run node');
   const variant = data.graphVariant;
   const [isHovering, setIsHovering] = useState(false);
 
@@ -36,7 +37,7 @@ export default memo(({ data }: { data: StepRunNodeProps }) => {
       )}
       <div
         key={step.metadata.id}
-        data-step-id={step.metadata.id}
+        // data-step-id={step.metadata.id}
         className={cn(
           `step-run-card shadow-md rounded-sm py-3 px-2 mb-1 w-full text-xs text-[#050c1c] dark:text-[#ffffff] font-semibold font-mono`,
           `transition-all duration-300 ease-in-out`,
