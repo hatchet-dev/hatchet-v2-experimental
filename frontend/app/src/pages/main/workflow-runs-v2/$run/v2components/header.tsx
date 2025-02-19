@@ -39,11 +39,6 @@ interface RunDetailHeaderProps {
   refetch: () => void;
 }
 
-interface V2RunDetailHeaderProps {
-  taskRunId: string;
-  loading?: boolean;
-}
-
 export const WORKFLOW_RUN_TERMINAL_STATUSES = [
   WorkflowRunStatus.CANCELLED,
   WorkflowRunStatus.FAILED,
