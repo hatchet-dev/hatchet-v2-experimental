@@ -42,11 +42,10 @@ function statusToBadgeVariant(status: V2TaskStatus) {
 
 export default function ExpandedWorkflowRun() {
   const [sidebarState, setSidebarState] = useState<WorkflowRunSidebarState>();
-
   const { tenant } = useOutletContext<TenantContextType>();
-  invariant(tenant);
-
   const params = useParams();
+
+  invariant(tenant);
   invariant(params.run);
 
   useEffect(() => {
@@ -59,23 +58,24 @@ export default function ExpandedWorkflowRun() {
     }
   }, [params.run, sidebarState]);
 
-  const taskRunQuery = useQuery({
-    ...queries.v2Tasks.get(params.run),
+  const { data, isLoading, isError } = useQuery({
+    ...queries.v2WorkflowRuns.details(tenant.metadata.id, params.run),
   });
 
-  if (taskRunQuery.isLoading) {
-    // TODO: Loading state
+  if (isLoading || isError) {
     return null;
   }
 
-  const taskRun = taskRunQuery.data;
+  const workflowRun = data?.run;
+  const taskEvents = data?.taskEvents;
+  const shape = data?.shape;
 
-  if (!taskRun) {
+  if (!workflowRun || !taskEvents || !shape) {
     return null;
   }
 
-  const inputData = taskRun.input;
-  const additionalMetadata = taskRun.additionalMetadata;
+  const inputData = JSON.stringify(workflowRun.additionalMetadata || {});
+  const additionalMetadata = workflowRun.additionalMetadata;
 
   return (
     <div className="flex-grow h-full w-full">
@@ -84,8 +84,8 @@ export default function ExpandedWorkflowRun() {
         <Separator className="my-4" />
         <div className="flex flex-row gap-x-4">
           <p className="font-semibold">Status</p>
-          <Badge variant={statusToBadgeVariant(taskRun.status)}>
-            {taskRun.status}
+          <Badge variant={statusToBadgeVariant(workflowRun.status)}>
+            {workflowRun.status}
           </Badge>
         </div>
         {/* <div className="w-full h-fit flex overflow-auto relative bg-slate-100 dark:bg-slate-900">
@@ -122,8 +122,8 @@ export default function ExpandedWorkflowRun() {
             <div className="h-4" />
             {
               <StepRunEvents
-                taskRunId={params.run}
-                taskDisplayName={taskRun.displayName}
+                workflowRunId={params.run}
+                fallbackTaskDisplayName={workflowRun.displayName}
                 onClick={(stepRunId) => {
                   setSidebarState(
                     stepRunId == sidebarState?.stepRunId

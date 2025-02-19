@@ -1,4 +1,4 @@
-import { queries, V2TaskEvent, V2WorkflowRunTaskEvent } from '@/lib/api';
+import { queries, V2TaskEvent } from '@/lib/api';
 import { useQuery } from '@tanstack/react-query';
 import { DataTable } from '@/components/molecules/data-table/data-table';
 import { columns } from './events-columns';
@@ -7,12 +7,12 @@ import { useTenant } from '@/lib/atoms';
 export function StepRunEvents({
   taskRunId,
   workflowRunId,
-  taskDisplayName,
+  fallbackTaskDisplayName,
   onClick,
 }: {
   taskRunId?: string | undefined;
   workflowRunId?: string | undefined;
-  taskDisplayName: string;
+  fallbackTaskDisplayName: string;
   onClick: (stepRunId?: string) => void;
 }) {
   const tenant = useTenant();
@@ -38,7 +38,7 @@ export function StepRunEvents({
     },
   });
 
-  type EventWithMetadata = V2WorkflowRunTaskEvent & {
+  type EventWithMetadata = V2TaskEvent & {
     metadata: {
       id: string;
     };
@@ -54,7 +54,7 @@ export function StepRunEvents({
 
   const cols = columns({
     onRowClick: (row) => onClick(`${row.taskId}`),
-    taskDisplayName,
+    fallbackTaskDisplayName,
   });
 
   return (
