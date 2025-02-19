@@ -1225,6 +1225,38 @@ func (q *Queries) ReadTaskByExternalID(ctx context.Context, db DBTX, externalid 
 	return &i, err
 }
 
+const readWorkflowRunByExternalId = `-- name: ReadWorkflowRunByExternalId :one
+SELECT d.id, d.inserted_at, d.tenant_id, d.external_id, d.display_name, d.workflow_id, d.workflow_version_id, d.readable_status, d.input, d.additional_metadata
+FROM v2_lookup_table lt
+JOIN v2_dags_olap d ON (lt.tenant_id, lt.dag_id, lt.inserted_at) = (d.tenant_id, d.id, d.inserted_at)
+WHERE
+    lt.external_id = $1::uuid
+    AND lt.tenant_id = $2::uuid
+`
+
+type ReadWorkflowRunByExternalIdParams struct {
+	Workflowrunexternalid pgtype.UUID `json:"workflowrunexternalid"`
+	Tenantid              pgtype.UUID `json:"tenantid"`
+}
+
+func (q *Queries) ReadWorkflowRunByExternalId(ctx context.Context, db DBTX, arg ReadWorkflowRunByExternalIdParams) (*V2DagsOlap, error) {
+	row := db.QueryRow(ctx, readWorkflowRunByExternalId, arg.Workflowrunexternalid, arg.Tenantid)
+	var i V2DagsOlap
+	err := row.Scan(
+		&i.ID,
+		&i.InsertedAt,
+		&i.TenantID,
+		&i.ExternalID,
+		&i.DisplayName,
+		&i.WorkflowID,
+		&i.WorkflowVersionID,
+		&i.ReadableStatus,
+		&i.Input,
+		&i.AdditionalMetadata,
+	)
+	return &i, err
+}
+
 const updateDAGStatuses = `-- name: UpdateDAGStatuses :one
 WITH locked_events AS (
     SELECT

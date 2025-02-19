@@ -90,6 +90,7 @@ type WorkflowRunData struct {
 
 type OLAPEventRepository interface {
 	ReadTaskRun(ctx context.Context, taskExternalId string) (*timescalev2.V2TasksOlap, error)
+	ReadWorkflowRun(ctx context.Context, tenantId, workflowRunExternalId pgtype.UUID) (*timescalev2.V2DagsOlap, error)
 	ReadTaskRunData(ctx context.Context, tenantId pgtype.UUID, taskId int64, taskInsertedAt pgtype.Timestamptz) (*timescalev2.PopulateSingleTaskRunDataRow, error)
 	ListTasks(ctx context.Context, tenantId string, opts ListTaskRunOpts) ([]*timescalev2.PopulateTaskRunDataRow, int, error)
 	ListWorkflowRuns(ctx context.Context, tenantId string, opts ListWorkflowRunOpts) ([]*WorkflowRunData, int, error)
@@ -297,6 +298,30 @@ func (r *olapEventRepository) ReadTaskRun(ctx context.Context, taskExternalId st
 		ExternalID:         row.ExternalID,
 		LatestRetryCount:   row.LatestRetryCount,
 		LatestWorkerID:     row.LatestWorkerID,
+	}, nil
+}
+
+func (r *olapEventRepository) ReadWorkflowRun(ctx context.Context, tenantId, workflowRunExternalId pgtype.UUID) (*timescalev2.V2DagsOlap, error) {
+	row, err := r.queries.ReadWorkflowRunByExternalId(ctx, r.pool, timescalev2.ReadWorkflowRunByExternalIdParams{
+		Workflowrunexternalid: workflowRunExternalId,
+		Tenantid:              tenantId,
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &timescalev2.V2DagsOlap{
+		ID:                 row.ID,
+		InsertedAt:         row.InsertedAt,
+		TenantID:           row.TenantID,
+		ExternalID:         row.ExternalID,
+		DisplayName:        row.DisplayName,
+		WorkflowID:         row.WorkflowID,
+		WorkflowVersionID:  row.WorkflowVersionID,
+		ReadableStatus:     row.ReadableStatus,
+		Input:              row.Input,
+		AdditionalMetadata: row.AdditionalMetadata,
 	}, nil
 }
 
