@@ -17,7 +17,6 @@ export interface StepRunNodeProps {
 
 // eslint-disable-next-line react/display-name
 export default memo(({ data }: { data: StepRunNodeProps }) => {
-  console.log('Rendering step run node');
   const variant = data.graphVariant;
   const [isHovering, setIsHovering] = useState(false);
 

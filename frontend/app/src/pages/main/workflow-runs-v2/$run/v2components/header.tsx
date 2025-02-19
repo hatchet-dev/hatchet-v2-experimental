@@ -130,7 +130,7 @@ export const V2RunSummary = () => {
   invariant(params.run);
 
   const { data } = useQuery({
-    ...queries.v2Tasks.get(params.run),
+    ...queries.v2WorkflowRuns.details(tenant.metadata.id, params.run),
   });
 
   const timings = [];
@@ -142,15 +142,15 @@ export const V2RunSummary = () => {
   timings.push(
     <div key="created" className="text-sm text-muted-foreground">
       {'Created '}
-      <RelativeDate date={data.metadata.createdAt} />
+      <RelativeDate date={data.run.startedAt} />
     </div>,
   );
 
-  if (data.startedAt) {
+  if (data.run.startedAt) {
     timings.push(
       <div key="started" className="text-sm text-muted-foreground">
         {'Started '}
-        <RelativeDate date={data.startedAt} />
+        <RelativeDate date={data.run.startedAt} />
       </div>,
     );
   } else {
@@ -161,37 +161,37 @@ export const V2RunSummary = () => {
     );
   }
 
-  if (data.status === V2TaskStatus.CANCELLED && data.finishedAt) {
+  if (data.run.status === V2TaskStatus.CANCELLED && data.run.finishedAt) {
     timings.push(
       <div key="finished" className="text-sm text-muted-foreground">
         {'Cancelled '}
-        <RelativeDate date={data.finishedAt} />
+        <RelativeDate date={data.run.finishedAt} />
       </div>,
     );
   }
 
-  if (data.status === V2TaskStatus.FAILED && data.finishedAt) {
+  if (data.run.status === V2TaskStatus.FAILED && data.run.finishedAt) {
     timings.push(
       <div key="finished" className="text-sm text-muted-foreground">
         {'Failed '}
-        <RelativeDate date={data.finishedAt} />
+        <RelativeDate date={data.run.finishedAt} />
       </div>,
     );
   }
 
-  if (data.status === V2TaskStatus.COMPLETED && data.finishedAt) {
+  if (data.run.status === V2TaskStatus.COMPLETED && data.run.finishedAt) {
     timings.push(
       <div key="finished" className="text-sm text-muted-foreground">
         {'Succeeded '}
-        <RelativeDate date={data.finishedAt} />
+        <RelativeDate date={data.run.finishedAt} />
       </div>,
     );
   }
 
-  if (data.duration) {
+  if (data.run.duration) {
     timings.push(
       <div key="duration" className="text-sm text-muted-foreground">
-        Run took {formatDuration(data.duration)}
+        Run took {formatDuration(data.run.duration)}
       </div>,
     );
   }

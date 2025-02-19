@@ -88,10 +88,7 @@ const WorkflowRunVisualizer = ({
               : hasChild
                 ? 'output_only'
                 : 'input_only',
-          onClick: () => {
-            console.log('Firing node onClick');
-            setSelectedTaskRunId(task.metadata.id);
-          },
+          onClick: () => setSelectedTaskRunId(task.metadata.id),
           childWorkflowsCount,
         };
 
@@ -167,7 +164,6 @@ const WorkflowRunVisualizer = ({
           hideAttribution: true,
         }}
         onNodeClick={(_, node) => {
-          console.log('Clicked on node', node);
           setSelectedTaskRunId(node.id);
         }}
         className="border rounded-lg"
