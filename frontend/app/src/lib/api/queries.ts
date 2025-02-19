@@ -272,10 +272,10 @@ export const queries = createQueryKeyStore({
       queryKey: ['workflow-run:list', tenant, query],
       queryFn: async () => (await api.workflowRunList(tenant, query)).data,
     }),
-    shape: (tenant: string, workflowRun: string) => ({
-      queryKey: ['workflow-run:get:shape', tenant, workflowRun],
+    shape: (tenant: string, workflowVersionId: string) => ({
+      queryKey: ['workflow-run:get:shape', tenant, workflowVersionId],
       queryFn: async () =>
-        (await api.workflowRunGetShape(tenant, workflowRun)).data,
+        (await api.workflowRunGetShape(tenant, workflowVersionId)).data,
     }),
     get: (tenant: string, workflowRun: string) => ({
       queryKey: ['workflow-run:get', tenant, workflowRun],

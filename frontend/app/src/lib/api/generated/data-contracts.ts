@@ -276,6 +276,25 @@ export interface V2WorkflowRunList {
   rows: V2WorkflowRun[];
 }
 
+export interface WorkflowRunShapeItem {
+  /**
+   * @format uuid
+   * @minLength 36
+   * @maxLength 36
+   */
+  parent: string;
+  children: string[];
+}
+
+export type WorkflowRunShape = WorkflowRunShapeItem[];
+
+export interface V2WorkflowRunDetails {
+  run: V2WorkflowRun;
+  /** The list of task events for the workflow run */
+  taskEvents: V2TaskEvent[];
+  shape: WorkflowRunShape;
+}
+
 export interface V2TaskRunMetric {
   status: V2TaskStatus;
   count: number;
@@ -1361,18 +1380,6 @@ export interface WorkflowRunsMetricsCounts {
 export interface WorkflowRunsMetrics {
   counts?: WorkflowRunsMetricsCounts;
 }
-
-export interface WorkflowRunShapeItem {
-  /**
-   * @format uuid
-   * @minLength 36
-   * @maxLength 36
-   */
-  parent: string;
-  children: string[];
-}
-
-export type WorkflowRunShape = WorkflowRunShapeItem[];
 
 export interface RerunStepRunRequest {
   input: object;

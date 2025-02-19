@@ -41,7 +41,6 @@ V2WorkflowRun:
       type: string
       format: uuid
       description: The ID of the workflow version.
-
   required:
     - metadata
     - id
@@ -64,3 +63,43 @@ V2WorkflowRunList:
   required:
     - pagination
     - rows
+
+WorkflowRunShapeItem:
+  type: object
+  properties:
+    parent:
+      type: string
+      format: uuid
+      minLength: 36
+      maxLength: 36
+    children:
+      type: array
+      items:
+        type: string
+        format: uuid
+        minLength: 36
+        maxLength: 36
+  required:
+    - parent
+    - children
+
+WorkflowRunShape:
+  type: array
+  items:
+    $ref: "#/WorkflowRunShapeItem"
+
+V2WorkflowRunDetails:
+  properties:
+    run:
+      $ref: "#/V2WorkflowRun"
+    taskEvents:
+      type: array
+      items:
+        $ref: "./task.yaml#/V2TaskEvent"
+      description: The list of task events for the workflow run
+    shape:
+      $ref: "#/WorkflowRunShape"
+  required:
+    - run
+    - taskEvents
+    - shape

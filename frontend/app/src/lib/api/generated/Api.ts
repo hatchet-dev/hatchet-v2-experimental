@@ -90,6 +90,7 @@ import {
   V2TaskRunMetrics,
   V2TaskStatus,
   V2TaskSummaryList,
+  V2WorkflowRunDetails,
   V2WorkflowRunList,
   WebhookWorkerCreateRequest,
   WebhookWorkerCreated,
@@ -300,6 +301,23 @@ export class Api<SecurityDataType = unknown> extends HttpClient<SecurityDataType
       path: `/api/v2/tenants/${tenant}/workflow-runs`,
       method: 'GET',
       query: query,
+      secure: true,
+      format: 'json',
+      ...params,
+    });
+  /**
+   * @description Get a workflow run and its metadata to display on the "detail" page
+   *
+   * @tags Workflow Runs
+   * @name V2WorkflowRunGet
+   * @summary List tasks
+   * @request GET:/api/v2/tenants/{tenant}/workflow-runs/{workflow_run_id}
+   * @secure
+   */
+  v2WorkflowRunGet = (tenant: string, workflowRunId: string, params: RequestParams = {}) =>
+    this.request<V2WorkflowRunDetails, APIErrors>({
+      path: `/api/v2/tenants/${tenant}/workflow-runs/${workflowRunId}`,
+      method: 'GET',
       secure: true,
       format: 'json',
       ...params,
