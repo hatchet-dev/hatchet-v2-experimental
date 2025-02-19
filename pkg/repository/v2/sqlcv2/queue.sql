@@ -1,4 +1,8 @@
 -- name: UpsertQueues :exec
+WITH ordered_names AS (
+    SELECT unnest(@names::text[]) AS name
+    ORDER BY name
+)
 INSERT INTO
     v2_queue (
         tenant_id,
@@ -7,8 +11,9 @@ INSERT INTO
     )
 SELECT
     $1,
-    unnest(@names::text[]) AS name,
+    name,
     NOW()
+FROM ordered_names
 ON CONFLICT (tenant_id, name) DO UPDATE
 SET
     last_active = NOW();
