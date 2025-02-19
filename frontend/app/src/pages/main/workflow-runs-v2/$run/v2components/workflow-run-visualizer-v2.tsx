@@ -11,7 +11,7 @@ import 'reactflow/dist/style.css';
 import dagre from 'dagre';
 import { useTheme } from '@/components/theme-provider';
 import { useQuery } from '@tanstack/react-query';
-import { queries } from '@/lib/api';
+import { queries, V2TaskSummary } from '@/lib/api';
 import { useTenant } from '@/lib/atoms';
 import invariant from 'tiny-invariant';
 import { useParams } from 'react-router-dom';
@@ -19,24 +19,18 @@ import { useParams } from 'react-router-dom';
 const connectionLineStyleDark = { stroke: '#fff' };
 const connectionLineStyleLight = { stroke: '#000' };
 
-interface WorkflowRunShapeItemForWorkflowRunDetails {
-  parent: string;
-  children: string[];
-}
-
 type NodeData = {
-  task: WorkflowRunShapeItemForWorkflowRunDetails;
+  task: V2TaskSummary;
   label: string;
 };
 
-type WorkflowRunShapeForWorkflowRunDetails =
-  WorkflowRunShapeItemForWorkflowRunDetails[];
-
 const HatchetNode = ({ data }: { data: NodeData }) => {
+  console.log(data);
   return (
     <div className="text-updater-node">
       <Handle type="target" position={Position.Top} />
-      <div>{data.label}</div>
+      <div>{data.task.displayName}</div>
+      <div>{data.task.status}</div>
       <Handle type="source" position={Position.Bottom} />
     </div>
   );
@@ -67,8 +61,9 @@ const WorkflowRunVisualizer = () => {
   }
 
   const shape = data?.shape;
+  const tasks = data?.tasks;
 
-  if (!shape) {
+  if (!shape || !tasks) {
     return null;
   }
 
@@ -95,13 +90,13 @@ const WorkflowRunVisualizer = () => {
 
   const nodes: Node[] = useMemo(
     () =>
-      shape.map((task) => ({
-        id: task.parent,
+      tasks.map((task) => ({
+        id: task.metadata.id,
         type: 'stepNode',
         position: { x: 0, y: 0 },
         data: {
           task,
-          label: task.parent,
+          label: task.metadata.id,
         },
         selectable: true,
       })),

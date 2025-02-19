@@ -71,11 +71,13 @@ export default function ExpandedWorkflowRun() {
   const workflowRun = data?.run;
   const taskEvents = data?.taskEvents;
   const shape = data?.shape;
+  const tasks = data?.tasks;
 
-  if (!workflowRun || !taskEvents || !shape) {
+  if (!workflowRun || !taskEvents || !shape || !tasks) {
     return null;
   }
 
+  // FIXME: This is a bug
   const inputData = JSON.stringify(workflowRun.additionalMetadata || {});
   const additionalMetadata = workflowRun.additionalMetadata;
 
@@ -91,7 +93,7 @@ export default function ExpandedWorkflowRun() {
           </Badge>
         </div>
         <div className="w-full h-fit flex overflow-auto relative bg-slate-100 dark:bg-slate-900">
-          <WorkflowRunVisualizer/>
+          <WorkflowRunVisualizer />
           {shape && <ViewToggle shape={shape} />}
         </div>
         <div className="h-4" />
