@@ -241,11 +241,13 @@ func (s *Scheduler) Start() (func() error, error) {
 					continue
 				}
 
-				err = s.scheduleStepRuns(ctx, sqlchelpers.UUIDToStr(res.TenantId), res)
+				go func(results *v2.QueueResults) {
+					err = s.scheduleStepRuns(ctx, sqlchelpers.UUIDToStr(results.TenantId), results)
 
-				if err != nil {
-					s.l.Error().Err(err).Msg("could not schedule step runs")
-				}
+					if err != nil {
+						s.l.Error().Err(err).Msg("could not schedule step runs")
+					}
+				}(res)
 			}
 		}
 	}()

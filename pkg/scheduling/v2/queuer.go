@@ -375,6 +375,8 @@ func (q *Queuer) flushToDatabase(ctx context.Context, r *assignResults) int {
 	ctx, span := telemetry.NewSpan(ctx, "flush-to-database")
 	defer span.End()
 
+	begin := time.Now()
+
 	q.l.Debug().Int("assigned", len(r.assigned)).Int("unassigned", len(r.unassigned)).Int("scheduling_timed_out", len(r.schedulingTimedOut)).Msg("flushing to database")
 
 	if len(r.assigned) == 0 && len(r.unassigned) == 0 && len(r.schedulingTimedOut) == 0 && len(r.rateLimited) == 0 {
@@ -424,6 +426,9 @@ func (q *Queuer) flushToDatabase(ctx context.Context, r *assignResults) int {
 		return 0
 	}
 
+	writeDuration := time.Since(begin)
+	checkpoint := time.Now()
+
 	nackIds := make([]int, 0, len(failed))
 	ackIds := make([]int, 0, len(succeeded))
 
@@ -438,13 +443,14 @@ func (q *Queuer) flushToDatabase(ctx context.Context, r *assignResults) int {
 	}
 
 	q.s.nack(nackIds)
+
+	nackDuration := time.Since(checkpoint)
+	checkpoint = time.Now()
+
 	q.s.ack(ackIds)
 
-	schedulingTimedOut := make([]int64, 0, len(r.schedulingTimedOut))
-
-	for _, id := range r.schedulingTimedOut {
-		schedulingTimedOut = append(schedulingTimedOut, id.TaskID)
-	}
+	ackDuration := time.Since(checkpoint)
+	checkpoint = time.Now()
 
 	q.resultsCh <- &QueueResults{
 		TenantId:           q.tenantId,
@@ -454,9 +460,23 @@ func (q *Queuer) flushToDatabase(ctx context.Context, r *assignResults) int {
 		Unassigned:         r.unassigned,
 	}
 
+	chWriteDuration := time.Since(checkpoint)
+
 	q.l.Debug().Int("succeeded", len(succeeded)).Int("failed", len(failed)).Msg("flushed to database")
 
-	return len(succeeded)
+	if time.Since(begin) > 100*time.Millisecond {
+		q.l.Warn().Dur(
+			"write_duration", writeDuration,
+		).Dur(
+			"nack_duration", nackDuration,
+		).Dur(
+			"ack_duration", ackDuration,
+		).Dur(
+			"ch_write_duration", chWriteDuration,
+		).Msgf("flushing %d items to database took longer than 100ms", len(r.assigned)+len(r.unassigned)+len(r.schedulingTimedOut))
+	}
+
+	return len(succeeded) + len(r.schedulingTimedOut)
 }
 
 func getLargerDuration(s1, s2 string) (string, error) {

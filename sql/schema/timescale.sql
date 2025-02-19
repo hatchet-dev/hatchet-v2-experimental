@@ -320,7 +320,7 @@ BEGIN
          FROM %I e
          WHERE e.tenant_id = $1
            AND e.requeue_after <= CURRENT_TIMESTAMP
-         ORDER BY e.task_id
+         ORDER BY e.requeue_after, e.task_id, e.id
          LIMIT $2
          FOR UPDATE SKIP LOCKED',
          partition_table)

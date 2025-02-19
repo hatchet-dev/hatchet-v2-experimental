@@ -154,8 +154,8 @@ func New(fs ...OLAPControllerOpt) (*OLAPControllerImpl, error) {
 		a:      a,
 	}
 
-	o.updateTaskStatusOperations = queueutils.NewOperationPool(opts.l, time.Second*5, "update task statuses", o.updateTaskStatuses)
-	o.updateDAGStatusOperations = queueutils.NewOperationPool(opts.l, time.Second*5, "update dag statuses", o.updateDAGStatuses)
+	o.updateTaskStatusOperations = queueutils.NewOperationPool(opts.l, time.Second*15, "update task statuses", o.updateTaskStatuses)
+	o.updateDAGStatusOperations = queueutils.NewOperationPool(opts.l, time.Second*15, "update dag statuses", o.updateDAGStatuses)
 
 	return o, nil
 }

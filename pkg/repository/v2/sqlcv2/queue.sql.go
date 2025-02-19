@@ -489,6 +489,10 @@ func (q *Queries) UpdateTasksToAssigned(ctx context.Context, db DBTX, arg Update
 }
 
 const upsertQueues = `-- name: UpsertQueues :exec
+WITH ordered_names AS (
+    SELECT unnest($2::text[]) AS name
+    ORDER BY name
+)
 INSERT INTO
     v2_queue (
         tenant_id,
@@ -497,8 +501,9 @@ INSERT INTO
     )
 SELECT
     $1,
-    unnest($2::text[]) AS name,
+    name,
     NOW()
+FROM ordered_names
 ON CONFLICT (tenant_id, name) DO UPDATE
 SET
     last_active = NOW()

@@ -685,8 +685,15 @@ func getParentInDAGGroupMatch(cancelGroupId, parentExternalId string) []GroupMat
 			GroupId:    uuid.NewString(),
 			EventType:  sqlcv2.V2EventTypeINTERNAL,
 			EventKey:   GetTaskCompletedEventKey(parentExternalId),
-			Expression: "true",
+			Expression: "!has(input.skipped) || (has(input.skipped) && !input.skipped)",
 			Action:     sqlcv2.V2MatchConditionActionCREATE,
+		},
+		{
+			GroupId:    uuid.NewString(),
+			EventType:  sqlcv2.V2EventTypeINTERNAL,
+			EventKey:   GetTaskCompletedEventKey(parentExternalId),
+			Expression: "has(input.skipped) && input.skipped",
+			Action:     sqlcv2.V2MatchConditionActionSKIP,
 		},
 		{
 			GroupId:    cancelGroupId,

@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/google/cel-go/cel"
+	"github.com/google/cel-go/checker/decls"
 
 	"github.com/hatchet-dev/hatchet/pkg/repository/prisma/sqlchelpers"
 	"github.com/hatchet-dev/hatchet/pkg/repository/v2/sqlcv2"
@@ -80,7 +81,11 @@ type MatchRepositoryImpl struct {
 }
 
 func newMatchRepository(s *sharedRepository) (MatchRepository, error) {
-	env, err := cel.NewEnv()
+	env, err := cel.NewEnv(
+		cel.Declarations(
+			decls.NewVar("input", decls.NewMapType(decls.String, decls.Dyn)),
+		),
+	)
 
 	if err != nil {
 		return nil, err
