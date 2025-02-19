@@ -73,9 +73,9 @@ export default function ExpandedWorkflowRun() {
   return (
     <div className="flex-grow h-full w-full">
       <div className="mx-auto max-w-7xl pt-2 px-4 sm:px-6 lg:px-8">
-        <V2RunDetailHeader taskRunId={params.run} />
+        <V2RunDetailHeader />
         <Separator className="my-4" />
-        <div className="flex flex-row gap-x-4">
+        <div className="flex flex-row gap-x-4 mb-4">
           <p className="font-semibold">Status</p>
           <Badge variant={statusToBadgeVariant(workflowRun.status)}>
             {workflowRun.status}

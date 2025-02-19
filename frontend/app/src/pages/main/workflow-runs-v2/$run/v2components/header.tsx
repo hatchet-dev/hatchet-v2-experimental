@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link, useOutletContext } from 'react-router-dom';
+import { Link, useOutletContext, useParams } from 'react-router-dom';
 
 import CronPrettifier from 'cronstrue';
 
@@ -195,19 +195,22 @@ const RunDetailHeader: React.FC<RunDetailHeaderProps> = ({
   );
 };
 
-export const V2RunDetailHeader: React.FC<V2RunDetailHeaderProps> = ({
-  taskRunId,
-}) => {
+export const V2RunDetailHeader = () => {
   const { tenant } = useOutletContext<TenantContextType>();
+  const params = useParams();
+
   invariant(tenant);
+  invariant(params.run);
 
   const { isLoading: loading, data } = useQuery({
-    ...queries.v2Tasks.get(taskRunId),
+    ...queries.v2WorkflowRuns.details(tenant.metadata.id, params.run),
   });
 
   if (loading || !data) {
     return <div>Loading...</div>;
   }
+
+  const workflowRun = data?.run;
 
   return (
     <div className="flex flex-col gap-4">
@@ -222,7 +225,7 @@ export const V2RunDetailHeader: React.FC<V2RunDetailHeaderProps> = ({
           </BreadcrumbItem>
           <BreadcrumbSeparator />
           <BreadcrumbItem>
-            <BreadcrumbPage>{data.displayName}</BreadcrumbPage>
+            <BreadcrumbPage>{workflowRun.displayName}</BreadcrumbPage>
           </BreadcrumbItem>
         </BreadcrumbList>
       </Breadcrumb>
@@ -231,12 +234,12 @@ export const V2RunDetailHeader: React.FC<V2RunDetailHeaderProps> = ({
           <div>
             <h2 className="text-2xl font-bold leading-tight text-foreground flex flex-row gap-4 items-center">
               <AdjustmentsHorizontalIcon className="w-5 h-5 mt-1" />
-              {data?.displayName}
+              {workflowRun.displayName}
             </h2>
           </div>
           <div className="flex flex-row gap-2 items-center">
             <a
-              href={`/workflows/${data.workflowId}`}
+              href={`/workflows/${workflowRun.workflowId}`}
               target="_blank"
               rel="noreferrer"
             >
@@ -279,7 +282,7 @@ export const V2RunDetailHeader: React.FC<V2RunDetailHeaderProps> = ({
         <TriggeringCronSection cron={data.triggeredBy.cronSchedule} />
       )} */}
       <div className="flex flex-row gap-2 items-center">
-        <V2RunSummary taskRunId={taskRunId} />
+        <V2RunSummary taskRunId={workflowRun.metadata.id} />
       </div>
     </div>
   );
