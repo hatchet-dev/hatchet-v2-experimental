@@ -1,24 +1,49 @@
 import { useMemo } from 'react';
-import ReactFlow, { Position, MarkerType, Node, Edge } from 'reactflow';
+import ReactFlow, {
+  Position,
+  MarkerType,
+  Node,
+  Edge,
+  SmoothStepEdge,
+  Handle,
+} from 'reactflow';
 import 'reactflow/dist/style.css';
-import StepRunNode from './step-run-node';
-import { WorkflowRunShapeForWorkflowRunDetails } from '@/lib/api';
 import dagre from 'dagre';
 import { useTheme } from '@/components/theme-provider';
 
 const connectionLineStyleDark = { stroke: '#fff' };
 const connectionLineStyleLight = { stroke: '#000' };
 
-function HatchetNode({ id }: { id: string }) {
-  return <div>{id}</div>;
+interface WorkflowRunShapeItemForWorkflowRunDetails {
+  parent: string;
+  children: string[];
 }
+
+type WorkflowRunShapeForWorkflowRunDetails =
+  WorkflowRunShapeItemForWorkflowRunDetails[];
+
+const HatchetNode = ({ data }) => {
+  return (
+    <div className="text-updater-node">
+      <Handle type="target" position={Position.Top} />
+      <div>{data.label}</div>
+      <Handle type="source" position={Position.Bottom} />
+    </div>
+  );
+};
 
 const nodeTypes = {
   stepNode: HatchetNode,
 };
 
+const edgeTypes = {
+  smoothstep: SmoothStepEdge,
+};
+
 const WorkflowRunVisualizer = ({
   shape,
+  selectedStepRunId,
+  setSelectedStepRunId,
 }: {
   shape: WorkflowRunShapeForWorkflowRunDetails;
   selectedStepRunId?: string;
@@ -26,39 +51,55 @@ const WorkflowRunVisualizer = ({
 }) => {
   const { theme } = useTheme();
 
-  const edges: Edge[] = shape
-    .map((task) =>
-      task.children.map((child) => ({
-        id: task.parent,
-        source: task.parent,
-        target: child,
-        // TODO: Change this
-        animated: false,
-        markerEnd: {
-          type: MarkerType.ArrowClosed,
-        },
-      })),
-    )
-    .flat();
+  // Create edges by mapping through each task and its children
+  const edges: Edge[] = useMemo(
+    () =>
+      shape.flatMap((task) =>
+        task.children.map((childId) => ({
+          id: `${task.parent}-${childId}`,
+          source: task.parent,
+          target: childId,
+          animated: true,
+          style:
+            theme === 'dark'
+              ? connectionLineStyleDark
+              : connectionLineStyleLight,
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+          },
+          type: 'smoothstep',
+        })),
+      ),
+    [shape, theme],
+  );
 
-  const nodes: Node[] = shape.map((task) => ({
-    id: task.parent,
-    selectable: false,
-    type: 'stepNode',
-    position: { x: 0, y: 0 },
-    data: task,
-  }));
+  // Create nodes from the shape data
+  const nodes: Node[] = useMemo(
+    () =>
+      shape.map((task) => ({
+        id: task.parent,
+        type: 'stepNode',
+        position: { x: 0, y: 0 },
+        data: {
+          task,
+          label: task.parent,
+        },
+        selectable: true,
+      })),
+    [shape],
+  );
 
   const nodeWidth = 230;
   const nodeHeight = 70;
-  const dagreGraph = new dagre.graphlib.Graph();
-  dagreGraph.setDefaultEdgeLabel(() => ({}));
 
   const getLayoutedElements = (
     nodes: Node[],
     edges: Edge[],
     direction = 'LR',
   ) => {
+    const dagreGraph = new dagre.graphlib.Graph();
+    dagreGraph.setDefaultEdgeLabel(() => ({}));
+
     const isHorizontal = direction === 'LR';
     dagreGraph.setGraph({ rankdir: direction });
 
@@ -72,50 +113,42 @@ const WorkflowRunVisualizer = ({
 
     dagre.layout(dagreGraph);
 
-    nodes.forEach((node) => {
+    const layoutedNodes = nodes.map((node) => {
       const nodeWithPosition = dagreGraph.node(node.id);
       node.targetPosition = isHorizontal ? Position.Left : Position.Top;
       node.sourcePosition = isHorizontal ? Position.Right : Position.Bottom;
 
-      // We are shifting the dagre node position (anchor=center center) to the top left
-      // so it matches the React Flow node anchor point (top left).
       node.position = {
         x: nodeWithPosition.x - nodeWidth / 2,
         y: nodeWithPosition.y - nodeHeight / 2,
       };
 
-      return node;
+      return { ...node };
     });
 
-    return { nodes, edges };
+    return { nodes: layoutedNodes, edges };
   };
 
-  const dagrLayout = getLayoutedElements(nodes, edges);
+  const { nodes: layoutedNodes, edges: layoutedEdges } = useMemo(
+    () => getLayoutedElements(nodes, edges),
+    [nodes, edges],
+  );
 
-  const dagrNodes = dagrLayout.nodes;
-  const dagrEdges = dagrLayout.edges;
-
-  const connectionLineStyle = useMemo(() => {
-    return theme === 'dark'
-      ? connectionLineStyleDark
-      : connectionLineStyleLight;
-  }, [theme]);
-
-  console.log(edges, nodes);
+  console.log('Edges', layoutedEdges, 'Nodes', layoutedNodes);
 
   return (
     <div className="w-full h-[300px]">
       <ReactFlow
-        nodes={dagrNodes}
-        edges={dagrEdges}
+        nodes={layoutedNodes}
+        edges={layoutedEdges}
         nodeTypes={nodeTypes}
-        connectionLineStyle={connectionLineStyle}
-        snapToGrid={true}
+        edgeTypes={edgeTypes}
         fitView
         proOptions={{
           hideAttribution: true,
         }}
-        className="border-1 border-gray-800 rounded-lg"
+        onNodeClick={(_, node) => setSelectedStepRunId(node.id)}
+        className="border rounded-lg"
         maxZoom={1}
       />
     </div>
