@@ -1226,12 +1226,69 @@ func (q *Queries) ReadTaskByExternalID(ctx context.Context, db DBTX, externalid 
 }
 
 const readWorkflowRunByExternalId = `-- name: ReadWorkflowRunByExternalId :one
-SELECT d.id, d.inserted_at, d.tenant_id, d.external_id, d.display_name, d.workflow_id, d.workflow_version_id, d.readable_status, d.input, d.additional_metadata
-FROM v2_lookup_table lt
-JOIN v2_dags_olap d ON (lt.tenant_id, lt.dag_id, lt.inserted_at) = (d.tenant_id, d.id, d.inserted_at)
-WHERE
-    lt.external_id = $1::uuid
-    AND lt.tenant_id = $2::uuid
+WITH dags AS (
+    SELECT d.id, d.inserted_at, d.tenant_id, d.external_id, d.display_name, d.workflow_id, d.workflow_version_id, d.readable_status, d.input, d.additional_metadata
+    FROM v2_lookup_table lt
+    JOIN v2_dags_olap d ON (lt.tenant_id, lt.dag_id, lt.inserted_at) = (d.tenant_id, d.id, d.inserted_at)
+    WHERE
+        lt.external_id = $1::uuid
+        AND lt.tenant_id = $2::uuid
+), runs AS (
+    SELECT
+        d.id AS dag_id,
+        r.id AS run_id,
+        r.tenant_id,
+        r.inserted_at,
+        r.external_id,
+        r.readable_status,
+        r.kind,
+        r.workflow_id,
+        d.display_name,
+        d.input,
+        d.additional_metadata,
+        d.workflow_version_id
+    FROM v2_runs_olap r
+    JOIN dags d ON (r.tenant_id, r.external_id, r.inserted_at) = (d.tenant_id, d.external_id, d.inserted_at)
+    WHERE
+        r.tenant_id = $2::uuid
+        AND r.kind = 'DAG'
+), relevant_events AS (
+    SELECT
+        r.run_id,
+        e.tenant_id, e.id, e.inserted_at, e.task_id, e.task_inserted_at, e.event_type, e.workflow_id, e.event_timestamp, e.readable_status, e.retry_count, e.error_message, e.output, e.worker_id, e.additional__event_data, e.additional__event_message
+    FROM runs r
+    JOIN v2_dag_to_task_olap dt ON r.dag_id = dt.dag_id  -- Do I need to join by ` + "`" + `inserted_at` + "`" + ` here too?
+    JOIN v2_task_events_olap e ON e.task_id = dt.task_id -- Do I need to join by ` + "`" + `inserted_at` + "`" + ` here too?
+), metadata AS (
+    SELECT
+        e.run_id,
+        MIN(e.inserted_at)::timestamptz AS created_at,
+        MIN(e.inserted_at) FILTER (WHERE e.readable_status = 'RUNNING')::timestamptz AS started_at,
+        MAX(e.inserted_at) FILTER (WHERE e.readable_status IN ('COMPLETED', 'CANCELLED', 'FAILED'))::timestamptz AS finished_at
+    FROM
+        relevant_events e
+    GROUP BY e.run_id
+), error_message AS (
+    SELECT
+        DISTINCT ON (e.run_id) e.run_id::bigint,
+        e.error_message
+    FROM
+        relevant_events e
+    WHERE
+        e.readable_status = 'FAILED'
+    ORDER BY
+        e.run_id, e.retry_count DESC
+)
+SELECT
+    r.dag_id, r.run_id, r.tenant_id, r.inserted_at, r.external_id, r.readable_status, r.kind, r.workflow_id, r.display_name, r.input, r.additional_metadata, r.workflow_version_id,
+    m.created_at,
+    m.started_at,
+    m.finished_at,
+    e.error_message
+FROM runs r
+LEFT JOIN metadata m ON r.run_id = m.run_id
+LEFT JOIN error_message e ON r.run_id = e.run_id
+ORDER BY r.inserted_at DESC, r.run_id DESC
 `
 
 type ReadWorkflowRunByExternalIdParams struct {
@@ -1239,20 +1296,45 @@ type ReadWorkflowRunByExternalIdParams struct {
 	Tenantid              pgtype.UUID `json:"tenantid"`
 }
 
-func (q *Queries) ReadWorkflowRunByExternalId(ctx context.Context, db DBTX, arg ReadWorkflowRunByExternalIdParams) (*V2DagsOlap, error) {
+type ReadWorkflowRunByExternalIdRow struct {
+	DagID              int64                `json:"dag_id"`
+	RunID              int64                `json:"run_id"`
+	TenantID           pgtype.UUID          `json:"tenant_id"`
+	InsertedAt         pgtype.Timestamptz   `json:"inserted_at"`
+	ExternalID         pgtype.UUID          `json:"external_id"`
+	ReadableStatus     V2ReadableStatusOlap `json:"readable_status"`
+	Kind               V2RunKind            `json:"kind"`
+	WorkflowID         pgtype.UUID          `json:"workflow_id"`
+	DisplayName        string               `json:"display_name"`
+	Input              []byte               `json:"input"`
+	AdditionalMetadata []byte               `json:"additional_metadata"`
+	WorkflowVersionID  pgtype.UUID          `json:"workflow_version_id"`
+	CreatedAt          pgtype.Timestamptz   `json:"created_at"`
+	StartedAt          pgtype.Timestamptz   `json:"started_at"`
+	FinishedAt         pgtype.Timestamptz   `json:"finished_at"`
+	ErrorMessage       pgtype.Text          `json:"error_message"`
+}
+
+func (q *Queries) ReadWorkflowRunByExternalId(ctx context.Context, db DBTX, arg ReadWorkflowRunByExternalIdParams) (*ReadWorkflowRunByExternalIdRow, error) {
 	row := db.QueryRow(ctx, readWorkflowRunByExternalId, arg.Workflowrunexternalid, arg.Tenantid)
-	var i V2DagsOlap
+	var i ReadWorkflowRunByExternalIdRow
 	err := row.Scan(
-		&i.ID,
-		&i.InsertedAt,
+		&i.DagID,
+		&i.RunID,
 		&i.TenantID,
+		&i.InsertedAt,
 		&i.ExternalID,
-		&i.DisplayName,
-		&i.WorkflowID,
-		&i.WorkflowVersionID,
 		&i.ReadableStatus,
+		&i.Kind,
+		&i.WorkflowID,
+		&i.DisplayName,
 		&i.Input,
 		&i.AdditionalMetadata,
+		&i.WorkflowVersionID,
+		&i.CreatedAt,
+		&i.StartedAt,
+		&i.FinishedAt,
+		&i.ErrorMessage,
 	)
 	return &i, err
 }

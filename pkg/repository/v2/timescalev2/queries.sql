@@ -885,10 +885,66 @@ LEFT JOIN error_message e ON r.run_id = e.run_id
 ORDER BY r.inserted_at DESC, r.run_id DESC;
 
 -- name: ReadWorkflowRunByExternalId :one
-SELECT d.*
-FROM v2_lookup_table lt
-JOIN v2_dags_olap d ON (lt.tenant_id, lt.dag_id, lt.inserted_at) = (d.tenant_id, d.id, d.inserted_at)
-WHERE
-    lt.external_id = @workflowRunExternalId::uuid
-    AND lt.tenant_id = @tenantId::uuid
-;
+WITH dags AS (
+    SELECT d.*
+    FROM v2_lookup_table lt
+    JOIN v2_dags_olap d ON (lt.tenant_id, lt.dag_id, lt.inserted_at) = (d.tenant_id, d.id, d.inserted_at)
+    WHERE
+        lt.external_id = @workflowRunExternalId::uuid
+        AND lt.tenant_id = @tenantId::uuid
+), runs AS (
+    SELECT
+        d.id AS dag_id,
+        r.id AS run_id,
+        r.tenant_id,
+        r.inserted_at,
+        r.external_id,
+        r.readable_status,
+        r.kind,
+        r.workflow_id,
+        d.display_name,
+        d.input,
+        d.additional_metadata,
+        d.workflow_version_id
+    FROM v2_runs_olap r
+    JOIN dags d ON (r.tenant_id, r.external_id, r.inserted_at) = (d.tenant_id, d.external_id, d.inserted_at)
+    WHERE
+        r.tenant_id = @tenantId::uuid
+        AND r.kind = 'DAG'
+), relevant_events AS (
+    SELECT
+        r.run_id,
+        e.*
+    FROM runs r
+    JOIN v2_dag_to_task_olap dt ON r.dag_id = dt.dag_id  -- Do I need to join by `inserted_at` here too?
+    JOIN v2_task_events_olap e ON e.task_id = dt.task_id -- Do I need to join by `inserted_at` here too?
+), metadata AS (
+    SELECT
+        e.run_id,
+        MIN(e.inserted_at)::timestamptz AS created_at,
+        MIN(e.inserted_at) FILTER (WHERE e.readable_status = 'RUNNING')::timestamptz AS started_at,
+        MAX(e.inserted_at) FILTER (WHERE e.readable_status IN ('COMPLETED', 'CANCELLED', 'FAILED'))::timestamptz AS finished_at
+    FROM
+        relevant_events e
+    GROUP BY e.run_id
+), error_message AS (
+    SELECT
+        DISTINCT ON (e.run_id) e.run_id::bigint,
+        e.error_message
+    FROM
+        relevant_events e
+    WHERE
+        e.readable_status = 'FAILED'
+    ORDER BY
+        e.run_id, e.retry_count DESC
+)
+SELECT
+    r.*,
+    m.created_at,
+    m.started_at,
+    m.finished_at,
+    e.error_message
+FROM runs r
+LEFT JOIN metadata m ON r.run_id = m.run_id
+LEFT JOIN error_message e ON r.run_id = e.run_id
+ORDER BY r.inserted_at DESC, r.run_id DESC;

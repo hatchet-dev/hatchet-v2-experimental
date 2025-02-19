@@ -7,7 +7,9 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hatchet-dev/hatchet/api/v1/server/oas/gen"
+	"github.com/hatchet-dev/hatchet/pkg/repository"
 	"github.com/hatchet-dev/hatchet/pkg/repository/olap"
+	"github.com/hatchet-dev/hatchet/pkg/repository/prisma/dbsqlc"
 	"github.com/hatchet-dev/hatchet/pkg/repository/prisma/sqlchelpers"
 	"github.com/hatchet-dev/hatchet/pkg/repository/v2/timescalev2"
 	"github.com/oapi-codegen/runtime/types"
@@ -260,4 +262,86 @@ func ToTask(taskWithData *timescalev2.PopulateSingleTaskRunDataRow) gen.V2Task {
 		WorkflowId:         uuid.MustParse(sqlchelpers.UUIDToStr(taskWithData.WorkflowID)),
 		ErrorMessage:       &taskWithData.ErrorMessage.String,
 	}
+}
+
+func ToWorkflowRunDetails(
+	taskRunEvents []*timescalev2.ListTaskEventsForWorkflowRunRow,
+	workflowRun *repository.WorkflowRunData,
+	shape []*dbsqlc.GetWorkflowRunShapeRow,
+) (gen.V2WorkflowRunDetails, error) {
+	workflowVersionId := uuid.MustParse(sqlchelpers.UUIDToStr(workflowRun.WorkflowVersionId))
+	duration := int(workflowRun.FinishedAt.Time.Sub(workflowRun.StartedAt.Time).Milliseconds())
+
+	parsedWorkflowRun := gen.V2WorkflowRun{
+		AdditionalMetadata: &map[string]interface{}{},
+		DisplayName:        workflowRun.DisplayName,
+		Duration:           &duration,
+		ErrorMessage:       &workflowRun.ErrorMessage,
+		FinishedAt:         &workflowRun.FinishedAt.Time,
+		Metadata: gen.APIResourceMeta{
+			Id:        sqlchelpers.UUIDToStr(workflowRun.ExternalID),
+			CreatedAt: workflowRun.InsertedAt.Time,
+			UpdatedAt: workflowRun.InsertedAt.Time,
+		},
+		Output:            nil,
+		StartedAt:         &workflowRun.StartedAt.Time,
+		Status:            gen.V2TaskStatus(workflowRun.ReadableStatus),
+		TenantId:          uuid.MustParse(sqlchelpers.UUIDToStr(workflowRun.TenantID)),
+		WorkflowId:        uuid.MustParse(sqlchelpers.UUIDToStr(workflowRun.WorkflowID)),
+		WorkflowVersionId: &workflowVersionId,
+	}
+
+	shapeRows := make([]gen.WorkflowRunShapeItem, len(shape))
+
+	for i, shapeRow := range shape {
+		parent := uuid.MustParse(sqlchelpers.UUIDToStr(shapeRow.Parent))
+		children := make([]uuid.UUID, len(shapeRow.Children))
+
+		for c, child := range shapeRow.Children {
+			children[c] = uuid.MustParse(sqlchelpers.UUIDToStr(child))
+		}
+
+		shapeRows[i] = gen.WorkflowRunShapeItem{
+			Children: children,
+			Parent:   parent,
+		}
+	}
+
+	// type V2TaskEvent struct {
+	// 	ErrorMessage    *string             `json:"errorMessage,omitempty"`
+	// 	EventType       V2TaskEventType     `json:"eventType"`
+	// 	Id              int                 `json:"id"`
+	// 	Message         string              `json:"message"`
+	// 	Output          *string             `json:"output,omitempty"`
+	// 	TaskDisplayName *string             `json:"taskDisplayName,omitempty"`
+	// 	TaskId          openapi_types.UUID  `json:"taskId"`
+	// 	Timestamp       time.Time           `json:"timestamp"`
+	// 	WorkerId        *openapi_types.UUID `json:"workerId,omitempty"`
+	// }
+
+	parsedTaskEvents := make([]gen.V2TaskEvent, len(taskRunEvents))
+
+	for i, event := range taskRunEvents {
+		workerId := uuid.MustParse(sqlchelpers.UUIDToStr(event.WorkerID))
+		output := string(event.Output)
+
+		parsedTaskEvents[i] = gen.V2TaskEvent{
+			ErrorMessage:    &event.ErrorMessage.String,
+			EventType:       gen.V2TaskEventType(event.EventType),
+			Id:              int(event.ID),
+			Message:         event.AdditionalEventMessage.String,
+			Output:          &output,
+			TaskDisplayName: &event.DisplayName,
+			// THIS IS A BUG
+			TaskId:    uuid.MustParse(sqlchelpers.UUIDToStr(event.TenantID)),
+			Timestamp: event.EventTimestamp.Time,
+			WorkerId:  &workerId,
+		}
+	}
+
+	return gen.V2WorkflowRunDetails{
+		Run:        parsedWorkflowRun,
+		Shape:      shapeRows,
+		TaskEvents: parsedTaskEvents,
+	}, nil
 }
