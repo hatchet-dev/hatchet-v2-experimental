@@ -19,10 +19,15 @@ interface WorkflowRunShapeItemForWorkflowRunDetails {
   children: string[];
 }
 
+type NodeData = {
+  task: WorkflowRunShapeItemForWorkflowRunDetails;
+  label: string;
+};
+
 type WorkflowRunShapeForWorkflowRunDetails =
   WorkflowRunShapeItemForWorkflowRunDetails[];
 
-const HatchetNode = ({ data }) => {
+const HatchetNode = ({ data }: { data: NodeData }) => {
   return (
     <div className="text-updater-node">
       <Handle type="target" position={Position.Top} />
@@ -42,16 +47,11 @@ const edgeTypes = {
 
 const WorkflowRunVisualizer = ({
   shape,
-  selectedStepRunId,
-  setSelectedStepRunId,
 }: {
   shape: WorkflowRunShapeForWorkflowRunDetails;
-  selectedStepRunId?: string;
-  setSelectedStepRunId: (stepRunId: string) => void;
 }) => {
   const { theme } = useTheme();
 
-  // Create edges by mapping through each task and its children
   const edges: Edge[] = useMemo(
     () =>
       shape.flatMap((task) =>
@@ -73,7 +73,6 @@ const WorkflowRunVisualizer = ({
     [shape, theme],
   );
 
-  // Create nodes from the shape data
   const nodes: Node[] = useMemo(
     () =>
       shape.map((task) => ({
@@ -134,8 +133,6 @@ const WorkflowRunVisualizer = ({
     [nodes, edges],
   );
 
-  console.log('Edges', layoutedEdges, 'Nodes', layoutedNodes);
-
   return (
     <div className="w-full h-[300px]">
       <ReactFlow
@@ -147,7 +144,7 @@ const WorkflowRunVisualizer = ({
         proOptions={{
           hideAttribution: true,
         }}
-        onNodeClick={(_, node) => setSelectedStepRunId(node.id)}
+        onNodeClick={(_, node) => console.log(node)}
         className="border rounded-lg"
         maxZoom={1}
       />

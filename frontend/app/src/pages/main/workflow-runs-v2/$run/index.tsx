@@ -93,14 +93,14 @@ export default function ExpandedWorkflowRun() {
         <div className="w-full h-fit flex overflow-auto relative bg-slate-100 dark:bg-slate-900">
           <WorkflowRunVisualizer
             shape={shape}
-            selectedStepRunId={sidebarState?.stepRunId}
-            setSelectedStepRunId={(stepRunId) => {
-              setSidebarState({
-                stepRunId,
-                defaultOpenTab: TabOption.Output,
-                workflowRunId: params.run,
-              });
-            }}
+            // selectedStepRunId={sidebarState?.stepRunId}
+            // setSelectedStepRunId={(stepRunId) => {
+            //   setSidebarState({
+            //     stepRunId,
+            //     defaultOpenTab: TabOption.Output,
+            //     workflowRunId: params.run,
+            //   });
+            // }}
           />
           {shape && <ViewToggle shape={shape} />}
         </div>
