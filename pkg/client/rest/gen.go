@@ -1548,7 +1548,10 @@ type WorkflowRunOrderByDirection string
 type WorkflowRunOrderByField string
 
 // WorkflowRunShape defines model for WorkflowRunShape.
-type WorkflowRunShape = []struct {
+type WorkflowRunShape = []WorkflowRunShapeItem
+
+// WorkflowRunShapeItem defines model for WorkflowRunShapeItem.
+type WorkflowRunShapeItem struct {
 	Children []openapi_types.UUID `json:"children"`
 	Parent   openapi_types.UUID   `json:"parent"`
 }

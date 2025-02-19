@@ -1362,7 +1362,7 @@ export interface WorkflowRunsMetrics {
   counts?: WorkflowRunsMetricsCounts;
 }
 
-export type WorkflowRunShape = {
+export interface WorkflowRunShapeItem {
   /**
    * @format uuid
    * @minLength 36
@@ -1370,7 +1370,9 @@ export type WorkflowRunShape = {
    */
   parent: string;
   children: string[];
-}[];
+}
+
+export type WorkflowRunShape = WorkflowRunShapeItem[];
 
 export interface RerunStepRunRequest {
   input: object;
