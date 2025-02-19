@@ -702,7 +702,7 @@ workflowRun:
       - Workflow
 workflowRunShape:
   get:
-    x-resources: ["tenant", "workflow-run"]
+    x-resources: ["tenant"]
     description: Get a workflow run for a tenant
     operationId: workflow-run:get:shape
     parameters:
