@@ -715,9 +715,9 @@ workflowRunShape:
           format: uuid
           minLength: 36
           maxLength: 36
-      - description: The workflow run id
+      - description: The workflow version id
         in: path
-        name: workflow-run
+        name: workflow-version-id
         required: true
         schema:
           type: string

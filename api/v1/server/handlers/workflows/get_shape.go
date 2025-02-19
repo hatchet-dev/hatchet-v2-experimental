@@ -18,6 +18,10 @@ func (t *WorkflowService) WorkflowRunGetShape(ctx echo.Context, request gen.Work
 	reqCtx, cancel := context.WithTimeout(ctx.Request().Context(), 5*time.Second)
 	defer cancel()
 
+	shape, err := t.config.APIRepository.WorkflowRun().GetWorkflowRunShape(
+		reqCtx, request.WorkflowVersionId,
+	)
+
 	jobRuns, err := t.config.APIRepository.JobRun().ListJobRunByWorkflowRunId(
 		reqCtx,
 		sqlchelpers.UUIDToStr(run.TenantId),

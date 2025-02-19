@@ -1362,40 +1362,15 @@ export interface WorkflowRunsMetrics {
   counts?: WorkflowRunsMetricsCounts;
 }
 
-export interface WorkflowRunShape {
-  metadata: APIResourceMeta;
-  tenantId: string;
-  workflowId?: string;
-  workflowVersionId: string;
-  workflowVersion?: WorkflowVersion;
-  status: WorkflowRunStatus;
-  displayName?: string;
-  jobRuns?: JobRun[];
-  triggeredBy: WorkflowRunTriggeredBy;
-  input?: Record<string, any>;
-  error?: string;
-  /** @format date-time */
-  startedAt?: string;
-  /** @format date-time */
-  finishedAt?: string;
-  /** @example 1000 */
-  duration?: number;
+export type WorkflowRunShape = {
   /**
    * @format uuid
    * @minLength 36
    * @maxLength 36
-   * @example "bb214807-246e-43a5-a25d-41761d1cff9e"
    */
-  parentId?: string;
-  /**
-   * @format uuid
-   * @minLength 36
-   * @maxLength 36
-   * @example "bb214807-246e-43a5-a25d-41761d1cff9e"
-   */
-  parentStepRunId?: string;
-  additionalMetadata?: Record<string, any>;
-}
+  parent: string;
+  children: string[];
+}[];
 
 export interface RerunStepRunRequest {
   input: object;
