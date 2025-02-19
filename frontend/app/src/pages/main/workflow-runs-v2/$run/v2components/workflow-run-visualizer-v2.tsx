@@ -15,6 +15,7 @@ import { queries, V2TaskSummary } from '@/lib/api';
 import { useTenant } from '@/lib/atoms';
 import invariant from 'tiny-invariant';
 import { useParams } from 'react-router-dom';
+import stepRunNode from './step-run-node';
 
 const connectionLineStyleDark = { stroke: '#fff' };
 const connectionLineStyleLight = { stroke: '#000' };
@@ -24,19 +25,8 @@ type NodeData = {
   label: string;
 };
 
-const HatchetNode = ({ data }: { data: NodeData }) => {
-  return (
-    <div className="text-updater-node">
-      <Handle type="target" position={Position.Top} />
-      <div>{data.task.displayName}</div>
-      <div>{data.task.status}</div>
-      <Handle type="source" position={Position.Bottom} />
-    </div>
-  );
-};
-
 const nodeTypes = {
-  stepNode: HatchetNode,
+  stepNode: stepRunNode,
 };
 
 const edgeTypes = {

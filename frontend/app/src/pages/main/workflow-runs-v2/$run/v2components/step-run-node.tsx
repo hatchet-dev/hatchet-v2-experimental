@@ -1,9 +1,19 @@
 import { Label } from '@/components/ui/label';
-import { Step, StepRun, StepRunStatus } from '@/lib/api';
+import {
+  Step,
+  StepRun,
+  StepRunStatus,
+  V2TaskStatus,
+  V2TaskSummary,
+} from '@/lib/api';
 import { cn, formatDuration } from '@/lib/utils';
 import { memo, useState } from 'react';
 import { Handle, Position } from 'reactflow';
-import { RunIndicator, RunStatus } from '../../components/run-statuses';
+import {
+  RunIndicator,
+  RunStatus,
+  V2RunIndicator,
+} from '../../components/run-statuses';
 import RelativeDate from '@/components/molecules/relative-date';
 import { TabOption } from './step-run-detail/step-run-detail';
 
@@ -15,14 +25,24 @@ export interface StepRunNodeProps {
   onClick: (defaultOpenTab?: TabOption) => void;
 }
 
+type NodeData = {
+  task: V2TaskSummary;
+  label: string;
+};
+
 // eslint-disable-next-line react/display-name
-export default memo(({ data }: { data: StepRunNodeProps }) => {
-  const variant = data.graphVariant;
+export default memo(({ data }: { data: NodeData }) => {
+  // FIXME
+  // const variant = data.graphVariant;
+  const variant = 'default';
   const [isHovering, setIsHovering] = useState(false);
 
-  //   const selected = data.selected;
-  const step = data.step;
-  const stepRun = data.stepRun;
+  const startedAtEpoch = data.task.startedAt
+    ? new Date(data.task.startedAt).getTime()
+    : 0;
+  const finishedAtEpoch = data.task.finishedAt
+    ? new Date(data.task.finishedAt).getTime()
+    : 0;
 
   return (
     <div className="flex flex-col justify-start min-w-fit grow">
@@ -35,7 +55,7 @@ export default memo(({ data }: { data: StepRunNodeProps }) => {
         />
       )}
       <div
-        key={step.metadata.id}
+        key={data.task.metadata.id}
         // data-step-id={step.metadata.id}
         className={cn(
           `step-run-card shadow-md rounded-sm py-3 px-2 mb-1 w-full text-xs text-[#050c1c] dark:text-[#ffffff] font-semibold font-mono`,
@@ -48,22 +68,23 @@ export default memo(({ data }: { data: StepRunNodeProps }) => {
           height: '30px',
           opacity: isHovering ? 1 : 0.8,
         }}
-        onClick={() => data.onClick()}
+        // FIXME: Onclick handler
+        onClick={() => {}}
         onMouseEnter={() => setIsHovering(true)}
         onMouseLeave={() => setIsHovering(false)}
       >
-        {data.stepRun.status == StepRunStatus.RUNNING && (
+        {data.task.status == V2TaskStatus.RUNNING && (
           <span className="spark mask-gradient animate-flip before:animate-rotate absolute inset-0 h-[100%] w-[100%] overflow-hidden [mask:linear-gradient(#ccc,_transparent_50%)] before:absolute before:aspect-square before:w-[200%] before:rotate-[-90deg] before:bg-[conic-gradient(from_0deg,transparent_0_340deg,#ccc_360deg)] before:content-[''] before:[inset:0_auto_auto_50%] before:[translate:-50%_-15%]" />
         )}
         <span className="step-run-backdrop absolute inset-[1px] bg-background transition-colors duration-200" />
         <div className="z-10 flex flex-row items-center justify-between gap-4 w-full">
           <div className="flex flex-row items-center justify-start gap-2 z-10">
-            <RunIndicator status={data.stepRun.status} />
-            <div className="truncate flex-grow">{step.readableId}</div>
+            <V2RunIndicator status={data.task.status} />
+            <div className="truncate flex-grow">{data.task.displayName}</div>
           </div>
-          {stepRun.finishedAtEpoch && stepRun.startedAtEpoch && (
+          {data.task.finishedAt && data.task.startedAt && (
             <div className="text-xs text-gray-500 dark:text-gray-400">
-              {formatDuration(stepRun.finishedAtEpoch - stepRun.startedAtEpoch)}
+              {formatDuration(finishedAtEpoch - startedAtEpoch)}
             </div>
           )}
         </div>
@@ -77,9 +98,9 @@ export default memo(({ data }: { data: StepRunNodeProps }) => {
           />
         )}
       </div>
-      {stepRun?.childWorkflowsCount ? (
+      {/* {stepRun?.childWorkflowsCount ? (
         <div
-          key={`${step.metadata.id}-child-workflows`}
+          key={`${data.task.metadata.id}-child-workflows`}
           className={cn(
             `w-[calc(100%-1rem)] box-border shadow-md ml-4 rounded-sm py-3 px-2 mb-1 text-xs text-[#050c1c] dark:text-[#ffffff] font-semibold font-mono`,
             `transition-all duration-300 ease-in-out`,
@@ -90,13 +111,14 @@ export default memo(({ data }: { data: StepRunNodeProps }) => {
           style={{
             height: '30px',
           }}
-          onClick={() => data.onClick(TabOption.ChildWorkflowRuns)}
+          //FIXME: onClick handler
+          onClick={() => {}}
         >
           <div className="truncate flex-grow">
-            {step.readableId}: {stepRun.childWorkflowsCount} children
+            {data.task.displayName}: {stepRun.childWorkflowsCount} children
           </div>
         </div>
-      ) : null}
+      ) : null} */}
     </div>
   );
 });
