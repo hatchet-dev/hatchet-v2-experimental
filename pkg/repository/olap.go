@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -90,7 +91,7 @@ type WorkflowRunData struct {
 
 type OLAPEventRepository interface {
 	ReadTaskRun(ctx context.Context, taskExternalId string) (*timescalev2.V2TasksOlap, error)
-	ReadWorkflowRun(ctx context.Context, tenantId, workflowRunExternalId pgtype.UUID) (*WorkflowRunData, error)
+	ReadWorkflowRun(ctx context.Context, tenantId, workflowRunExternalId pgtype.UUID) (*WorkflowRunData, []TaskMetadata, error)
 	ReadTaskRunData(ctx context.Context, tenantId pgtype.UUID, taskId int64, taskInsertedAt pgtype.Timestamptz) (*timescalev2.PopulateSingleTaskRunDataRow, error)
 	ListTasks(ctx context.Context, tenantId string, opts ListTaskRunOpts) ([]*timescalev2.PopulateTaskRunDataRow, int, error)
 	ListWorkflowRuns(ctx context.Context, tenantId string, opts ListWorkflowRunOpts) ([]*WorkflowRunData, int, error)
@@ -104,6 +105,7 @@ type OLAPEventRepository interface {
 	UpdateTaskStatuses(ctx context.Context, tenantId string) (bool, error)
 	UpdateDAGStatuses(ctx context.Context, tenantId string) (bool, error)
 	ListTasksByDAGId(ctx context.Context, tenantId string, dagIds []pgtype.UUID) ([]*timescalev2.PopulateTaskRunDataRow, map[int64]uuid.UUID, error)
+	ListTasksByIdAndInsertedAt(ctx context.Context, tenantId string, taskMetadata []TaskMetadata) ([]*timescalev2.PopulateTaskRunDataRow, error)
 }
 
 type olapEventRepository struct {
@@ -301,15 +303,31 @@ func (r *olapEventRepository) ReadTaskRun(ctx context.Context, taskExternalId st
 	}, nil
 }
 
-func (r *olapEventRepository) ReadWorkflowRun(ctx context.Context, tenantId, workflowRunExternalId pgtype.UUID) (*WorkflowRunData, error) {
+type TaskMetadata struct {
+	TaskID         int64     `json:"task_id"`
+	TaskInsertedAt time.Time `json:"task_inserted_at"`
+}
+
+func ParseTaskMetadata(jsonData []byte) ([]TaskMetadata, error) {
+	var tasks []TaskMetadata
+	err := json.Unmarshal(jsonData, &tasks)
+	if err != nil {
+		return nil, err
+	}
+	return tasks, nil
+}
+
+func (r *olapEventRepository) ReadWorkflowRun(ctx context.Context, tenantId, workflowRunExternalId pgtype.UUID) (*WorkflowRunData, []TaskMetadata, error) {
 	row, err := r.queries.ReadWorkflowRunByExternalId(ctx, r.pool, timescalev2.ReadWorkflowRunByExternalIdParams{
 		Workflowrunexternalid: workflowRunExternalId,
 		Tenantid:              tenantId,
 	})
 
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
+
+	taskMetadata, err := ParseTaskMetadata(row.TaskMetadata)
 
 	return &WorkflowRunData{
 		TenantID:           row.TenantID,
@@ -325,7 +343,7 @@ func (r *olapEventRepository) ReadWorkflowRun(ctx context.Context, tenantId, wor
 		FinishedAt:         row.FinishedAt,
 		ErrorMessage:       row.ErrorMessage.String,
 		WorkflowVersionId:  row.WorkflowVersionID,
-	}, nil
+	}, taskMetadata, nil
 }
 
 func (r *olapEventRepository) ReadTaskRunData(ctx context.Context, tenantId pgtype.UUID, taskId int64, taskInsertedAt pgtype.Timestamptz) (*timescalev2.PopulateSingleTaskRunDataRow, error) {
@@ -490,6 +508,40 @@ func (r *olapEventRepository) ListTasksByDAGId(ctx context.Context, tenantId str
 	}
 
 	return tasksWithData, taskIdToDagExternalId, nil
+}
+
+func (r *olapEventRepository) ListTasksByIdAndInsertedAt(ctx context.Context, tenantId string, taskMetadata []TaskMetadata) ([]*timescalev2.PopulateTaskRunDataRow, error) {
+	tx, err := r.pool.Begin(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	defer tx.Rollback(ctx)
+
+	taskIds := make([]int64, 0)
+	taskInsertedAts := make([]pgtype.Timestamptz, 0)
+
+	for _, metadata := range taskMetadata {
+		taskIds = append(taskIds, metadata.TaskID)
+		taskInsertedAts = append(taskInsertedAts, sqlchelpers.TimestamptzFromTime(metadata.TaskInsertedAt))
+	}
+
+	tasksWithData, err := r.queries.PopulateTaskRunData(ctx, tx, timescalev2.PopulateTaskRunDataParams{
+		Taskids:         taskIds,
+		Taskinsertedats: taskInsertedAts,
+		Tenantid:        sqlchelpers.UUIDFromStr(tenantId),
+	})
+
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+
+	return tasksWithData, nil
 }
 
 func (r *olapEventRepository) ListWorkflowRuns(ctx context.Context, tenantId string, opts ListWorkflowRunOpts) ([]*WorkflowRunData, int, error) {

@@ -91,17 +91,7 @@ export default function ExpandedWorkflowRun() {
           </Badge>
         </div>
         <div className="w-full h-fit flex overflow-auto relative bg-slate-100 dark:bg-slate-900">
-          <WorkflowRunVisualizer
-            shape={shape}
-            // selectedStepRunId={sidebarState?.stepRunId}
-            // setSelectedStepRunId={(stepRunId) => {
-            //   setSidebarState({
-            //     stepRunId,
-            //     defaultOpenTab: TabOption.Output,
-            //     workflowRunId: params.run,
-            //   });
-            // }}
-          />
+          <WorkflowRunVisualizer/>
           {shape && <ViewToggle shape={shape} />}
         </div>
         <div className="h-4" />

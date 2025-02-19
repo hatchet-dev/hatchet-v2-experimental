@@ -12,6 +12,7 @@ import (
 	"github.com/hatchet-dev/hatchet/pkg/repository/prisma/dbsqlc"
 	"github.com/hatchet-dev/hatchet/pkg/repository/prisma/sqlchelpers"
 	"github.com/hatchet-dev/hatchet/pkg/repository/v2/timescalev2"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/oapi-codegen/runtime/types"
 )
 
@@ -268,6 +269,8 @@ func ToWorkflowRunDetails(
 	taskRunEvents []*timescalev2.ListTaskEventsForWorkflowRunRow,
 	workflowRun *repository.WorkflowRunData,
 	shape []*dbsqlc.GetWorkflowRunShapeRow,
+	tasks []*timescalev2.PopulateTaskRunDataRow,
+	stepIdToTaskExternalId map[pgtype.UUID]pgtype.UUID,
 ) (gen.V2WorkflowRunDetails, error) {
 	workflowVersionId := uuid.MustParse(sqlchelpers.UUIDToStr(workflowRun.WorkflowVersionId))
 	duration := int(workflowRun.FinishedAt.Time.Sub(workflowRun.StartedAt.Time).Milliseconds())
@@ -294,11 +297,11 @@ func ToWorkflowRunDetails(
 	shapeRows := make([]gen.WorkflowRunShapeItemForWorkflowRunDetails, len(shape))
 
 	for i, shapeRow := range shape {
-		parent := uuid.MustParse(sqlchelpers.UUIDToStr(shapeRow.Parent))
+		parent := uuid.MustParse(sqlchelpers.UUIDToStr(stepIdToTaskExternalId[shapeRow.Parent]))
 		children := make([]uuid.UUID, len(shapeRow.Children))
 
 		for c, child := range shapeRow.Children {
-			children[c] = uuid.MustParse(sqlchelpers.UUIDToStr(child))
+			children[c] = uuid.MustParse(sqlchelpers.UUIDToStr(stepIdToTaskExternalId[child]))
 		}
 
 		shapeRows[i] = gen.WorkflowRunShapeItemForWorkflowRunDetails{
@@ -320,16 +323,17 @@ func ToWorkflowRunDetails(
 			Message:         event.AdditionalEventMessage.String,
 			Output:          &output,
 			TaskDisplayName: &event.DisplayName,
-			// THIS IS A BUG
-			TaskId:    uuid.MustParse(sqlchelpers.UUIDToStr(event.TenantID)),
-			Timestamp: event.EventTimestamp.Time,
-			WorkerId:  &workerId,
+			Timestamp:       event.EventTimestamp.Time,
+			WorkerId:        &workerId,
 		}
 	}
+
+	parsedTasks := ToTaskSummaryRows(tasks)
 
 	return gen.V2WorkflowRunDetails{
 		Run:        parsedWorkflowRun,
 		Shape:      shapeRows,
 		TaskEvents: parsedTaskEvents,
+		Tasks:      parsedTasks,
 	}, nil
 }

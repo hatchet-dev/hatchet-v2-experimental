@@ -99,7 +99,12 @@ V2WorkflowRunDetails:
       description: The list of task events for the workflow run
     shape:
       $ref: "#/WorkflowRunShapeForWorkflowRunDetails"
+    tasks:
+      type: array
+      items:
+        $ref: "./task.yaml#/V2TaskSummary"
   required:
     - run
     - taskEvents
     - shape
+    - tasks

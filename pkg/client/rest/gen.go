@@ -1317,7 +1317,8 @@ type V2WorkflowRunDetails struct {
 	Shape WorkflowRunShapeForWorkflowRunDetails `json:"shape"`
 
 	// TaskEvents The list of task events for the workflow run
-	TaskEvents []V2TaskEvent `json:"taskEvents"`
+	TaskEvents []V2TaskEvent   `json:"taskEvents"`
+	Tasks      []V2TaskSummary `json:"tasks"`
 }
 
 // V2WorkflowRunList defines model for V2WorkflowRunList.

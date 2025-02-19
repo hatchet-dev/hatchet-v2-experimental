@@ -10,6 +10,11 @@ import ReactFlow, {
 import 'reactflow/dist/style.css';
 import dagre from 'dagre';
 import { useTheme } from '@/components/theme-provider';
+import { useQuery } from '@tanstack/react-query';
+import { queries } from '@/lib/api';
+import { useTenant } from '@/lib/atoms';
+import invariant from 'tiny-invariant';
+import { useParams } from 'react-router-dom';
 
 const connectionLineStyleDark = { stroke: '#fff' };
 const connectionLineStyleLight = { stroke: '#000' };
@@ -45,12 +50,27 @@ const edgeTypes = {
   smoothstep: SmoothStepEdge,
 };
 
-const WorkflowRunVisualizer = ({
-  shape,
-}: {
-  shape: WorkflowRunShapeForWorkflowRunDetails;
-}) => {
+const WorkflowRunVisualizer = () => {
   const { theme } = useTheme();
+  const { tenant } = useTenant();
+  const params = useParams();
+
+  invariant(tenant);
+  invariant(params.run);
+
+  const { data, isLoading, isError } = useQuery({
+    ...queries.v2WorkflowRuns.details(tenant.metadata.id, params.run),
+  });
+
+  if (isLoading || isError) {
+    return null;
+  }
+
+  const shape = data?.shape;
+
+  if (!shape) {
+    return null;
+  }
 
   const edges: Edge[] = useMemo(
     () =>

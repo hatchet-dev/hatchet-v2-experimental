@@ -1255,7 +1255,9 @@ WITH dags AS (
 ), relevant_events AS (
     SELECT
         r.run_id,
-        e.tenant_id, e.id, e.inserted_at, e.task_id, e.task_inserted_at, e.event_type, e.workflow_id, e.event_timestamp, e.readable_status, e.retry_count, e.error_message, e.output, e.worker_id, e.additional__event_data, e.additional__event_message
+        e.tenant_id, e.id, e.inserted_at, e.task_id, e.task_inserted_at, e.event_type, e.workflow_id, e.event_timestamp, e.readable_status, e.retry_count, e.error_message, e.output, e.worker_id, e.additional__event_data, e.additional__event_message,
+        dt.task_id AS dag_task_id,
+        dt.task_inserted_at AS dag_task_inserted_at
     FROM runs r
     JOIN v2_dag_to_task_olap dt ON r.dag_id = dt.dag_id  -- Do I need to join by ` + "`" + `inserted_at` + "`" + ` here too?
     JOIN v2_task_events_olap e ON e.task_id = dt.task_id -- Do I need to join by ` + "`" + `inserted_at` + "`" + ` here too?
@@ -1264,7 +1266,8 @@ WITH dags AS (
         e.run_id,
         MIN(e.inserted_at)::timestamptz AS created_at,
         MIN(e.inserted_at) FILTER (WHERE e.readable_status = 'RUNNING')::timestamptz AS started_at,
-        MAX(e.inserted_at) FILTER (WHERE e.readable_status IN ('COMPLETED', 'CANCELLED', 'FAILED'))::timestamptz AS finished_at
+        MAX(e.inserted_at) FILTER (WHERE e.readable_status IN ('COMPLETED', 'CANCELLED', 'FAILED'))::timestamptz AS finished_at,
+        JSON_AGG(JSON_BUILD_OBJECT('task_id', e.dag_task_id,'task_inserted_at', e.dag_task_inserted_at)) AS task_metadata
     FROM
         relevant_events e
     GROUP BY e.run_id
@@ -1284,7 +1287,8 @@ SELECT
     m.created_at,
     m.started_at,
     m.finished_at,
-    e.error_message
+    e.error_message,
+    m.task_metadata
 FROM runs r
 LEFT JOIN metadata m ON r.run_id = m.run_id
 LEFT JOIN error_message e ON r.run_id = e.run_id
@@ -1313,6 +1317,7 @@ type ReadWorkflowRunByExternalIdRow struct {
 	StartedAt          pgtype.Timestamptz   `json:"started_at"`
 	FinishedAt         pgtype.Timestamptz   `json:"finished_at"`
 	ErrorMessage       pgtype.Text          `json:"error_message"`
+	TaskMetadata       []byte               `json:"task_metadata"`
 }
 
 func (q *Queries) ReadWorkflowRunByExternalId(ctx context.Context, db DBTX, arg ReadWorkflowRunByExternalIdParams) (*ReadWorkflowRunByExternalIdRow, error) {
@@ -1335,6 +1340,7 @@ func (q *Queries) ReadWorkflowRunByExternalId(ctx context.Context, db DBTX, arg 
 		&i.StartedAt,
 		&i.FinishedAt,
 		&i.ErrorMessage,
+		&i.TaskMetadata,
 	)
 	return &i, err
 }

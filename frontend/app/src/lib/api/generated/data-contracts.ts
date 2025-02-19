@@ -293,6 +293,7 @@ export interface V2WorkflowRunDetails {
   /** The list of task events for the workflow run */
   taskEvents: V2TaskEvent[];
   shape: WorkflowRunShapeForWorkflowRunDetails;
+  tasks: V2TaskSummary[];
 }
 
 export interface V2TaskRunMetric {
