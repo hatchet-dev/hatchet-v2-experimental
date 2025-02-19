@@ -883,3 +883,12 @@ FROM runs r
 LEFT JOIN metadata m ON r.run_id = m.run_id
 LEFT JOIN error_message e ON r.run_id = e.run_id
 ORDER BY r.inserted_at DESC, r.run_id DESC;
+
+-- GetWorkflowRunMetadata :one
+SELECT *
+FROM v2_lookup_table lt
+JOIN v2_dags_olap d ON (lt.tenant_id, lt.dag_id, lt.inserted_at) = (d.tenant_id, d.id, d.inserted_at)
+WHERE
+    lt.external_id = @workflowRunId::uuid
+    AND lt.tenant_id = @tenantId::uuid
+;
