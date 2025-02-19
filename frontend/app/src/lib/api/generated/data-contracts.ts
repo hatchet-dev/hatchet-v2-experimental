@@ -276,7 +276,7 @@ export interface V2WorkflowRunList {
   rows: V2WorkflowRun[];
 }
 
-export interface WorkflowRunShapeItem {
+export interface WorkflowRunShapeItemForWorkflowRunDetails {
   /**
    * @format uuid
    * @minLength 36
@@ -286,13 +286,13 @@ export interface WorkflowRunShapeItem {
   children: string[];
 }
 
-export type WorkflowRunShape = WorkflowRunShapeItem[];
+export type WorkflowRunShapeForWorkflowRunDetails = WorkflowRunShapeItemForWorkflowRunDetails[];
 
 export interface V2WorkflowRunDetails {
   run: V2WorkflowRun;
   /** The list of task events for the workflow run */
   taskEvents: V2TaskEvent[];
-  shape: WorkflowRunShape;
+  shape: WorkflowRunShapeForWorkflowRunDetails;
 }
 
 export interface V2TaskRunMetric {
@@ -1379,6 +1379,41 @@ export interface WorkflowRunsMetricsCounts {
 
 export interface WorkflowRunsMetrics {
   counts?: WorkflowRunsMetricsCounts;
+}
+
+export interface WorkflowRunShape {
+  metadata: APIResourceMeta;
+  tenantId: string;
+  workflowId?: string;
+  workflowVersionId: string;
+  workflowVersion?: WorkflowVersion;
+  status: WorkflowRunStatus;
+  displayName?: string;
+  jobRuns?: JobRun[];
+  triggeredBy: WorkflowRunTriggeredBy;
+  input?: Record<string, any>;
+  error?: string;
+  /** @format date-time */
+  startedAt?: string;
+  /** @format date-time */
+  finishedAt?: string;
+  /** @example 1000 */
+  duration?: number;
+  /**
+   * @format uuid
+   * @minLength 36
+   * @maxLength 36
+   * @example "bb214807-246e-43a5-a25d-41761d1cff9e"
+   */
+  parentId?: string;
+  /**
+   * @format uuid
+   * @minLength 36
+   * @maxLength 36
+   * @example "bb214807-246e-43a5-a25d-41761d1cff9e"
+   */
+  parentStepRunId?: string;
+  additionalMetadata?: Record<string, any>;
 }
 
 export interface RerunStepRunRequest {

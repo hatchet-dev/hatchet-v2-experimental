@@ -291,7 +291,7 @@ func ToWorkflowRunDetails(
 		WorkflowVersionId: &workflowVersionId,
 	}
 
-	shapeRows := make([]gen.WorkflowRunShapeItem, len(shape))
+	shapeRows := make([]gen.WorkflowRunShapeItemForWorkflowRunDetails, len(shape))
 
 	for i, shapeRow := range shape {
 		parent := uuid.MustParse(sqlchelpers.UUIDToStr(shapeRow.Parent))
@@ -301,23 +301,11 @@ func ToWorkflowRunDetails(
 			children[c] = uuid.MustParse(sqlchelpers.UUIDToStr(child))
 		}
 
-		shapeRows[i] = gen.WorkflowRunShapeItem{
+		shapeRows[i] = gen.WorkflowRunShapeItemForWorkflowRunDetails{
 			Children: children,
 			Parent:   parent,
 		}
 	}
-
-	// type V2TaskEvent struct {
-	// 	ErrorMessage    *string             `json:"errorMessage,omitempty"`
-	// 	EventType       V2TaskEventType     `json:"eventType"`
-	// 	Id              int                 `json:"id"`
-	// 	Message         string              `json:"message"`
-	// 	Output          *string             `json:"output,omitempty"`
-	// 	TaskDisplayName *string             `json:"taskDisplayName,omitempty"`
-	// 	TaskId          openapi_types.UUID  `json:"taskId"`
-	// 	Timestamp       time.Time           `json:"timestamp"`
-	// 	WorkerId        *openapi_types.UUID `json:"workerId,omitempty"`
-	// }
 
 	parsedTaskEvents := make([]gen.V2TaskEvent, len(taskRunEvents))
 

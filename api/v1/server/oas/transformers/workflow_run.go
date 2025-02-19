@@ -14,28 +14,70 @@ import (
 )
 
 func ToWorkflowRunShape(
-	shapeRows []dbsqlc.GetWorkflowRunShapeRow,
-) gen.WorkflowRunShape {
-	result := make([]gen.WorkflowRunShapeItem, len(shapeRows))
-
-	for _, shapeRow := range shapeRows {
-		parent := uuid.MustParse(sqlchelpers.UUIDToStr(shapeRow.Parent))
-
-		children := make([]uuid.UUID, len(shapeRow.Children))
-
-		for i, child := range shapeRow.Children {
-			children[i] = uuid.MustParse(sqlchelpers.UUIDToStr(child))
-		}
-
-		res := gen.WorkflowRunShapeItem{
-			Children: children,
-			Parent:   parent,
-		}
-
-		result = append(result, res)
+	run *dbsqlc.GetWorkflowRunByIdRow,
+	version *dbsqlc.GetWorkflowVersionByIdRow,
+	jobs []*dbsqlc.ListJobRunsForWorkflowRunFullRow,
+	steps []*dbsqlc.GetStepsForJobsRow,
+	stepRuns []*repository.StepRunForJobRun,
+) *gen.WorkflowRunShape {
+	res := &gen.WorkflowRunShape{
+		Metadata: *toAPIMetadata(
+			sqlchelpers.UUIDToStr(run.ID),
+			run.CreatedAt.Time,
+			run.UpdatedAt.Time,
+		),
+		TenantId:          sqlchelpers.UUIDToStr(run.TenantId),
+		WorkflowVersionId: sqlchelpers.UUIDToStr(run.WorkflowVersionId),
+		DisplayName:       &run.DisplayName.String,
+		Error:             &run.Error.String,
+		Status:            gen.WorkflowRunStatus(run.Status),
 	}
 
-	return result
+	if run.StartedAt.Valid {
+		res.StartedAt = &run.StartedAt.Time
+	}
+
+	if run.FinishedAt.Valid {
+		res.FinishedAt = &run.FinishedAt.Time
+	}
+
+	if run.Duration.Valid {
+		duration := int(run.Duration.Int64)
+		res.Duration = &duration
+	}
+
+	if version != nil {
+		// TODO concurrency
+		workflowId := sqlchelpers.UUIDToStr(version.Workflow.ID)
+		res.WorkflowId = &workflowId
+		res.WorkflowVersion = ToWorkflowVersion(&version.WorkflowVersion, &version.Workflow, nil, nil, nil, nil)
+	}
+
+	res.TriggeredBy = *ToWorkflowRunTriggeredBy(run.ParentId, &run.WorkflowRunTriggeredBy)
+
+	if jobs != nil {
+		jobRuns := make([]gen.JobRun, 0)
+
+		for _, jobRun := range jobs {
+			jobRunCp := *jobRun
+			jobRuns = append(jobRuns, *ToJobRun(&jobRunCp, steps, stepRuns))
+
+		}
+
+		res.JobRuns = &jobRuns
+	}
+
+	if run.AdditionalMetadata != nil {
+
+		additionalMetadata := make(map[string]interface{})
+		err := json.Unmarshal(run.AdditionalMetadata, &additionalMetadata)
+
+		if err == nil {
+			res.AdditionalMetadata = &additionalMetadata
+		}
+	}
+
+	return res
 }
 
 func ToWorkflowRun(

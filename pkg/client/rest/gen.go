@@ -1313,8 +1313,8 @@ type V2WorkflowRun struct {
 
 // V2WorkflowRunDetails defines model for V2WorkflowRunDetails.
 type V2WorkflowRunDetails struct {
-	Run   V2WorkflowRun    `json:"run"`
-	Shape WorkflowRunShape `json:"shape"`
+	Run   V2WorkflowRun                         `json:"run"`
+	Shape WorkflowRunShapeForWorkflowRunDetails `json:"shape"`
 
 	// TaskEvents The list of task events for the workflow run
 	TaskEvents []V2TaskEvent `json:"taskEvents"`
@@ -1557,10 +1557,31 @@ type WorkflowRunOrderByDirection string
 type WorkflowRunOrderByField string
 
 // WorkflowRunShape defines model for WorkflowRunShape.
-type WorkflowRunShape = []WorkflowRunShapeItem
+type WorkflowRunShape struct {
+	AdditionalMetadata *map[string]interface{} `json:"additionalMetadata,omitempty"`
+	DisplayName        *string                 `json:"displayName,omitempty"`
+	Duration           *int                    `json:"duration,omitempty"`
+	Error              *string                 `json:"error,omitempty"`
+	FinishedAt         *time.Time              `json:"finishedAt,omitempty"`
+	Input              *map[string]interface{} `json:"input,omitempty"`
+	JobRuns            *[]JobRun               `json:"jobRuns,omitempty"`
+	Metadata           APIResourceMeta         `json:"metadata"`
+	ParentId           *openapi_types.UUID     `json:"parentId,omitempty"`
+	ParentStepRunId    *openapi_types.UUID     `json:"parentStepRunId,omitempty"`
+	StartedAt          *time.Time              `json:"startedAt,omitempty"`
+	Status             WorkflowRunStatus       `json:"status"`
+	TenantId           string                  `json:"tenantId"`
+	TriggeredBy        WorkflowRunTriggeredBy  `json:"triggeredBy"`
+	WorkflowId         *string                 `json:"workflowId,omitempty"`
+	WorkflowVersion    *WorkflowVersion        `json:"workflowVersion,omitempty"`
+	WorkflowVersionId  string                  `json:"workflowVersionId"`
+}
 
-// WorkflowRunShapeItem defines model for WorkflowRunShapeItem.
-type WorkflowRunShapeItem struct {
+// WorkflowRunShapeForWorkflowRunDetails defines model for WorkflowRunShapeForWorkflowRunDetails.
+type WorkflowRunShapeForWorkflowRunDetails = []WorkflowRunShapeItemForWorkflowRunDetails
+
+// WorkflowRunShapeItemForWorkflowRunDetails defines model for WorkflowRunShapeItemForWorkflowRunDetails.
+type WorkflowRunShapeItemForWorkflowRunDetails struct {
 	Children []openapi_types.UUID `json:"children"`
 	Parent   openapi_types.UUID   `json:"parent"`
 }

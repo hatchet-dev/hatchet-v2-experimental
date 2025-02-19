@@ -104,30 +104,64 @@ WorkflowRun:
     - status
     - triggeredBy
 
-WorkflowRunShapeItem:
+WorkflowRunShape:
   type: object
   properties:
-    parent:
+    metadata:
+      $ref: "./metadata.yaml#/APIResourceMeta"
+    tenantId:
       type: string
-      format: uuid
-      minLength: 36
-      maxLength: 36
-    children:
+    workflowId:
+      type: string
+    workflowVersionId:
+      type: string
+    workflowVersion:
+      $ref: "./_index.yaml#/WorkflowVersion"
+    status:
+      $ref: "#/WorkflowRunStatus"
+    displayName:
+      type: string
+    jobRuns:
       type: array
       items:
-        type: string
-        format: uuid
-        minLength: 36
-        maxLength: 36
+        $ref: "#/JobRun"
+    triggeredBy:
+      $ref: "#/WorkflowRunTriggeredBy"
+    input:
+      type: object
+      additionalProperties: true
+    error:
+      type: string
+    startedAt:
+      type: string
+      format: date-time
+    finishedAt:
+      type: string
+      format: date-time
+    duration:
+      type: integer
+      example: 1000
+    parentId:
+      type: string
+      example: bb214807-246e-43a5-a25d-41761d1cff9e
+      minLength: 36
+      maxLength: 36
+      format: uuid
+    parentStepRunId:
+      type: string
+      example: bb214807-246e-43a5-a25d-41761d1cff9e
+      minLength: 36
+      maxLength: 36
+      format: uuid
+    additionalMetadata:
+      type: object
+      additionalProperties: true
   required:
-    - parent
-    - children
-
-WorkflowRunShape:
-  type: array
-  items:
-    $ref: "#/WorkflowRunShapeItem"
-
+    - metadata
+    - tenantId
+    - workflowVersionId
+    - status
+    - triggeredBy
 
 WorkflowRunList:
   type: object
