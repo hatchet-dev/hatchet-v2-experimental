@@ -45,20 +45,12 @@ const WorkflowRunVisualizer = ({
     ...queries.v2WorkflowRuns.details(tenant.metadata.id, params.run),
   });
 
-  if (isLoading || isError) {
-    return null;
-  }
-
   const shape = data?.shape;
   const tasks = data?.tasks;
 
-  if (!shape || !tasks) {
-    return null;
-  }
-
   const edges: Edge[] = useMemo(
     () =>
-      shape.flatMap((task) =>
+      shape?.flatMap((task) =>
         task.children.map((childId) => ({
           id: `${task.parent}-${childId}`,
           source: task.parent,
@@ -73,17 +65,17 @@ const WorkflowRunVisualizer = ({
           },
           type: 'smoothstep',
         })),
-      ),
+      ) || [],
     [shape, theme],
   );
 
   const nodes: Node[] = useMemo(
     () =>
-      tasks.map((task) => {
-        const hasParent = shape.some((s) =>
+      tasks?.map((task) => {
+        const hasParent = shape?.some((s) =>
           s.children.includes(task.metadata.id),
         );
-        const hasChild = shape.some((s) => s.parent === task.metadata.id);
+        const hasChild = shape?.some((s) => s.parent === task.metadata.id);
 
         // TODO: get the actual number of children
         const childWorkflowsCount = 0;
@@ -96,7 +88,10 @@ const WorkflowRunVisualizer = ({
               : hasChild
                 ? 'output_only'
                 : 'input_only',
-          onClick: () => {},
+          onClick: () => {
+            console.log('Firing node onClick');
+            setSelectedTaskRunId(task.metadata.id);
+          },
           childWorkflowsCount,
         };
 
@@ -107,7 +102,7 @@ const WorkflowRunVisualizer = ({
           data,
           selectable: true,
         };
-      }),
+      }) || [],
     [shape],
   );
 
@@ -155,6 +150,10 @@ const WorkflowRunVisualizer = ({
     () => getLayoutedElements(nodes, edges),
     [nodes, edges],
   );
+
+  if (isLoading || isError || !shape || !tasks) {
+    return null;
+  }
 
   return (
     <div className="w-full h-[300px]">

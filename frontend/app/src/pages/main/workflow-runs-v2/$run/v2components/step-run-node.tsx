@@ -1,25 +1,11 @@
 import { Label } from '@/components/ui/label';
-import {
-  Step,
-  StepRun,
-  StepRunStatus,
-  V2TaskStatus,
-  V2TaskSummary,
-} from '@/lib/api';
+import { StepRun, StepRunStatus, V2TaskStatus, V2TaskSummary } from '@/lib/api';
 import { cn, formatDuration } from '@/lib/utils';
-import { memo, useState } from 'react';
+import { memo } from 'react';
 import { Handle, Position } from 'reactflow';
 import { RunStatus, V2RunIndicator } from '../../components/run-statuses';
 import RelativeDate from '@/components/molecules/relative-date';
 import { TabOption } from './step-run-detail/step-run-detail';
-
-export interface StepRunNodeProps {
-  stepRun: StepRun;
-  step: Step;
-  graphVariant: 'default' | 'input_only' | 'output_only' | 'none';
-  //   selected: 'none' | 'selected' | 'not_selected';
-  onClick: (defaultOpenTab?: TabOption) => void;
-}
 
 export type NodeData = {
   task: V2TaskSummary;
@@ -31,7 +17,6 @@ export type NodeData = {
 // eslint-disable-next-line react/display-name
 export default memo(({ data }: { data: NodeData }) => {
   const variant = data.graphVariant;
-  const [isHovering, setIsHovering] = useState(false);
 
   const startedAtEpoch = data.task.startedAt
     ? new Date(data.task.startedAt).getTime()
@@ -52,22 +37,16 @@ export default memo(({ data }: { data: NodeData }) => {
       )}
       <div
         key={data.task.metadata.id}
-        // data-step-id={step.metadata.id}
+        data-step-id={data.task.metadata.id}
         className={cn(
           `step-run-card shadow-md rounded-sm py-3 px-2 mb-1 w-full text-xs text-[#050c1c] dark:text-[#ffffff] font-semibold font-mono`,
           `transition-all duration-300 ease-in-out`,
           `cursor-pointer`,
           `flex flex-row items-center justify-between gap-4 border-2 dark:border-[1px]`,
           `bg-[#ffffff] dark:bg-[#050c1c]`,
+          'hover:opacity-100 opacity-80',
+          'h-[30px]',
         )}
-        style={{
-          height: '30px',
-          opacity: isHovering ? 1 : 0.8,
-        }}
-        // FIXME: Onclick handler
-        onClick={() => {}}
-        onMouseEnter={() => setIsHovering(true)}
-        onMouseLeave={() => setIsHovering(false)}
       >
         {data.task.status == V2TaskStatus.RUNNING && (
           <span className="spark mask-gradient animate-flip before:animate-rotate absolute inset-0 h-[100%] w-[100%] overflow-hidden [mask:linear-gradient(#ccc,_transparent_50%)] before:absolute before:aspect-square before:w-[200%] before:rotate-[-90deg] before:bg-[conic-gradient(from_0deg,transparent_0_340deg,#ccc_360deg)] before:content-[''] before:[inset:0_auto_auto_50%] before:[translate:-50%_-15%]" />
@@ -107,7 +86,7 @@ export default memo(({ data }: { data: NodeData }) => {
           style={{
             height: '30px',
           }}
-          //FIXME: onClick handler
+          // FIXME: onClick handler
           onClick={() => {}}
         >
           <div className="truncate flex-grow">

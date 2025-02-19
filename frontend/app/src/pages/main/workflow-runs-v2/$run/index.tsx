@@ -67,7 +67,6 @@ export default function ExpandedWorkflowRun() {
     return null;
   }
 
-  // FIXME: This is a bug
   const inputData = JSON.stringify(workflowRun.input || {});
   const additionalMetadata = workflowRun.additionalMetadata;
 

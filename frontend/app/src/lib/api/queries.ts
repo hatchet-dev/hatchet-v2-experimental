@@ -222,7 +222,8 @@ export const queries = createQueryKeyStore({
     }),
     details: (tenant: string, workflowRunId: string) => ({
       queryKey: ['workflow-run-details:get', tenant, workflowRunId],
-      queryFn: async () => (await api.v2WorkflowRunGet(tenant, workflowRunId)).data,
+      queryFn: async () =>
+        (await api.v2WorkflowRunGet(tenant, workflowRunId)).data,
     }),
   },
   v2Tasks: {
@@ -246,15 +247,27 @@ export const queries = createQueryKeyStore({
     }),
   },
   v2TaskEvents: {
-    list: (tenant: string, query: ListWorkflowRunsQuery, taskRunId?: string | undefined, workflowRunId?: string | undefined) => ({
-      queryKey: ['v2:workflow-run:list', tenant, taskRunId, workflowRunId, query],
+    list: (
+      tenant: string,
+      query: ListWorkflowRunsQuery,
+      taskRunId?: string | undefined,
+      workflowRunId?: string | undefined,
+    ) => ({
+      queryKey: [
+        'v2:workflow-run:list',
+        tenant,
+        taskRunId,
+        workflowRunId,
+        query,
+      ],
       queryFn: async () => {
         if (taskRunId) {
-          return (await api.v2TaskEventList(taskRunId, query)).data
+          return (await api.v2TaskEventList(taskRunId, query)).data;
         } else if (workflowRunId) {
-          return (await api.v2WorkflowRunTaskEventsList(tenant, workflowRunId)).data
+          return (await api.v2WorkflowRunTaskEventsList(tenant, workflowRunId))
+            .data;
         } else {
-          throw new Error('Either task or workflowRunId must be set')
+          throw new Error('Either task or workflowRunId must be set');
         }
       },
     }),
