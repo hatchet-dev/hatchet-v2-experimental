@@ -82,10 +82,8 @@ export default memo(({ data }: { data: NodeData }) => {
             `cursor-pointer`,
             `flex flex-row items-center justify-start border-2 dark:border-[1px]`,
             `bg-[#ffffff] dark:bg-[#050c1c]`,
+            'h-[30px]',
           )}
-          style={{
-            height: '30px',
-          }}
           // FIXME: onClick handler
           onClick={() => {}}
         >
