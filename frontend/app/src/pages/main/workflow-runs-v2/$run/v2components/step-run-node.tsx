@@ -25,16 +25,16 @@ export interface StepRunNodeProps {
   onClick: (defaultOpenTab?: TabOption) => void;
 }
 
-type NodeData = {
+export type NodeData = {
   task: V2TaskSummary;
-  label: string;
+  graphVariant: 'default' | 'input_only' | 'output_only' | 'none';
+  onClick: (defaultOpenTab?: TabOption) => void;
+  childWorkflowsCount: number;
 };
 
 // eslint-disable-next-line react/display-name
 export default memo(({ data }: { data: NodeData }) => {
-  // FIXME
-  // const variant = data.graphVariant;
-  const variant = 'default';
+  const variant = data.graphVariant;
   const [isHovering, setIsHovering] = useState(false);
 
   const startedAtEpoch = data.task.startedAt
@@ -98,7 +98,7 @@ export default memo(({ data }: { data: NodeData }) => {
           />
         )}
       </div>
-      {/* {stepRun?.childWorkflowsCount ? (
+      {data.childWorkflowsCount ? (
         <div
           key={`${data.task.metadata.id}-child-workflows`}
           className={cn(
@@ -115,10 +115,10 @@ export default memo(({ data }: { data: NodeData }) => {
           onClick={() => {}}
         >
           <div className="truncate flex-grow">
-            {data.task.displayName}: {stepRun.childWorkflowsCount} children
+            {data.task.displayName}: {data.childWorkflowsCount} children
           </div>
         </div>
-      ) : null} */}
+      ) : null}
     </div>
   );
 });

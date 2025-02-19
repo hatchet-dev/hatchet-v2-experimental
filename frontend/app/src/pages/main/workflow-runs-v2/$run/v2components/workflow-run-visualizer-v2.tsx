@@ -5,25 +5,19 @@ import ReactFlow, {
   Node,
   Edge,
   SmoothStepEdge,
-  Handle,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import dagre from 'dagre';
 import { useTheme } from '@/components/theme-provider';
 import { useQuery } from '@tanstack/react-query';
-import { queries, V2TaskSummary } from '@/lib/api';
+import { queries } from '@/lib/api';
 import { useTenant } from '@/lib/atoms';
 import invariant from 'tiny-invariant';
 import { useParams } from 'react-router-dom';
-import stepRunNode from './step-run-node';
+import stepRunNode, { NodeData } from './step-run-node';
 
 const connectionLineStyleDark = { stroke: '#fff' };
 const connectionLineStyleLight = { stroke: '#000' };
-
-type NodeData = {
-  task: V2TaskSummary;
-  label: string;
-};
 
 const nodeTypes = {
   stepNode: stepRunNode,
@@ -79,16 +73,35 @@ const WorkflowRunVisualizer = () => {
 
   const nodes: Node[] = useMemo(
     () =>
-      tasks.map((task) => ({
-        id: task.metadata.id,
-        type: 'stepNode',
-        position: { x: 0, y: 0 },
-        data: {
+      tasks.map((task) => {
+        const hasParent = shape.some((s) =>
+          s.children.includes(task.metadata.id),
+        );
+        const hasChild = shape.some((s) => s.parent === task.metadata.id);
+
+        // TODO: get the actual number of children
+        const childWorkflowsCount = 0;
+
+        const data: NodeData = {
           task,
-          label: task.metadata.id,
-        },
-        selectable: true,
-      })),
+          graphVariant:
+            hasParent && hasChild
+              ? 'default'
+              : hasChild
+                ? 'output_only'
+                : 'input_only',
+          onClick: () => {},
+          childWorkflowsCount,
+        };
+
+        return {
+          id: task.metadata.id,
+          type: 'stepNode',
+          position: { x: 0, y: 0 },
+          data,
+          selectable: true,
+        };
+      }),
     [shape],
   );
 
