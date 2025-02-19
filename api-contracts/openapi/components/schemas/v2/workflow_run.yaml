@@ -44,6 +44,10 @@ V2WorkflowRun:
     input:
       type: object
       description: The input of the task run.
+    createdAt:
+      type: string
+      format: date-time
+      description: The timestamp the task run was created.
   required:
     - metadata
     - id

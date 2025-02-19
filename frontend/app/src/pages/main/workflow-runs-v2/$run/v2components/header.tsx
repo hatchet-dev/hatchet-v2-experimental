@@ -142,7 +142,7 @@ export const V2RunSummary = () => {
   timings.push(
     <div key="created" className="text-sm text-muted-foreground">
       {'Created '}
-      <RelativeDate date={data.run.startedAt} />
+      <RelativeDate date={data.run.createdAt} />
     </div>,
   );
 

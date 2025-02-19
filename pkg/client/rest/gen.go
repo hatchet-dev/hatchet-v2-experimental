@@ -1286,6 +1286,9 @@ type V2WorkflowRun struct {
 	// AdditionalMetadata Additional metadata for the task run.
 	AdditionalMetadata *map[string]interface{} `json:"additionalMetadata,omitempty"`
 
+	// CreatedAt The timestamp the task run was created.
+	CreatedAt *time.Time `json:"createdAt,omitempty"`
+
 	// DisplayName The display name of the task run.
 	DisplayName string `json:"displayName"`
 

@@ -277,6 +277,11 @@ export interface V2WorkflowRun {
   workflowVersionId?: string;
   /** The input of the task run. */
   input: object;
+  /**
+   * The timestamp the task run was created.
+   * @format date-time
+   */
+  createdAt?: string;
 }
 
 export interface V2WorkflowRunList {

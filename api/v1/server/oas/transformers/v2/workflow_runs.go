@@ -40,6 +40,7 @@ func ToWorkflowRun(task *repository.WorkflowRunData) gen.V2WorkflowRun {
 			CreatedAt: task.InsertedAt.Time,
 			UpdatedAt: task.InsertedAt.Time,
 		},
+		CreatedAt:          &task.CreatedAt.Time,
 		DisplayName:        task.DisplayName,
 		Duration:           durationPtr,
 		StartedAt:          startedAt,

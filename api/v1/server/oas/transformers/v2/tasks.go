@@ -281,6 +281,7 @@ func ToWorkflowRunDetails(
 
 	parsedWorkflowRun := gen.V2WorkflowRun{
 		AdditionalMetadata: &map[string]interface{}{},
+		CreatedAt:          &workflowRun.CreatedAt.Time,
 		DisplayName:        workflowRun.DisplayName,
 		Duration:           &duration,
 		ErrorMessage:       &workflowRun.ErrorMessage,
