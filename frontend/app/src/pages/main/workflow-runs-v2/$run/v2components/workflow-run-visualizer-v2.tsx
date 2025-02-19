@@ -25,7 +25,6 @@ type NodeData = {
 };
 
 const HatchetNode = ({ data }: { data: NodeData }) => {
-  console.log(data);
   return (
     <div className="text-updater-node">
       <Handle type="target" position={Position.Top} />
