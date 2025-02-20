@@ -11,6 +11,8 @@ import dagre from 'dagre';
 import { useTheme } from '@/components/theme-provider';
 import stepRunNode, { NodeData } from './step-run-node';
 import { useWorkflowDetails } from '../../hooks';
+import invariant from 'tiny-invariant';
+import { V2TaskStatus } from '@/lib/api';
 
 const connectionLineStyleDark = { stroke: '#fff' };
 const connectionLineStyleLight = { stroke: '#000' };
@@ -35,32 +37,38 @@ const WorkflowRunVisualizer = ({
 
   const edges: Edge[] = useMemo(
     () =>
-      shape?.flatMap((task) =>
-        task.children.map((childId) => ({
-          id: `${task.parent}-${childId}`,
-          source: task.parent,
-          target: childId,
-          animated: true,
-          style:
-            theme === 'dark'
-              ? connectionLineStyleDark
-              : connectionLineStyleLight,
-          markerEnd: {
-            type: MarkerType.ArrowClosed,
-          },
-          type: 'smoothstep',
-        })),
+      shape.flatMap((task) =>
+        task.children.map((childId) => {
+          const child = taskRuns.find((t) => t.metadata.id === childId);
+
+          invariant(child);
+
+          return {
+            id: `${task.parent}-${childId}`,
+            source: task.parent,
+            target: childId,
+            animated: child.status === V2TaskStatus.RUNNING,
+            style:
+              theme === 'dark'
+                ? connectionLineStyleDark
+                : connectionLineStyleLight,
+            markerEnd: {
+              type: MarkerType.ArrowClosed,
+            },
+            type: 'smoothstep',
+          };
+        }),
       ) || [],
     [shape, theme],
   );
 
   const nodes: Node[] = useMemo(
     () =>
-      taskRuns?.map((task) => {
-        const hasParent = shape?.some((s) =>
+      taskRuns.map((task) => {
+        const hasParent = shape.some((s) =>
           s.children.includes(task.metadata.id),
         );
-        const hasChild = shape?.some((s) => s.parent === task.metadata.id);
+        const hasChild = shape.some((s) => s.parent === task.metadata.id);
 
         // TODO: get the actual number of children
         const childWorkflowsCount = 0;
@@ -152,6 +160,10 @@ const WorkflowRunVisualizer = ({
           setSelectedTaskRunId(node.id);
         }}
         maxZoom={1}
+        connectionLineStyle={
+          theme === 'dark' ? connectionLineStyleDark : connectionLineStyleLight
+        }
+        snapToGrid={true}
       />
     </div>
   );
