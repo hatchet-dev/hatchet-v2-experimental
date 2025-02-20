@@ -1,6 +1,8 @@
 package workflowruns
 
 import (
+	"fmt"
+
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/labstack/echo/v4"
@@ -13,7 +15,10 @@ import (
 
 func (t *V2WorkflowRunsService) V2WorkflowRunGet(ctx echo.Context, request gen.V2WorkflowRunGetRequestObject) (gen.V2WorkflowRunGetResponseObject, error) {
 	tenant := ctx.Get("tenant").(*db.TenantModel)
-	workflowRunId := request.WorkflowRunId
+
+	fmt.Println(ctx.Get("tenant"), request.V2WorkflowRun)
+	workflowRunId := request.V2WorkflowRun
+
 	requestContext := ctx.Request().Context()
 
 	taskRunEvents, err := t.config.EngineRepository.OLAP().ListTaskRunEventsByWorkflowRunId(
@@ -26,7 +31,7 @@ func (t *V2WorkflowRunsService) V2WorkflowRunGet(ctx echo.Context, request gen.V
 		return nil, err
 	}
 
-	workflowRunPtr, taskMetadata, err := t.config.OLAPRepository.ReadWorkflowRun(requestContext, sqlchelpers.UUIDFromStr(tenant.ID), sqlchelpers.UUIDFromStr(workflowRunId.String()))
+	workflowRunPtr, taskMetadata, err := t.config.OLAPRepository.ReadWorkflowRun(requestContext, sqlchelpers.UUIDFromStr(workflowRunId.String()))
 
 	if err != nil {
 		return nil, err

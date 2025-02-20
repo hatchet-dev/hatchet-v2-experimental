@@ -10,7 +10,7 @@ import (
 
 func (t *V2WorkflowRunsService) V2WorkflowRunTaskEventsList(ctx echo.Context, request gen.V2WorkflowRunTaskEventsListRequestObject) (gen.V2WorkflowRunTaskEventsListResponseObject, error) {
 	tenant := ctx.Get("tenant").(*db.TenantModel)
-	workflowRunId := request.WorkflowRunId
+	workflowRunId := request.V2WorkflowRun
 
 	taskRunEvents, err := t.config.EngineRepository.OLAP().ListTaskRunEventsByWorkflowRunId(
 		ctx.Request().Context(),

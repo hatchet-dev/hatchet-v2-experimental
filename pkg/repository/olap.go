@@ -92,7 +92,7 @@ type WorkflowRunData struct {
 
 type OLAPEventRepository interface {
 	ReadTaskRun(ctx context.Context, taskExternalId string) (*timescalev2.V2TasksOlap, error)
-	ReadWorkflowRun(ctx context.Context, tenantId, workflowRunExternalId pgtype.UUID) (*WorkflowRunData, []TaskMetadata, error)
+	ReadWorkflowRun(ctx context.Context, workflowRunExternalId pgtype.UUID) (*WorkflowRunData, []TaskMetadata, error)
 	ReadTaskRunData(ctx context.Context, tenantId pgtype.UUID, taskId int64, taskInsertedAt pgtype.Timestamptz) (*timescalev2.PopulateSingleTaskRunDataRow, *pgtype.UUID, error)
 	ListTasks(ctx context.Context, tenantId string, opts ListTaskRunOpts) ([]*timescalev2.PopulateTaskRunDataRow, int, error)
 	ListWorkflowRuns(ctx context.Context, tenantId string, opts ListWorkflowRunOpts) ([]*WorkflowRunData, int, error)
@@ -318,11 +318,8 @@ func ParseTaskMetadata(jsonData []byte) ([]TaskMetadata, error) {
 	return tasks, nil
 }
 
-func (r *olapEventRepository) ReadWorkflowRun(ctx context.Context, tenantId, workflowRunExternalId pgtype.UUID) (*WorkflowRunData, []TaskMetadata, error) {
-	row, err := r.queries.ReadWorkflowRunByExternalId(ctx, r.pool, timescalev2.ReadWorkflowRunByExternalIdParams{
-		Workflowrunexternalid: workflowRunExternalId,
-		Tenantid:              tenantId,
-	})
+func (r *olapEventRepository) ReadWorkflowRun(ctx context.Context, workflowRunExternalId pgtype.UUID) (*WorkflowRunData, []TaskMetadata, error) {
+	row, err := r.queries.ReadWorkflowRunByExternalId(ctx, r.pool, workflowRunExternalId)
 
 	if err != nil {
 		return nil, nil, err

@@ -1,18 +1,15 @@
 import { queries } from '@/lib/api';
-import { TenantContextType } from '@/lib/outlet';
 import { useQuery } from '@tanstack/react-query';
-import { useOutletContext, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import invariant from 'tiny-invariant';
 
 export const useWorkflowDetails = () => {
-  const { tenant } = useOutletContext<TenantContextType>();
   const params = useParams();
 
-  invariant(tenant);
   invariant(params.run);
 
   const { data, isLoading, isError } = useQuery({
-    ...queries.v2WorkflowRuns.details(tenant.metadata.id, params.run),
+    ...queries.v2WorkflowRuns.details(params.run),
   });
 
   const shape = data?.shape || [];

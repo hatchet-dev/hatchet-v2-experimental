@@ -890,9 +890,7 @@ WITH dags AS (
     SELECT d.*
     FROM v2_lookup_table lt
     JOIN v2_dags_olap d ON (lt.tenant_id, lt.dag_id, lt.inserted_at) = (d.tenant_id, d.id, d.inserted_at)
-    WHERE
-        lt.external_id = @workflowRunExternalId::uuid
-        AND lt.tenant_id = @tenantId::uuid
+    WHERE lt.external_id = @workflowRunExternalId::uuid
 ), runs AS (
     SELECT
         d.id AS dag_id,
@@ -909,9 +907,7 @@ WITH dags AS (
         d.workflow_version_id
     FROM v2_runs_olap r
     JOIN dags d ON (r.tenant_id, r.external_id, r.inserted_at) = (d.tenant_id, d.external_id, d.inserted_at)
-    WHERE
-        r.tenant_id = @tenantId::uuid
-        AND r.kind = 'DAG'
+    WHERE r.kind = 'DAG'
 ), relevant_events AS (
     SELECT
         r.run_id,
