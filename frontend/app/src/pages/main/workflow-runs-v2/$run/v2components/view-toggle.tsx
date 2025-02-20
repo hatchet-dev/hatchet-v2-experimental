@@ -1,16 +1,13 @@
 import { Button } from '@/components/ui/button';
-import {
-  WorkflowRunShape,
-  WorkflowRunShapeForWorkflowRunDetails,
-} from '@/lib/api';
+import { queries, WorkflowRunShape } from '@/lib/api';
 import { preferredWorkflowRunViewAtom } from '@/lib/atoms';
 import { type ViewOptions } from '@/lib/atoms';
+import { TenantContextType } from '@/lib/outlet';
+import { useQuery } from '@tanstack/react-query';
 import { useAtom } from 'jotai';
 import { BiExitFullscreen, BiExpand } from 'react-icons/bi';
-
-type Props = {
-  shape: WorkflowRunShapeForWorkflowRunDetails;
-};
+import { useOutletContext, useParams } from 'react-router-dom';
+import invariant from 'tiny-invariant';
 
 const ToggleIcon = ({ view }: { view: ViewOptions | undefined }) => {
   switch (view) {
@@ -27,9 +24,24 @@ const ToggleIcon = ({ view }: { view: ViewOptions | undefined }) => {
   }
 };
 
-export const ViewToggle = ({ shape }: Props) => {
+export const ViewToggle = () => {
   const [view, setView] = useAtom(preferredWorkflowRunViewAtom);
   const otherView = view === 'graph' ? 'minimap' : 'graph';
+  const { tenant } = useOutletContext<TenantContextType>();
+  const params = useParams();
+
+  invariant(tenant);
+  invariant(params.run);
+
+  const { data, isLoading, isError } = useQuery({
+    ...queries.v2WorkflowRuns.details(tenant.metadata.id, params.run),
+  });
+
+  if (isLoading || isError) {
+    return null;
+  }
+
+  const shape = data?.shape || [];
 
   // only render if there are at least two dependent steps, otherwise the view toggle is not needed
   if (!shape.some((t) => t.children.length > 0)) {

@@ -1,4 +1,9 @@
-import { queries, V2TaskStatus, WorkflowRunStatus } from '@/lib/api';
+import {
+  queries,
+  V2TaskStatus,
+  WorkflowRunShapeForWorkflowRunDetails,
+  WorkflowRunStatus,
+} from '@/lib/api';
 import { TenantContextType } from '@/lib/outlet';
 import { useQuery } from '@tanstack/react-query';
 import { useOutletContext, useParams } from 'react-router-dom';
@@ -39,8 +44,32 @@ function statusToBadgeVariant(status: V2TaskStatus) {
   }
 }
 
-export default function ExpandedWorkflowRun() {
+const GraphView = ({
+  shape,
+  handleTaskRunExpand,
+}: {
+  shape: WorkflowRunShapeForWorkflowRunDetails;
+  handleTaskRunExpand: (stepRunId: string) => void;
+}) => {
   const [view] = useAtom(preferredWorkflowRunViewAtom);
+
+  const showGraphView =
+    view == 'graph' && shape.some((task) => task.children.length > 0);
+
+  return showGraphView ? (
+    <WorkflowRunVisualizer setSelectedTaskRunId={handleTaskRunExpand} />
+  ) : (
+    <JobMiniMap
+      onClick={(stepRunId) => {
+        if (stepRunId) {
+          handleTaskRunExpand(stepRunId);
+        }
+      }}
+    />
+  );
+};
+
+export default function ExpandedWorkflowRun() {
   const { tenant } = useOutletContext<TenantContextType>();
   const params = useParams();
   const [selectedTaskRunId, setSelectedTaskRunId] = useState<string>();
@@ -63,11 +92,9 @@ export default function ExpandedWorkflowRun() {
   }
 
   const workflowRun = data?.run;
-  const taskEvents = data?.taskEvents;
   const shape = data?.shape;
-  const tasks = data?.tasks;
 
-  if (!workflowRun || !taskEvents || !shape || !tasks) {
+  if (!workflowRun || !shape) {
     return null;
   }
 
@@ -86,27 +113,8 @@ export default function ExpandedWorkflowRun() {
           </Badge>
         </div>
         <div className="w-full h-fit flex overflow-auto relative bg-slate-100 dark:bg-slate-900">
-          {view == 'graph' &&
-            shape.some((task) => task.children.length > 0) && (
-              <WorkflowRunVisualizer
-                setSelectedTaskRunId={handleTaskRunExpand}
-              />
-            )}
-          {(view == 'minimap' ||
-            (!shape.some((task) => task.children.length > 0) && (
-              <WorkflowRunVisualizer
-                setSelectedTaskRunId={handleTaskRunExpand}
-              />
-            ))) && (
-            <JobMiniMap
-              onClick={(stepRunId) => {
-                if (stepRunId) {
-                  handleTaskRunExpand(stepRunId);
-                }
-              }}
-            />
-          )}
-          <ViewToggle shape={shape} />
+          <GraphView shape={shape} handleTaskRunExpand={handleTaskRunExpand} />
+          <ViewToggle />
         </div>
         <div className="h-4" />
         <Tabs defaultValue="activity">
@@ -124,18 +132,14 @@ export default function ExpandedWorkflowRun() {
           </TabsList>
           <TabsContent value="activity">
             <div className="h-4" />
-            {
-              <StepRunEvents
-                workflowRunId={params.run}
-                fallbackTaskDisplayName={workflowRun.displayName}
-                onClick={handleTaskRunExpand}
-              />
-            }
+            <StepRunEvents
+              workflowRunId={params.run}
+              fallbackTaskDisplayName={workflowRun.displayName}
+              onClick={handleTaskRunExpand}
+            />
           </TabsContent>
           <TabsContent value="input">
-            {inputData && (
-              <WorkflowRunInputDialog input={JSON.parse(inputData)} />
-            )}
+            <WorkflowRunInputDialog input={JSON.parse(inputData)} />
           </TabsContent>
           <TabsContent value="additional-metadata">
             <CodeHighlighter
@@ -146,21 +150,19 @@ export default function ExpandedWorkflowRun() {
           </TabsContent>
         </Tabs>
       </div>
-      {inputData && (
-        <Sheet
-          open={isSidebarOpen}
-          onOpenChange={(open) => setIsSidebarOpen(open)}
-        >
-          <SheetContent className="w-fit min-w-[56rem] max-w-4xl sm:max-w-2xl z-[60]">
-            {selectedTaskRunId && (
-              <StepRunDetail
-                taskRunId={selectedTaskRunId}
-                defaultOpenTab={TabOption.Output}
-              />
-            )}
-          </SheetContent>
-        </Sheet>
-      )}
+      <Sheet
+        open={isSidebarOpen}
+        onOpenChange={(open) => setIsSidebarOpen(open)}
+      >
+        <SheetContent className="w-fit min-w-[56rem] max-w-4xl sm:max-w-2xl z-[60]">
+          {selectedTaskRunId && (
+            <StepRunDetail
+              taskRunId={selectedTaskRunId}
+              defaultOpenTab={TabOption.Output}
+            />
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
