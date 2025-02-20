@@ -56,39 +56,19 @@ const StepRunDetail: React.FC<StepRunDetailProps> = ({
   const { tenant } = useTenant();
 
   const tenantId = tenant?.metadata.id;
-
-  if (!tenantId) {
-    throw new Error('Tenant not found');
-  }
-
-  const errors: string[] = [];
-
-  const eventsQuery = useQuery({
-    ...queries.v2TaskEvents.list(
-      tenantId,
-      {
-        offset: 0,
-        limit: 50,
-      },
-      taskRunId,
-    ),
-    refetchInterval: () => {
-      return 5000;
-    },
-  });
+  invariant(tenantId);
 
   const taskRunQuery = useQuery({
     ...queries.v2Tasks.get(taskRunId),
   });
 
-  const events = eventsQuery.data?.rows || [];
   const taskRun = taskRunQuery.data;
 
-  if (eventsQuery.isLoading || taskRunQuery.isLoading) {
+  if (taskRunQuery.isLoading) {
     return <Loading />;
   }
 
-  if (events.length === 0 || !taskRun) {
+  if (!taskRun) {
     return <div>No events found</div>;
   }
 
@@ -140,24 +120,19 @@ const StepRunDetail: React.FC<StepRunDetailProps> = ({
           <XCircleIcon className="w-4 h-4" />
           Cancel
         </Button>
-        {showViewTaskRunButton && (
-          <Link to={`/task-runs/${taskRunId}`}>
-            <Button size={'sm'} className="px-2 py-2 gap-2" variant={'outline'}>
-              <LinkIcon className="w-4 h-4" />
-              View Task Run
-            </Button>
-          </Link>
-        )}
+        <Link
+          to={
+            showViewTaskRunButton
+              ? `/task-runs/${taskRunId}`
+              : `/workflow-runs/${taskRunId}`
+          }
+        >
+          <Button size={'sm'} className="px-2 py-2 gap-2" variant={'outline'}>
+            <LinkIcon className="w-4 h-4" />
+            View Task Run
+          </Button>
+        </Link>
       </div>
-      {errors && errors.length > 0 && (
-        <div className="mt-4">
-          {errors.map((error, index) => (
-            <div key={index} className="text-red-500">
-              {error}
-            </div>
-          ))}
-        </div>
-      )}
       <div className="flex flex-row gap-2 items-center">
         <V2StepRunSummary taskRunId={taskRunId} />
       </div>
