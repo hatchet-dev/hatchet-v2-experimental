@@ -16,7 +16,6 @@ import {
 } from '@/components/ui/breadcrumb';
 import { formatDuration } from '@/lib/utils';
 import RelativeDate from '@/components/molecules/relative-date';
-import { useTenant } from '@/lib/atoms';
 import { useWorkflowDetails } from '../../hooks';
 
 export const WORKFLOW_RUN_TERMINAL_STATUSES = [

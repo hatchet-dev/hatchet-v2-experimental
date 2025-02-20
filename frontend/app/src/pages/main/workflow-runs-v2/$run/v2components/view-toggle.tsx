@@ -1,13 +1,9 @@
 import { Button } from '@/components/ui/button';
-import { queries, WorkflowRunShape } from '@/lib/api';
+import { WorkflowRunShape } from '@/lib/api';
 import { preferredWorkflowRunViewAtom } from '@/lib/atoms';
 import { type ViewOptions } from '@/lib/atoms';
-import { TenantContextType } from '@/lib/outlet';
-import { useQuery } from '@tanstack/react-query';
 import { useAtom } from 'jotai';
 import { BiExitFullscreen, BiExpand } from 'react-icons/bi';
-import { useOutletContext, useParams } from 'react-router-dom';
-import invariant from 'tiny-invariant';
 import { useWorkflowDetails } from '../../hooks';
 
 const ToggleIcon = ({ view }: { view: ViewOptions | undefined }) => {

@@ -1,13 +1,9 @@
 import {
-  queries,
   V2TaskStatus,
   WorkflowRunShapeForWorkflowRunDetails,
   WorkflowRunStatus,
 } from '@/lib/api';
-import { TenantContextType } from '@/lib/outlet';
-import { useQuery } from '@tanstack/react-query';
-import { useOutletContext, useParams } from 'react-router-dom';
-import invariant from 'tiny-invariant';
+import { useParams } from 'react-router-dom';
 import { WorkflowRunInputDialog } from './v2components/workflow-run-input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { StepRunEvents } from './v2components/step-run-events-for-workflow-run';

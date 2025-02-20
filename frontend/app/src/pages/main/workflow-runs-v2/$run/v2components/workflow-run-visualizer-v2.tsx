@@ -4,7 +4,7 @@ import ReactFlow, {
   MarkerType,
   Node,
   Edge,
-  SmoothStepEdge,
+  BezierEdge,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import dagre from 'dagre';
@@ -22,7 +22,7 @@ const nodeTypes = {
 };
 
 const edgeTypes = {
-  smoothstep: SmoothStepEdge,
+  smoothstep: BezierEdge,
 };
 
 const createNodeId = (taskId: string) => taskId;
@@ -59,7 +59,7 @@ const WorkflowRunVisualizer = ({
           };
         }),
       ) || [],
-    [shape, theme],
+    [shape, theme, taskRuns],
   );
 
   const nodes: Node[] = useMemo(
