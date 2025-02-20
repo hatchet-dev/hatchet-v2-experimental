@@ -25,6 +25,7 @@ import WorkflowRunVisualizer from './v2components/workflow-run-visualizer-v2';
 import { useAtom } from 'jotai';
 import { preferredWorkflowRunViewAtom } from '@/lib/atoms';
 import { JobMiniMap } from './v2components/mini-map';
+import { useWorkflowDetails } from '../hooks';
 
 export const WORKFLOW_RUN_TERMINAL_STATUSES = [
   WorkflowRunStatus.CANCELLED,
@@ -70,7 +71,6 @@ const GraphView = ({
 };
 
 export default function ExpandedWorkflowRun() {
-  const { tenant } = useOutletContext<TenantContextType>();
   const params = useParams();
   const [selectedTaskRunId, setSelectedTaskRunId] = useState<string>();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -80,21 +80,9 @@ export default function ExpandedWorkflowRun() {
     setIsSidebarOpen(true);
   }, []);
 
-  invariant(tenant);
-  invariant(params.run);
+  const { workflowRun, shape, isLoading, isError } = useWorkflowDetails();
 
-  const { data, isLoading, isError } = useQuery({
-    ...queries.v2WorkflowRuns.details(tenant.metadata.id, params.run),
-  });
-
-  if (isLoading || isError) {
-    return null;
-  }
-
-  const workflowRun = data?.run;
-  const shape = data?.shape;
-
-  if (!workflowRun || !shape) {
+  if (isLoading || isError || !workflowRun) {
     return null;
   }
 

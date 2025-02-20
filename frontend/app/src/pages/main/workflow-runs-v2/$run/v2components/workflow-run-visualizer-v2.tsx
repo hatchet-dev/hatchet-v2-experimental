@@ -9,12 +9,8 @@ import ReactFlow, {
 import 'reactflow/dist/style.css';
 import dagre from 'dagre';
 import { useTheme } from '@/components/theme-provider';
-import { useQuery } from '@tanstack/react-query';
-import { queries } from '@/lib/api';
-import { useTenant } from '@/lib/atoms';
-import invariant from 'tiny-invariant';
-import { useParams } from 'react-router-dom';
 import stepRunNode, { NodeData } from './step-run-node';
+import { useWorkflowDetails } from '../../hooks';
 
 const connectionLineStyleDark = { stroke: '#fff' };
 const connectionLineStyleLight = { stroke: '#000' };
@@ -35,18 +31,7 @@ const WorkflowRunVisualizer = ({
   setSelectedTaskRunId: (id: string) => void;
 }) => {
   const { theme } = useTheme();
-  const { tenant } = useTenant();
-  const params = useParams();
-
-  invariant(tenant);
-  invariant(params.run);
-
-  const { data, isLoading, isError } = useQuery({
-    ...queries.v2WorkflowRuns.details(tenant.metadata.id, params.run),
-  });
-
-  const shape = data?.shape;
-  const tasks = data?.tasks;
+  const { shape, taskRuns, isLoading, isError } = useWorkflowDetails();
 
   const edges: Edge[] = useMemo(
     () =>
@@ -71,7 +56,7 @@ const WorkflowRunVisualizer = ({
 
   const nodes: Node[] = useMemo(
     () =>
-      tasks?.map((task) => {
+      taskRuns?.map((task) => {
         const hasParent = shape?.some((s) =>
           s.children.includes(task.metadata.id),
         );
@@ -100,7 +85,7 @@ const WorkflowRunVisualizer = ({
           selectable: true,
         };
       }) || [],
-    [shape, tasks, setSelectedTaskRunId],
+    [shape, taskRuns, setSelectedTaskRunId],
   );
 
   const nodeWidth = 230;
@@ -148,7 +133,7 @@ const WorkflowRunVisualizer = ({
     [nodes, edges],
   );
 
-  if (isLoading || isError || !shape || !tasks) {
+  if (isLoading || isError) {
     return null;
   }
 

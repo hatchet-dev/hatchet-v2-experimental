@@ -1,11 +1,8 @@
 import { useMemo } from 'react';
-import { queries, V2TaskSummary } from '@/lib/api';
+import { V2TaskSummary } from '@/lib/api';
 import { TabOption } from './step-run-detail/step-run-detail';
 import StepRunNode from './step-run-node';
-import invariant from 'tiny-invariant';
-import { useQuery } from '@tanstack/react-query';
-import { useOutletContext, useParams } from 'react-router-dom';
-import { TenantContextType } from '@/lib/outlet';
+import { useWorkflowDetails } from '../../hooks';
 
 interface JobMiniMapProps {
   onClick: (stepRunId?: string, defaultOpenTab?: TabOption) => void;
@@ -18,18 +15,7 @@ type NodeRelationship = {
 };
 
 export const JobMiniMap = ({ onClick }: JobMiniMapProps) => {
-  const { tenant } = useOutletContext<TenantContextType>();
-  const params = useParams();
-
-  invariant(tenant);
-  invariant(params.run);
-
-  const { data, isLoading, isError } = useQuery({
-    ...queries.v2WorkflowRuns.details(tenant.metadata.id, params.run),
-  });
-
-  const shape = useMemo(() => data?.shape || [], [data]);
-  const tasks = useMemo(() => data?.tasks || [], [data]);
+  const { shape, taskRuns: tasks, isLoading, isError } = useWorkflowDetails();
 
   const taskRunRelationships: NodeRelationship[] = useMemo(
     () =>

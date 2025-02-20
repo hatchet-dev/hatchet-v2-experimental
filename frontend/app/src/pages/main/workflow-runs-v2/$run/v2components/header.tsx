@@ -1,9 +1,4 @@
-import { useOutletContext, useParams } from 'react-router-dom';
-
-import { V2TaskStatus, WorkflowRunStatus, queries } from '@/lib/api';
-import { useQuery } from '@tanstack/react-query';
-import invariant from 'tiny-invariant';
-import { TenantContextType } from '@/lib/outlet';
+import { V2TaskStatus, WorkflowRunStatus } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import {
   AdjustmentsHorizontalIcon,
@@ -22,6 +17,7 @@ import {
 import { formatDuration } from '@/lib/utils';
 import RelativeDate from '@/components/molecules/relative-date';
 import { useTenant } from '@/lib/atoms';
+import { useWorkflowDetails } from '../../hooks';
 
 export const WORKFLOW_RUN_TERMINAL_STATUSES = [
   WorkflowRunStatus.CANCELLED,
@@ -30,21 +26,11 @@ export const WORKFLOW_RUN_TERMINAL_STATUSES = [
 ];
 
 export const V2RunDetailHeader = () => {
-  const { tenant } = useOutletContext<TenantContextType>();
-  const params = useParams();
+  const { workflowRun, isLoading: loading } = useWorkflowDetails();
 
-  invariant(tenant);
-  invariant(params.run);
-
-  const { isLoading: loading, data } = useQuery({
-    ...queries.v2WorkflowRuns.details(tenant.metadata.id, params.run),
-  });
-
-  if (loading || !data) {
+  if (loading || !workflowRun) {
     return <div>Loading...</div>;
   }
-
-  const workflowRun = data?.run;
 
   return (
     <div className="flex flex-col gap-4">
@@ -123,34 +109,26 @@ export const V2RunDetailHeader = () => {
 };
 
 export const V2RunSummary = () => {
-  const { tenant } = useTenant();
-  const params = useParams();
-
-  invariant(tenant);
-  invariant(params.run);
-
-  const { data } = useQuery({
-    ...queries.v2WorkflowRuns.details(tenant.metadata.id, params.run),
-  });
+  const { workflowRun } = useWorkflowDetails();
 
   const timings = [];
 
-  if (!data) {
+  if (!workflowRun) {
     return null;
   }
 
   timings.push(
     <div key="created" className="text-sm text-muted-foreground">
       {'Created '}
-      <RelativeDate date={data.run.createdAt} />
+      <RelativeDate date={workflowRun.createdAt} />
     </div>,
   );
 
-  if (data.run.startedAt) {
+  if (workflowRun.startedAt) {
     timings.push(
       <div key="started" className="text-sm text-muted-foreground">
         {'Started '}
-        <RelativeDate date={data.run.startedAt} />
+        <RelativeDate date={workflowRun.startedAt} />
       </div>,
     );
   } else {
@@ -161,37 +139,37 @@ export const V2RunSummary = () => {
     );
   }
 
-  if (data.run.status === V2TaskStatus.CANCELLED && data.run.finishedAt) {
+  if (workflowRun.status === V2TaskStatus.CANCELLED && workflowRun.finishedAt) {
     timings.push(
       <div key="finished" className="text-sm text-muted-foreground">
         {'Cancelled '}
-        <RelativeDate date={data.run.finishedAt} />
+        <RelativeDate date={workflowRun.finishedAt} />
       </div>,
     );
   }
 
-  if (data.run.status === V2TaskStatus.FAILED && data.run.finishedAt) {
+  if (workflowRun.status === V2TaskStatus.FAILED && workflowRun.finishedAt) {
     timings.push(
       <div key="finished" className="text-sm text-muted-foreground">
         {'Failed '}
-        <RelativeDate date={data.run.finishedAt} />
+        <RelativeDate date={workflowRun.finishedAt} />
       </div>,
     );
   }
 
-  if (data.run.status === V2TaskStatus.COMPLETED && data.run.finishedAt) {
+  if (workflowRun.status === V2TaskStatus.COMPLETED && workflowRun.finishedAt) {
     timings.push(
       <div key="finished" className="text-sm text-muted-foreground">
         {'Succeeded '}
-        <RelativeDate date={data.run.finishedAt} />
+        <RelativeDate date={workflowRun.finishedAt} />
       </div>,
     );
   }
 
-  if (data.run.duration) {
+  if (workflowRun.duration) {
     timings.push(
       <div key="duration" className="text-sm text-muted-foreground">
-        Run took {formatDuration(data.run.duration)}
+        Run took {formatDuration(workflowRun.duration)}
       </div>,
     );
   }

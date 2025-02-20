@@ -8,6 +8,7 @@ import { useAtom } from 'jotai';
 import { BiExitFullscreen, BiExpand } from 'react-icons/bi';
 import { useOutletContext, useParams } from 'react-router-dom';
 import invariant from 'tiny-invariant';
+import { useWorkflowDetails } from '../../hooks';
 
 const ToggleIcon = ({ view }: { view: ViewOptions | undefined }) => {
   switch (view) {
@@ -27,21 +28,12 @@ const ToggleIcon = ({ view }: { view: ViewOptions | undefined }) => {
 export const ViewToggle = () => {
   const [view, setView] = useAtom(preferredWorkflowRunViewAtom);
   const otherView = view === 'graph' ? 'minimap' : 'graph';
-  const { tenant } = useOutletContext<TenantContextType>();
-  const params = useParams();
 
-  invariant(tenant);
-  invariant(params.run);
-
-  const { data, isLoading, isError } = useQuery({
-    ...queries.v2WorkflowRuns.details(tenant.metadata.id, params.run),
-  });
+  const { shape, isLoading, isError } = useWorkflowDetails();
 
   if (isLoading || isError) {
     return null;
   }
-
-  const shape = data?.shape || [];
 
   // only render if there are at least two dependent steps, otherwise the view toggle is not needed
   if (!shape.some((t) => t.children.length > 0)) {
