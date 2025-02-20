@@ -88,7 +88,7 @@ export const JobMiniMap = ({ onClick }: JobMiniMapProps) => {
   }
 
   return (
-    <div className="flex flex-row p-4 rounded-sm relative gap-1">
+    <div className="flex flex-1 flex-row p-4 rounded-sm relative gap-1">
       {columns.map((column, colIndex) => (
         <div
           key={colIndex}
