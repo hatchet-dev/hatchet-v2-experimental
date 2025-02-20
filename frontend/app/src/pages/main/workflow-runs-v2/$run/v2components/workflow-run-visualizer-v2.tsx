@@ -166,7 +166,6 @@ const WorkflowRunVisualizer = ({
         onNodeClick={(_, node) => {
           setSelectedTaskRunId(node.id);
         }}
-        className="border rounded-lg"
         maxZoom={1}
       />
     </div>
