@@ -10,11 +10,15 @@ import { useQuery } from '@tanstack/react-query';
 import invariant from 'tiny-invariant';
 import { Button } from '@/components/ui/button';
 import { Loading } from '@/components/ui/loading';
-import { ArrowPathIcon, XCircleIcon } from '@heroicons/react/24/outline';
+import {
+  ArrowPathIcon,
+  LinkIcon,
+  XCircleIcon,
+} from '@heroicons/react/24/outline';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { StepRunEvents } from '../step-run-events-for-workflow-run';
-import { useOutletContext } from 'react-router-dom';
+import { Link, useOutletContext } from 'react-router-dom';
 import { TenantContextType } from '@/lib/outlet';
 import { TaskRunsTable as WorkflowRunsTable } from '../../../components/workflow-runs-table';
 import { useTenant } from '@/lib/atoms';
@@ -34,6 +38,7 @@ export enum TabOption {
 interface StepRunDetailProps {
   taskRunId: string;
   defaultOpenTab?: TabOption;
+  showViewTaskRunButton?: boolean;
 }
 
 export const STEP_RUN_TERMINAL_STATUSES = [
@@ -46,6 +51,7 @@ export const STEP_RUN_TERMINAL_STATUSES = [
 const StepRunDetail: React.FC<StepRunDetailProps> = ({
   taskRunId,
   defaultOpenTab = TabOption.Output,
+  showViewTaskRunButton,
 }) => {
   const { tenant } = useTenant();
 
@@ -134,6 +140,14 @@ const StepRunDetail: React.FC<StepRunDetailProps> = ({
           <XCircleIcon className="w-4 h-4" />
           Cancel
         </Button>
+        {showViewTaskRunButton && (
+          <Link to={`/task-runs/${taskRunId}`}>
+            <Button size={'sm'} className="px-2 py-2 gap-2" variant={'outline'}>
+              <LinkIcon className="w-4 h-4" />
+              View Task Run
+            </Button>
+          </Link>
+        )}
       </div>
       {errors && errors.length > 0 && (
         <div className="mt-4">

@@ -159,6 +159,7 @@ export default function ExpandedWorkflowRun() {
             <StepRunDetail
               taskRunId={selectedTaskRunId}
               defaultOpenTab={TabOption.Output}
+              showViewTaskRunButton
             />
           )}
         </SheetContent>

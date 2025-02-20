@@ -698,6 +698,7 @@ export function TaskRunsTable({
             <StepRunDetail
               taskRunId={stepDetailSheetState.taskRunId}
               defaultOpenTab={TabOption.Output}
+              showViewTaskRunButton
             />
           </SheetContent>
         </Sheet>
