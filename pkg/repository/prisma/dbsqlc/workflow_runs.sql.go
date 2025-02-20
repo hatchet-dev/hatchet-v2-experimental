@@ -2043,18 +2043,22 @@ func (q *Queries) GetWorkflowRunInput(ctx context.Context, db DBTX, workflowruni
 }
 
 const getWorkflowRunShape = `-- name: GetWorkflowRunShape :many
-SELECT s.id AS parent, ARRAY_AGG(so."B")::uuid[] AS children
+SELECT
+    s.id AS parentStepId,
+    s."readableId" AS stepName,
+    ARRAY_AGG(so."B")::uuid[] AS childrenStepIds
 FROM "WorkflowVersion" v
 JOIN "Job" j ON v."id" = j."workflowVersionId"
 JOIN "Step" s ON j."id" = s."jobId"
-JOIN "_StepOrder" so ON so."A" = s.id
+LEFT JOIN "_StepOrder" so ON so."A" = s.id
 WHERE v.id = $1::uuid
-GROUP BY s.id
+GROUP BY s.id, s."readableId"
 `
 
 type GetWorkflowRunShapeRow struct {
-	Parent   pgtype.UUID   `json:"parent"`
-	Children []pgtype.UUID `json:"children"`
+	Parentstepid    pgtype.UUID   `json:"parentstepid"`
+	Stepname        pgtype.Text   `json:"stepname"`
+	Childrenstepids []pgtype.UUID `json:"childrenstepids"`
 }
 
 func (q *Queries) GetWorkflowRunShape(ctx context.Context, db DBTX, workflowversionid pgtype.UUID) ([]*GetWorkflowRunShapeRow, error) {
@@ -2066,7 +2070,7 @@ func (q *Queries) GetWorkflowRunShape(ctx context.Context, db DBTX, workflowvers
 	var items []*GetWorkflowRunShapeRow
 	for rows.Next() {
 		var i GetWorkflowRunShapeRow
-		if err := rows.Scan(&i.Parent, &i.Children); err != nil {
+		if err := rows.Scan(&i.Parentstepid, &i.Stepname, &i.Childrenstepids); err != nil {
 			return nil, err
 		}
 		items = append(items, &i)

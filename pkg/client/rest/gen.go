@@ -1595,8 +1595,9 @@ type WorkflowRunShapeForWorkflowRunDetails = []WorkflowRunShapeItemForWorkflowRu
 
 // WorkflowRunShapeItemForWorkflowRunDetails defines model for WorkflowRunShapeItemForWorkflowRunDetails.
 type WorkflowRunShapeItemForWorkflowRunDetails struct {
-	Children []openapi_types.UUID `json:"children"`
-	Parent   openapi_types.UUID   `json:"parent"`
+	ChildrenExternalIds []openapi_types.UUID `json:"childrenExternalIds"`
+	TaskExternalId      openapi_types.UUID   `json:"taskExternalId"`
+	TaskName            string               `json:"taskName"`
 }
 
 // WorkflowRunStatus defines model for WorkflowRunStatus.

@@ -21,10 +21,12 @@ export const JobMiniMap = ({ onClick }: JobMiniMapProps) => {
     () =>
       tasks.map((item) => {
         const node = item.taskExternalId;
-        const children = shape.find((i) => i.parent === node)?.children || [];
+        const children =
+          shape.find((i) => i.taskExternalId === node)?.childrenExternalIds ||
+          [];
         const parents = shape
-          .filter((i) => i.children.includes(node))
-          .map((i) => i.parent);
+          .filter((i) => i.childrenExternalIds.includes(node))
+          .map((i) => i.taskExternalId);
 
         return {
           node,
@@ -103,6 +105,9 @@ export const JobMiniMap = ({ onClick }: JobMiniMapProps) => {
                   graphVariant: 'none',
                   onClick: () => onClick(taskRun.metadata.id),
                   childWorkflowsCount: 0,
+                  taskName:
+                    shape.find((i) => i.taskExternalId === taskRun.metadata.id)
+                      ?.taskName || '',
                 }}
               />
             );

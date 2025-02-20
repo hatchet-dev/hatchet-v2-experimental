@@ -303,8 +303,9 @@ export interface WorkflowRunShapeItemForWorkflowRunDetails {
    * @minLength 36
    * @maxLength 36
    */
-  parent: string;
-  children: string[];
+  taskExternalId: string;
+  childrenExternalIds: string[];
+  taskName: string;
 }
 
 export type WorkflowRunShapeForWorkflowRunDetails = WorkflowRunShapeItemForWorkflowRunDetails[];

@@ -38,14 +38,14 @@ const WorkflowRunVisualizer = ({
   const edges: Edge[] = useMemo(
     () =>
       shape.flatMap((task) =>
-        task.children.map((childId) => {
+        task.childrenExternalIds.map((childId) => {
           const child = taskRuns.find((t) => t.metadata.id === childId);
 
           invariant(child);
 
           return {
-            id: `${task.parent}-${childId}`,
-            source: task.parent,
+            id: `${task.taskExternalId}-${childId}`,
+            source: task.taskExternalId,
             target: childId,
             animated: child.status === V2TaskStatus.RUNNING,
             style:
@@ -66,9 +66,11 @@ const WorkflowRunVisualizer = ({
     () =>
       taskRuns.map((task) => {
         const hasParent = shape.some((s) =>
-          s.children.includes(task.metadata.id),
+          s.childrenExternalIds.includes(task.metadata.id),
         );
-        const hasChild = shape.some((s) => s.parent === task.metadata.id);
+        const hasChild = shape.some(
+          (s) => s.taskExternalId === task.metadata.id,
+        );
 
         // TODO: get the actual number of children
         const childWorkflowsCount = 0;
@@ -83,6 +85,9 @@ const WorkflowRunVisualizer = ({
                 : 'input_only',
           onClick: () => setSelectedTaskRunId(task.metadata.id),
           childWorkflowsCount,
+          taskName:
+            shape.find((i) => i.taskExternalId === task.metadata.id)
+              ?.taskName || '',
         };
 
         return {

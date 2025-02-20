@@ -51,7 +51,8 @@ const GraphView = ({
   const [view] = useAtom(preferredWorkflowRunViewAtom);
 
   const showGraphView =
-    view == 'graph' && shape.some((task) => task.children.length > 0);
+    view == 'graph' &&
+    shape.some((task) => task.childrenExternalIds.length > 0);
 
   return showGraphView ? (
     <WorkflowRunVisualizer setSelectedTaskRunId={handleTaskRunExpand} />

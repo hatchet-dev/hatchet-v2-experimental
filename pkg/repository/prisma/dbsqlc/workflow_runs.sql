@@ -1577,11 +1577,14 @@ WHERE sr."error" IS NOT NULL;
 
 
 -- name: GetWorkflowRunShape :many
-SELECT s.id AS parent, ARRAY_AGG(so."B")::uuid[] AS children
+SELECT
+    s.id AS parentStepId,
+    s."readableId" AS stepName,
+    ARRAY_AGG(so."B")::uuid[] AS childrenStepIds
 FROM "WorkflowVersion" v
 JOIN "Job" j ON v."id" = j."workflowVersionId"
 JOIN "Step" s ON j."id" = s."jobId"
-JOIN "_StepOrder" so ON so."A" = s.id
+LEFT JOIN "_StepOrder" so ON so."A" = s.id
 WHERE v.id = @workflowVersionId::uuid
-GROUP BY s.id
+GROUP BY s.id, s."readableId"
 ;

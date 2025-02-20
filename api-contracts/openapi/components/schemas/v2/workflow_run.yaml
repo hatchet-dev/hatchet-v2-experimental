@@ -75,21 +75,24 @@ V2WorkflowRunList:
 WorkflowRunShapeItemForWorkflowRunDetails:
   type: object
   properties:
-    parent:
+    taskExternalId:
       type: string
       format: uuid
       minLength: 36
       maxLength: 36
-    children:
+    childrenExternalIds:
       type: array
       items:
         type: string
         format: uuid
         minLength: 36
         maxLength: 36
+    taskName:
+      type: string
   required:
-    - parent
-    - children
+    - taskExternalId
+    - childrenExternalIds
+    - taskName
 
 WorkflowRunShapeForWorkflowRunDetails:
   type: array

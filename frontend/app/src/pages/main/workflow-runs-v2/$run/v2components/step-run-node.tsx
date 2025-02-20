@@ -12,6 +12,7 @@ export type NodeData = {
   graphVariant: 'default' | 'input_only' | 'output_only' | 'none';
   onClick: (defaultOpenTab?: TabOption) => void;
   childWorkflowsCount: number;
+  taskName: string;
 };
 
 // eslint-disable-next-line react/display-name
@@ -56,7 +57,7 @@ export default memo(({ data }: { data: NodeData }) => {
         <div className="z-10 flex flex-row items-center justify-between gap-4 w-full">
           <div className="flex flex-row items-center justify-start gap-2 z-10">
             <V2RunIndicator status={data.task.status} />
-            <div className="truncate flex-grow">{data.task.displayName}</div>
+            <div className="truncate flex-grow">{data.taskName}</div>
           </div>
           {data.task.finishedAt && data.task.startedAt && (
             <div className="text-xs text-gray-500 dark:text-gray-400">
@@ -91,7 +92,7 @@ export default memo(({ data }: { data: NodeData }) => {
           }}
         >
           <div className="truncate flex-grow">
-            {data.task.displayName}: {data.childWorkflowsCount} children
+            {data.taskName}: {data.childWorkflowsCount} children
           </div>
         </div>
       ) : null}
