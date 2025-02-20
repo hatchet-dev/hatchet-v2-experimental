@@ -5,18 +5,20 @@ import (
 
 	"github.com/hatchet-dev/hatchet/api/v1/server/oas/gen"
 	"github.com/hatchet-dev/hatchet/api/v1/server/oas/transformers/v2"
+	"github.com/hatchet-dev/hatchet/pkg/repository"
 	"github.com/hatchet-dev/hatchet/pkg/repository/prisma/db"
-	"github.com/hatchet-dev/hatchet/pkg/repository/prisma/sqlchelpers"
 )
 
 func (t *V2WorkflowRunsService) V2WorkflowRunTaskEventsList(ctx echo.Context, request gen.V2WorkflowRunTaskEventsListRequestObject) (gen.V2WorkflowRunTaskEventsListResponseObject, error) {
 	tenant := ctx.Get("tenant").(*db.TenantModel)
-	workflowRunId := request.V2WorkflowRun
+	rawWorkflowRun := ctx.Get("v2-workflow-run").(map[string]interface{})
+
+	workflowRun := rawWorkflowRun["workflowRun"].(*repository.WorkflowRunData)
 
 	taskRunEvents, err := t.config.EngineRepository.OLAP().ListTaskRunEventsByWorkflowRunId(
 		ctx.Request().Context(),
 		tenant.ID,
-		sqlchelpers.UUIDFromStr(workflowRunId.String()),
+		workflowRun.ExternalID,
 	)
 
 	if err != nil {
