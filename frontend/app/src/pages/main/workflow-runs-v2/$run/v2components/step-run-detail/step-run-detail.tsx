@@ -60,6 +60,7 @@ const StepRunDetail: React.FC<StepRunDetailProps> = ({
 
   const taskRunQuery = useQuery({
     ...queries.v2Tasks.get(taskRunId),
+    refetchInterval: 5000,
   });
 
   const taskRun = taskRunQuery.data;
