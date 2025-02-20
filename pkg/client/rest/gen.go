@@ -2573,10 +2573,10 @@ type ClientInterface interface {
 	V2WorkflowRunList(ctx context.Context, tenant openapi_types.UUID, params *V2WorkflowRunListParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// V2WorkflowRunGet request
-	V2WorkflowRunGet(ctx context.Context, tenant openapi_types.UUID, workflowRunId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	V2WorkflowRunGet(ctx context.Context, v2WorkflowRun openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// V2WorkflowRunTaskEventsList request
-	V2WorkflowRunTaskEventsList(ctx context.Context, tenant openapi_types.UUID, workflowRunId openapi_types.UUID, params *V2WorkflowRunTaskEventsListParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+	V2WorkflowRunTaskEventsList(ctx context.Context, v2WorkflowRun openapi_types.UUID, params *V2WorkflowRunTaskEventsListParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
 func (c *Client) LivenessGet(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -4103,8 +4103,8 @@ func (c *Client) V2WorkflowRunList(ctx context.Context, tenant openapi_types.UUI
 	return c.Client.Do(req)
 }
 
-func (c *Client) V2WorkflowRunGet(ctx context.Context, tenant openapi_types.UUID, workflowRunId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewV2WorkflowRunGetRequest(c.Server, tenant, workflowRunId)
+func (c *Client) V2WorkflowRunGet(ctx context.Context, v2WorkflowRun openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewV2WorkflowRunGetRequest(c.Server, v2WorkflowRun)
 	if err != nil {
 		return nil, err
 	}
@@ -4115,8 +4115,8 @@ func (c *Client) V2WorkflowRunGet(ctx context.Context, tenant openapi_types.UUID
 	return c.Client.Do(req)
 }
 
-func (c *Client) V2WorkflowRunTaskEventsList(ctx context.Context, tenant openapi_types.UUID, workflowRunId openapi_types.UUID, params *V2WorkflowRunTaskEventsListParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewV2WorkflowRunTaskEventsListRequest(c.Server, tenant, workflowRunId, params)
+func (c *Client) V2WorkflowRunTaskEventsList(ctx context.Context, v2WorkflowRun openapi_types.UUID, params *V2WorkflowRunTaskEventsListParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewV2WorkflowRunTaskEventsListRequest(c.Server, v2WorkflowRun, params)
 	if err != nil {
 		return nil, err
 	}
@@ -9505,19 +9505,12 @@ func NewV2WorkflowRunListRequest(server string, tenant openapi_types.UUID, param
 }
 
 // NewV2WorkflowRunGetRequest generates requests for V2WorkflowRunGet
-func NewV2WorkflowRunGetRequest(server string, tenant openapi_types.UUID, workflowRunId openapi_types.UUID) (*http.Request, error) {
+func NewV2WorkflowRunGetRequest(server string, v2WorkflowRun openapi_types.UUID) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "tenant", runtime.ParamLocationPath, tenant)
-	if err != nil {
-		return nil, err
-	}
-
-	var pathParam1 string
-
-	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "workflow_run_id", runtime.ParamLocationPath, workflowRunId)
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "v2-workflow-run", runtime.ParamLocationPath, v2WorkflowRun)
 	if err != nil {
 		return nil, err
 	}
@@ -9527,7 +9520,7 @@ func NewV2WorkflowRunGetRequest(server string, tenant openapi_types.UUID, workfl
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/api/v2/tenants/%s/workflow-runs/%s", pathParam0, pathParam1)
+	operationPath := fmt.Sprintf("/api/v2/workflow-runs/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -9546,19 +9539,12 @@ func NewV2WorkflowRunGetRequest(server string, tenant openapi_types.UUID, workfl
 }
 
 // NewV2WorkflowRunTaskEventsListRequest generates requests for V2WorkflowRunTaskEventsList
-func NewV2WorkflowRunTaskEventsListRequest(server string, tenant openapi_types.UUID, workflowRunId openapi_types.UUID, params *V2WorkflowRunTaskEventsListParams) (*http.Request, error) {
+func NewV2WorkflowRunTaskEventsListRequest(server string, v2WorkflowRun openapi_types.UUID, params *V2WorkflowRunTaskEventsListParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "tenant", runtime.ParamLocationPath, tenant)
-	if err != nil {
-		return nil, err
-	}
-
-	var pathParam1 string
-
-	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "workflow_run_id", runtime.ParamLocationPath, workflowRunId)
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "v2-workflow-run", runtime.ParamLocationPath, v2WorkflowRun)
 	if err != nil {
 		return nil, err
 	}
@@ -9568,7 +9554,7 @@ func NewV2WorkflowRunTaskEventsListRequest(server string, tenant openapi_types.U
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/api/v2/tenants/%s/workflow-runs/%s/task-events", pathParam0, pathParam1)
+	operationPath := fmt.Sprintf("/api/v2/workflow-runs/%s/task-events", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -10023,10 +10009,10 @@ type ClientWithResponsesInterface interface {
 	V2WorkflowRunListWithResponse(ctx context.Context, tenant openapi_types.UUID, params *V2WorkflowRunListParams, reqEditors ...RequestEditorFn) (*V2WorkflowRunListResponse, error)
 
 	// V2WorkflowRunGetWithResponse request
-	V2WorkflowRunGetWithResponse(ctx context.Context, tenant openapi_types.UUID, workflowRunId openapi_types.UUID, reqEditors ...RequestEditorFn) (*V2WorkflowRunGetResponse, error)
+	V2WorkflowRunGetWithResponse(ctx context.Context, v2WorkflowRun openapi_types.UUID, reqEditors ...RequestEditorFn) (*V2WorkflowRunGetResponse, error)
 
 	// V2WorkflowRunTaskEventsListWithResponse request
-	V2WorkflowRunTaskEventsListWithResponse(ctx context.Context, tenant openapi_types.UUID, workflowRunId openapi_types.UUID, params *V2WorkflowRunTaskEventsListParams, reqEditors ...RequestEditorFn) (*V2WorkflowRunTaskEventsListResponse, error)
+	V2WorkflowRunTaskEventsListWithResponse(ctx context.Context, v2WorkflowRun openapi_types.UUID, params *V2WorkflowRunTaskEventsListParams, reqEditors ...RequestEditorFn) (*V2WorkflowRunTaskEventsListResponse, error)
 }
 
 type LivenessGetResponse struct {
@@ -13624,8 +13610,8 @@ func (c *ClientWithResponses) V2WorkflowRunListWithResponse(ctx context.Context,
 }
 
 // V2WorkflowRunGetWithResponse request returning *V2WorkflowRunGetResponse
-func (c *ClientWithResponses) V2WorkflowRunGetWithResponse(ctx context.Context, tenant openapi_types.UUID, workflowRunId openapi_types.UUID, reqEditors ...RequestEditorFn) (*V2WorkflowRunGetResponse, error) {
-	rsp, err := c.V2WorkflowRunGet(ctx, tenant, workflowRunId, reqEditors...)
+func (c *ClientWithResponses) V2WorkflowRunGetWithResponse(ctx context.Context, v2WorkflowRun openapi_types.UUID, reqEditors ...RequestEditorFn) (*V2WorkflowRunGetResponse, error) {
+	rsp, err := c.V2WorkflowRunGet(ctx, v2WorkflowRun, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -13633,8 +13619,8 @@ func (c *ClientWithResponses) V2WorkflowRunGetWithResponse(ctx context.Context, 
 }
 
 // V2WorkflowRunTaskEventsListWithResponse request returning *V2WorkflowRunTaskEventsListResponse
-func (c *ClientWithResponses) V2WorkflowRunTaskEventsListWithResponse(ctx context.Context, tenant openapi_types.UUID, workflowRunId openapi_types.UUID, params *V2WorkflowRunTaskEventsListParams, reqEditors ...RequestEditorFn) (*V2WorkflowRunTaskEventsListResponse, error) {
-	rsp, err := c.V2WorkflowRunTaskEventsList(ctx, tenant, workflowRunId, params, reqEditors...)
+func (c *ClientWithResponses) V2WorkflowRunTaskEventsListWithResponse(ctx context.Context, v2WorkflowRun openapi_types.UUID, params *V2WorkflowRunTaskEventsListParams, reqEditors ...RequestEditorFn) (*V2WorkflowRunTaskEventsListResponse, error) {
+	rsp, err := c.V2WorkflowRunTaskEventsList(ctx, v2WorkflowRun, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}

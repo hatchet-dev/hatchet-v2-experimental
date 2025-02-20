@@ -94,19 +94,10 @@ listWorkflowRuns:
 
 listTaskEventsForWorkflowRun:
   get:
-    x-resources: ["tenant"]
+    x-resources: ["tenant", "v2-workflow-run"]
     description: List all tasks for a workflow run
     operationId: v2-workflow-run:task-events:list
     parameters:
-      - description: The tenant id
-        in: path
-        name: tenant
-        required: true
-        schema:
-          type: string
-          format: uuid
-          minLength: 36
-          maxLength: 36
       - description: The number to skip
         in: query
         name: offset
@@ -123,7 +114,7 @@ listTaskEventsForWorkflowRun:
           format: int64
       - description: The workflow run id to find runs for
         in: path
-        name: workflow_run_id
+        name: v2-workflow-run
         required: true
         schema:
           type: string
@@ -155,22 +146,13 @@ listTaskEventsForWorkflowRun:
 
 getWorkflowRunDetails:
   get:
-    x-resources: ["tenant"]
+    x-resources: ["tenant", "v2-workflow-run"]
     description: Get a workflow run and its metadata to display on the "detail" page
     operationId: v2-workflow-run:get
     parameters:
-      - description: The tenant id
-        in: path
-        name: tenant
-        required: true
-        schema:
-          type: string
-          format: uuid
-          minLength: 36
-          maxLength: 36
       - description: The workflow run id to get
         in: path
-        name: workflow_run_id
+        name: v2-workflow-run
         required: true
         schema:
           type: string

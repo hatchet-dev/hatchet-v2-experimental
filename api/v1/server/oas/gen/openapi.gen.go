@@ -2453,11 +2453,11 @@ type ServerInterface interface {
 	// (GET /api/v2/tenants/{tenant}/workflow-runs)
 	V2WorkflowRunList(ctx echo.Context, tenant openapi_types.UUID, params V2WorkflowRunListParams) error
 	// List tasks
-	// (GET /api/v2/tenants/{tenant}/workflow-runs/{workflow_run_id})
-	V2WorkflowRunGet(ctx echo.Context, tenant openapi_types.UUID, workflowRunId openapi_types.UUID) error
+	// (GET /api/v2/workflow-runs/{v2-workflow-run})
+	V2WorkflowRunGet(ctx echo.Context, v2WorkflowRun openapi_types.UUID) error
 	// List tasks
-	// (GET /api/v2/tenants/{tenant}/workflow-runs/{workflow_run_id}/task-events)
-	V2WorkflowRunTaskEventsList(ctx echo.Context, tenant openapi_types.UUID, workflowRunId openapi_types.UUID, params V2WorkflowRunTaskEventsListParams) error
+	// (GET /api/v2/workflow-runs/{v2-workflow-run}/task-events)
+	V2WorkflowRunTaskEventsList(ctx echo.Context, v2WorkflowRun openapi_types.UUID, params V2WorkflowRunTaskEventsListParams) error
 }
 
 // ServerInterfaceWrapper converts echo contexts to parameters.
@@ -5131,20 +5131,12 @@ func (w *ServerInterfaceWrapper) V2WorkflowRunList(ctx echo.Context) error {
 // V2WorkflowRunGet converts echo context to params.
 func (w *ServerInterfaceWrapper) V2WorkflowRunGet(ctx echo.Context) error {
 	var err error
-	// ------------- Path parameter "tenant" -------------
-	var tenant openapi_types.UUID
+	// ------------- Path parameter "v2-workflow-run" -------------
+	var v2WorkflowRun openapi_types.UUID
 
-	err = runtime.BindStyledParameterWithLocation("simple", false, "tenant", runtime.ParamLocationPath, ctx.Param("tenant"), &tenant)
+	err = runtime.BindStyledParameterWithLocation("simple", false, "v2-workflow-run", runtime.ParamLocationPath, ctx.Param("v2-workflow-run"), &v2WorkflowRun)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter tenant: %s", err))
-	}
-
-	// ------------- Path parameter "workflow_run_id" -------------
-	var workflowRunId openapi_types.UUID
-
-	err = runtime.BindStyledParameterWithLocation("simple", false, "workflow_run_id", runtime.ParamLocationPath, ctx.Param("workflow_run_id"), &workflowRunId)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter workflow_run_id: %s", err))
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter v2-workflow-run: %s", err))
 	}
 
 	ctx.Set(BearerAuthScopes, []string{})
@@ -5152,27 +5144,19 @@ func (w *ServerInterfaceWrapper) V2WorkflowRunGet(ctx echo.Context) error {
 	ctx.Set(CookieAuthScopes, []string{})
 
 	// Invoke the callback with all the unmarshaled arguments
-	err = w.Handler.V2WorkflowRunGet(ctx, tenant, workflowRunId)
+	err = w.Handler.V2WorkflowRunGet(ctx, v2WorkflowRun)
 	return err
 }
 
 // V2WorkflowRunTaskEventsList converts echo context to params.
 func (w *ServerInterfaceWrapper) V2WorkflowRunTaskEventsList(ctx echo.Context) error {
 	var err error
-	// ------------- Path parameter "tenant" -------------
-	var tenant openapi_types.UUID
+	// ------------- Path parameter "v2-workflow-run" -------------
+	var v2WorkflowRun openapi_types.UUID
 
-	err = runtime.BindStyledParameterWithLocation("simple", false, "tenant", runtime.ParamLocationPath, ctx.Param("tenant"), &tenant)
+	err = runtime.BindStyledParameterWithLocation("simple", false, "v2-workflow-run", runtime.ParamLocationPath, ctx.Param("v2-workflow-run"), &v2WorkflowRun)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter tenant: %s", err))
-	}
-
-	// ------------- Path parameter "workflow_run_id" -------------
-	var workflowRunId openapi_types.UUID
-
-	err = runtime.BindStyledParameterWithLocation("simple", false, "workflow_run_id", runtime.ParamLocationPath, ctx.Param("workflow_run_id"), &workflowRunId)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter workflow_run_id: %s", err))
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter v2-workflow-run: %s", err))
 	}
 
 	ctx.Set(BearerAuthScopes, []string{})
@@ -5196,7 +5180,7 @@ func (w *ServerInterfaceWrapper) V2WorkflowRunTaskEventsList(ctx echo.Context) e
 	}
 
 	// Invoke the callback with all the unmarshaled arguments
-	err = w.Handler.V2WorkflowRunTaskEventsList(ctx, tenant, workflowRunId, params)
+	err = w.Handler.V2WorkflowRunTaskEventsList(ctx, v2WorkflowRun, params)
 	return err
 }
 
@@ -5329,8 +5313,8 @@ func RegisterHandlersWithBaseURL(router EchoRouter, si ServerInterface, baseURL 
 	router.GET(baseURL+"/api/v2/tenants/:tenant/task-point-metrics", wrapper.V2TaskGetPointMetrics)
 	router.GET(baseURL+"/api/v2/tenants/:tenant/tasks", wrapper.V2TaskList)
 	router.GET(baseURL+"/api/v2/tenants/:tenant/workflow-runs", wrapper.V2WorkflowRunList)
-	router.GET(baseURL+"/api/v2/tenants/:tenant/workflow-runs/:workflow_run_id", wrapper.V2WorkflowRunGet)
-	router.GET(baseURL+"/api/v2/tenants/:tenant/workflow-runs/:workflow_run_id/task-events", wrapper.V2WorkflowRunTaskEventsList)
+	router.GET(baseURL+"/api/v2/workflow-runs/:v2-workflow-run", wrapper.V2WorkflowRunGet)
+	router.GET(baseURL+"/api/v2/workflow-runs/:v2-workflow-run/task-events", wrapper.V2WorkflowRunTaskEventsList)
 
 }
 
@@ -9123,8 +9107,7 @@ func (response V2WorkflowRunList403JSONResponse) VisitV2WorkflowRunListResponse(
 }
 
 type V2WorkflowRunGetRequestObject struct {
-	Tenant        openapi_types.UUID `json:"tenant"`
-	WorkflowRunId openapi_types.UUID `json:"workflow_run_id"`
+	V2WorkflowRun openapi_types.UUID `json:"v2-workflow-run"`
 }
 
 type V2WorkflowRunGetResponseObject interface {
@@ -9159,8 +9142,7 @@ func (response V2WorkflowRunGet403JSONResponse) VisitV2WorkflowRunGetResponse(w 
 }
 
 type V2WorkflowRunTaskEventsListRequestObject struct {
-	Tenant        openapi_types.UUID `json:"tenant"`
-	WorkflowRunId openapi_types.UUID `json:"workflow_run_id"`
+	V2WorkflowRun openapi_types.UUID `json:"v2-workflow-run"`
 	Params        V2WorkflowRunTaskEventsListParams
 }
 
@@ -12093,11 +12075,10 @@ func (sh *strictHandler) V2WorkflowRunList(ctx echo.Context, tenant openapi_type
 }
 
 // V2WorkflowRunGet operation middleware
-func (sh *strictHandler) V2WorkflowRunGet(ctx echo.Context, tenant openapi_types.UUID, workflowRunId openapi_types.UUID) error {
+func (sh *strictHandler) V2WorkflowRunGet(ctx echo.Context, v2WorkflowRun openapi_types.UUID) error {
 	var request V2WorkflowRunGetRequestObject
 
-	request.Tenant = tenant
-	request.WorkflowRunId = workflowRunId
+	request.V2WorkflowRun = v2WorkflowRun
 
 	handler := func(ctx echo.Context, request interface{}) (interface{}, error) {
 		return sh.ssi.V2WorkflowRunGet(ctx, request.(V2WorkflowRunGetRequestObject))
@@ -12119,11 +12100,10 @@ func (sh *strictHandler) V2WorkflowRunGet(ctx echo.Context, tenant openapi_types
 }
 
 // V2WorkflowRunTaskEventsList operation middleware
-func (sh *strictHandler) V2WorkflowRunTaskEventsList(ctx echo.Context, tenant openapi_types.UUID, workflowRunId openapi_types.UUID, params V2WorkflowRunTaskEventsListParams) error {
+func (sh *strictHandler) V2WorkflowRunTaskEventsList(ctx echo.Context, v2WorkflowRun openapi_types.UUID, params V2WorkflowRunTaskEventsListParams) error {
 	var request V2WorkflowRunTaskEventsListRequestObject
 
-	request.Tenant = tenant
-	request.WorkflowRunId = workflowRunId
+	request.V2WorkflowRun = v2WorkflowRun
 	request.Params = params
 
 	handler := func(ctx echo.Context, request interface{}) (interface{}, error) {
@@ -12367,10 +12347,10 @@ var swaggerSpec = []string{
 	"SqMGkugLJJd08l2XQ4WC2Kk+2f5C2Bmo8g3qosBOUIDwbDtrYHNqy5HaAqKJ8UkrnCqEUx5DqxNR9m5M",
 	"VejsV9g/bUHrbSxo3cs5JDdUBpcThbEArhYtEMQ+gpg4PIDQArw1Wp2NgUkCgvwVKJReWhdZKcO896Av",
 	"wFxdWPluvtrKygVrHG+rOd6tfLBlg0Pe+A55nV3yuI648micn6u9MbC+MVhM3aoVHuvUbq7eZ63qVWJ0",
-	"Wg28/Rq4Vb5W1CBCTlrVu3Oqd71KrijtWiW3pJLLF5fWR+ThlWi9LDjvLk6CO+S92IbmxUnggMBzEMEZ",
-	"W5LQ8RCOfPDshDzB0393PEgA8v+740RgCqt15S5XUs8hhpuzU7acitBCgfOdjSdQtu6U7TJueX/VBu4m",
-	"eN7++r/ofSqEDlfwdnpRjFuLeFstYoMc01o0v6ZEaxbO0AqztQmzYmbPMQQxjNPMnl1trk+WKpKLkyT2",
-	"Ox87nZfbl/8NAAD//93vT2+gTAIA",
+	"Wg28/Rq4Vb5W1CBCTlrVu3Oqd71KrijtWiW3pJLLF5fWR+RhS62XU3IHPx+Oc4WNX2wj8eIkcEDgOYjg",
+	"jAtJ6HgIRz54dkKez+m/Ox4kAPn/3XEiMIXVqrFppB6FgRuKU9ZToyYLy9vZm3oFS6cMobjlqlWbjpbc",
+	"1C0RVRP+sr9ZLzp2ClG5FXyU3sFap1n6pe06g8zQ6uVfU3o0u5RvBccGBUcxY+UYghjGacbKrjaHJUuB",
+	"yHk5if3Ox07n5fblfwMAAP//SLgHwXhLAgA=",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

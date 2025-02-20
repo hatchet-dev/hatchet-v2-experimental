@@ -266,6 +266,21 @@ func (t *APIServer) registerSpec(g *echo.Group, spec *openapi3.T) (*populator.Po
 		return workflowRun, sqlchelpers.UUIDToStr(workflowRun.TenantId), nil
 	})
 
+	populatorMW.RegisterGetter("v2-workflow-run", func(config *server.ServerConfig, parentId, id string) (result interface{}, uniqueParentId string, err error) {
+		workflowRun, taskMetadata, err := t.config.OLAPRepository.ReadWorkflowRun(context.Background(), sqlchelpers.UUIDFromStr(parentId), sqlchelpers.UUIDFromStr(id))
+
+		if err != nil {
+			return nil, "", err
+		}
+
+		workflowRunWithTaskMetadata := make(map[string]interface{})
+
+		workflowRunWithTaskMetadata["workflowRun"] = workflowRun
+		workflowRunWithTaskMetadata["taskMetadata"] = taskMetadata
+
+		return workflowRunWithTaskMetadata, sqlchelpers.UUIDToStr(workflowRun.TenantID), nil
+	})
+
 	populatorMW.RegisterGetter("scheduled-workflow-run", func(config *server.ServerConfig, parentId, id string) (result interface{}, uniqueParentId string, err error) {
 		scheduled, err := config.APIRepository.WorkflowRun().GetScheduledWorkflow(context.Background(), parentId, id)
 

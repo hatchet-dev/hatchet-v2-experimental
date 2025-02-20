@@ -311,12 +311,12 @@ export class Api<SecurityDataType = unknown> extends HttpClient<SecurityDataType
    * @tags Workflow Runs
    * @name V2WorkflowRunGet
    * @summary List tasks
-   * @request GET:/api/v2/tenants/{tenant}/workflow-runs/{workflow_run_id}
+   * @request GET:/api/v2/workflow-runs/{v2-workflow-run}
    * @secure
    */
-  v2WorkflowRunGet = (tenant: string, workflowRunId: string, params: RequestParams = {}) =>
+  v2WorkflowRunGet = (v2WorkflowRun: string, params: RequestParams = {}) =>
     this.request<V2WorkflowRunDetails, APIErrors>({
-      path: `/api/v2/tenants/${tenant}/workflow-runs/${workflowRunId}`,
+      path: `/api/v2/workflow-runs/${v2WorkflowRun}`,
       method: 'GET',
       secure: true,
       format: 'json',
@@ -328,12 +328,11 @@ export class Api<SecurityDataType = unknown> extends HttpClient<SecurityDataType
    * @tags Workflow Runs
    * @name V2WorkflowRunTaskEventsList
    * @summary List tasks
-   * @request GET:/api/v2/tenants/{tenant}/workflow-runs/{workflow_run_id}/task-events
+   * @request GET:/api/v2/workflow-runs/{v2-workflow-run}/task-events
    * @secure
    */
   v2WorkflowRunTaskEventsList = (
-    tenant: string,
-    workflowRunId: string,
+    v2WorkflowRun: string,
     query?: {
       /**
        * The number to skip
@@ -349,7 +348,7 @@ export class Api<SecurityDataType = unknown> extends HttpClient<SecurityDataType
     params: RequestParams = {},
   ) =>
     this.request<V2TaskEventList, APIErrors>({
-      path: `/api/v2/tenants/${tenant}/workflow-runs/${workflowRunId}/task-events`,
+      path: `/api/v2/workflow-runs/${v2WorkflowRun}/task-events`,
       method: 'GET',
       query: query,
       secure: true,
