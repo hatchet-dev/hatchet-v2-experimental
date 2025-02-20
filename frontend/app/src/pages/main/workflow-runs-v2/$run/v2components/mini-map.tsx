@@ -28,52 +28,48 @@ export const JobMiniMap = ({ onClick }: JobMiniMapProps) => {
     ...queries.v2WorkflowRuns.details(tenant.metadata.id, params.run),
   });
 
-  if (isLoading || isError) {
-    return null;
-  }
+  const shape = useMemo(() => data?.shape || [], [data]);
+  const tasks = useMemo(() => data?.tasks || [], [data]);
 
-  const shape = data?.shape || [];
-  const tasks = data?.tasks || [];
+  const taskRunRelationships: NodeRelationship[] = useMemo(
+    () =>
+      tasks.map((item) => {
+        const node = item.taskExternalId;
+        const children = shape.find((i) => i.parent === node)?.children || [];
+        const parents = shape
+          .filter((i) => i.children.includes(node))
+          .map((i) => i.parent);
 
-  const taskRunRelationships: NodeRelationship[] =
-    shape?.map((item) => {
-      const node = item.parent;
-      const children = item.children;
-      const parents =
-        shape.filter((i) => i.children.includes(node)).map((i) => i.parent) ||
-        [];
-
-      return {
-        node,
-        children,
-        parents,
-      };
-    }) || [];
+        return {
+          node,
+          children,
+          parents,
+        };
+      }) || [],
+    [shape, tasks],
+  );
 
   const columns = useMemo(() => {
     const columns: V2TaskSummary[][] = [];
     const processed = new Set<string>();
 
     const addToColumn = (taskRun: V2TaskSummary, columnIndex: number) => {
-      if (!taskRun.taskExternalId) {
-        return;
-      }
-
       if (!columns[columnIndex]) {
         columns[columnIndex] = [];
       }
+
       columns[columnIndex].push(taskRun);
       processed.add(taskRun.taskExternalId);
     };
 
     const processTaskRun = (taskRun: V2TaskSummary) => {
+      if (processed.has(taskRun.taskExternalId)) {
+        return;
+      }
+
       const relationship = taskRunRelationships.find(
         (r) => r.node == taskRun.taskExternalId,
       );
-
-      if (!taskRun.taskExternalId || processed.has(taskRun.taskExternalId)) {
-        return;
-      }
 
       if (!relationship || relationship.parents.length === 0) {
         addToColumn(taskRun, 0);
@@ -88,7 +84,9 @@ export const JobMiniMap = ({ onClick }: JobMiniMapProps) => {
           }),
         );
 
-        addToColumn(taskRun, maxParentColumn + 1);
+        if (maxParentColumn > -1) {
+          addToColumn(taskRun, maxParentColumn + 1);
+        }
       }
     };
 
@@ -97,20 +95,11 @@ export const JobMiniMap = ({ onClick }: JobMiniMapProps) => {
     }
 
     return columns;
-  }, [taskRunRelationships]);
+  }, [taskRunRelationships, tasks]);
 
-  const normalizedStepRunsByStepId = useMemo(() => {
-    return taskRunRelationships.reduce(
-      (acc, step) => {
-        const taskRun = tasks?.find((tr) => tr.taskExternalId === step.node);
-        if (taskRun) {
-          acc[step.node] = taskRun;
-        }
-        return acc;
-      },
-      {} as Record<string, V2TaskSummary>,
-    );
-  }, [tasks, taskRunRelationships]);
+  if (isLoading || isError) {
+    return null;
+  }
 
   return (
     <div className="flex flex-row p-4 rounded-sm relative gap-1">
@@ -120,23 +109,13 @@ export const JobMiniMap = ({ onClick }: JobMiniMapProps) => {
           className="flex flex-col justify-start h-full min-w-fit grow"
         >
           {column.map((taskRun) => {
-            if (!taskRun.taskExternalId) {
-              return null;
-            }
-
-            const task = normalizedStepRunsByStepId[taskRun.taskExternalId];
-
-            if (!task) {
-              return null;
-            }
-
             return (
               <StepRunNode
-                key={task.taskExternalId}
+                key={taskRun.taskExternalId}
                 data={{
-                  task,
+                  task: taskRun,
                   graphVariant: 'none',
-                  onClick: () => onClick(task?.metadata.id),
+                  onClick: () => onClick(taskRun.metadata.id),
                   childWorkflowsCount: 0,
                 }}
               />

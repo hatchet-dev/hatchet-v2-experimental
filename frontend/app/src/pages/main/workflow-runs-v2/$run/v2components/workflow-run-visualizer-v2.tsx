@@ -100,7 +100,7 @@ const WorkflowRunVisualizer = ({
           selectable: true,
         };
       }) || [],
-    [shape],
+    [shape, tasks, setSelectedTaskRunId],
   );
 
   const nodeWidth = 230;

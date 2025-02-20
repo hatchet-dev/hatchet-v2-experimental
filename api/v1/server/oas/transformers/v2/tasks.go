@@ -63,7 +63,7 @@ func ToTaskSummary(task *timescalev2.PopulateTaskRunDataRow) gen.V2TaskSummary {
 		WorkflowId:         uuid.MustParse(sqlchelpers.UUIDToStr(task.WorkflowID)),
 		TaskId:             int(task.ID),
 		TaskInsertedAt:     task.InsertedAt.Time,
-		TaskExternalId:     &taskExternalId,
+		TaskExternalId:     taskExternalId,
 	}
 }
 

@@ -1260,7 +1260,7 @@ type V2TaskSummary struct {
 	Status    V2TaskStatus `json:"status"`
 
 	// TaskExternalId The external ID of the task.
-	TaskExternalId *openapi_types.UUID `json:"taskExternalId,omitempty"`
+	TaskExternalId openapi_types.UUID `json:"taskExternalId"`
 
 	// TaskId The ID of the task.
 	TaskId int `json:"taskId"`

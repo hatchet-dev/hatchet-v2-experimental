@@ -60,6 +60,7 @@ V2TaskSummary:
     - displayName
     - workflowId
     - output
+    - taskExternalId
 
 V2DagChildren:
   type: object

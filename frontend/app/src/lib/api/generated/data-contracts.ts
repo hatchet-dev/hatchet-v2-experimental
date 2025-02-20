@@ -71,7 +71,7 @@ export interface V2TaskSummary {
    * @minLength 36
    * @maxLength 36
    */
-  taskExternalId?: string;
+  taskExternalId: string;
   /**
    * The timestamp the task was inserted.
    * @format date-time
