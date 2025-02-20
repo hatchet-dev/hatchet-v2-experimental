@@ -2,6 +2,7 @@ import React from 'react';
 import {
   StepRun,
   StepRunStatus,
+  V2Task,
   V2TaskStatus,
   WorkflowRun,
   queries,
@@ -47,6 +48,36 @@ export const STEP_RUN_TERMINAL_STATUSES = [
   StepRunStatus.FAILED,
   StepRunStatus.SUCCEEDED,
 ];
+
+const TaskRunPermalinkOrBacklink = ({
+  taskRun,
+  showViewTaskRunButton,
+}: {
+  taskRun: V2Task;
+  showViewTaskRunButton: boolean;
+}) => {
+  if (showViewTaskRunButton) {
+    return (
+      <Link to={`/task-runs/${taskRun.metadata.id}`}>
+        <Button size={'sm'} className="px-2 py-2 gap-2" variant={'outline'}>
+          <LinkIcon className="w-4 h-4" />
+          View Task Run
+        </Button>
+      </Link>
+    );
+  } else if (taskRun.workflowRunExternalId) {
+    return (
+      <Link to={`/workflow-runs/${taskRun.workflowRunExternalId}`}>
+        <Button size={'sm'} className="px-2 py-2 gap-2" variant={'outline'}>
+          <LinkIcon className="w-4 h-4" />
+          View Workflow Run
+        </Button>
+      </Link>
+    );
+  } else {
+    return null;
+  }
+};
 
 const StepRunDetail: React.FC<StepRunDetailProps> = ({
   taskRunId,
@@ -121,18 +152,10 @@ const StepRunDetail: React.FC<StepRunDetailProps> = ({
           <XCircleIcon className="w-4 h-4" />
           Cancel
         </Button>
-        <Link
-          to={
-            showViewTaskRunButton
-              ? `/task-runs/${taskRunId}`
-              : `/workflow-runs/${taskRunId}`
-          }
-        >
-          <Button size={'sm'} className="px-2 py-2 gap-2" variant={'outline'}>
-            <LinkIcon className="w-4 h-4" />
-            View Task Run
-          </Button>
-        </Link>
+        <TaskRunPermalinkOrBacklink
+          taskRun={taskRun}
+          showViewTaskRunButton={showViewTaskRunButton || false}
+        />
       </div>
       <div className="flex flex-row gap-2 items-center">
         <V2StepRunSummary taskRunId={taskRunId} />

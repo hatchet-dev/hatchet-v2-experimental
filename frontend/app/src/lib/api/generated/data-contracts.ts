@@ -186,6 +186,13 @@ export interface V2Task {
   output?: string;
   /** The error message of the task run (for the latest run) */
   errorMessage?: string;
+  /**
+   * The external ID of the workflow run.
+   * @format uuid
+   * @minLength 36
+   * @maxLength 36
+   */
+  workflowRunExternalId?: string;
 }
 
 export enum V2TaskEventType {

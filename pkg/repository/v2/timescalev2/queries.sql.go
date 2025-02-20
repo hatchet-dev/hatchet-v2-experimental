@@ -228,6 +228,26 @@ func (q *Queries) GetTenantStatusMetrics(ctx context.Context, db DBTX, arg GetTe
 	return &i, err
 }
 
+const getWorkflowRunIdFromDagIdInsertedAt = `-- name: GetWorkflowRunIdFromDagIdInsertedAt :one
+SELECT external_id
+FROM v2_dags_olap
+WHERE
+    id = $1::bigint
+    AND inserted_at = $2::timestamptz
+`
+
+type GetWorkflowRunIdFromDagIdInsertedAtParams struct {
+	Dagid         int64              `json:"dagid"`
+	Daginsertedat pgtype.Timestamptz `json:"daginsertedat"`
+}
+
+func (q *Queries) GetWorkflowRunIdFromDagIdInsertedAt(ctx context.Context, db DBTX, arg GetWorkflowRunIdFromDagIdInsertedAtParams) (pgtype.UUID, error) {
+	row := db.QueryRow(ctx, getWorkflowRunIdFromDagIdInsertedAt, arg.Dagid, arg.Daginsertedat)
+	var external_id pgtype.UUID
+	err := row.Scan(&external_id)
+	return external_id, err
+}
+
 const listOLAPDAGPartitionsBeforeDate = `-- name: ListOLAPDAGPartitionsBeforeDate :many
 SELECT
     p::text AS partition_name

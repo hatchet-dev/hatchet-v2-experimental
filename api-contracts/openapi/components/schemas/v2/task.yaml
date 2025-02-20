@@ -136,6 +136,12 @@ V2Task:
     errorMessage:
       type: string
       description: The error message of the task run (for the latest run)
+    workflowRunExternalId:
+      type: string
+      description: The external ID of the workflow run.
+      format: uuid
+      minLength: 36
+      maxLength: 36
   required:
     - metadata
     - id

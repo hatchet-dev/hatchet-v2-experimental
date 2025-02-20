@@ -217,7 +217,7 @@ func ToTaskRunMetrics(metrics *[]olap.TaskRunMetric) gen.V2TaskRunMetrics {
 	return toReturn
 }
 
-func ToTask(taskWithData *timescalev2.PopulateSingleTaskRunDataRow) gen.V2Task {
+func ToTask(taskWithData *timescalev2.PopulateSingleTaskRunDataRow, workflowRunExternalId *pgtype.UUID) gen.V2Task {
 	additionalMetadata := jsonToMap(taskWithData.AdditionalMetadata)
 
 	var finishedAt *time.Time
@@ -246,25 +246,33 @@ func ToTask(taskWithData *timescalev2.PopulateSingleTaskRunDataRow) gen.V2Task {
 		output = &outputStr
 	}
 
+	var parsedWorkflowRunUUID *uuid.UUID
+
+	if workflowRunExternalId != nil && workflowRunExternalId.Valid {
+		id := uuid.MustParse(sqlchelpers.UUIDToStr(*workflowRunExternalId))
+		parsedWorkflowRunUUID = &id
+	}
+
 	return gen.V2Task{
 		Metadata: gen.APIResourceMeta{
 			Id:        sqlchelpers.UUIDToStr(taskWithData.ExternalID),
 			CreatedAt: taskWithData.InsertedAt.Time,
 			UpdatedAt: taskWithData.InsertedAt.Time,
 		},
-		TaskId:             int(taskWithData.ID),
-		TaskInsertedAt:     taskWithData.InsertedAt.Time,
-		DisplayName:        taskWithData.DisplayName,
-		AdditionalMetadata: &additionalMetadata,
-		Duration:           durationPtr,
-		StartedAt:          startedAt,
-		FinishedAt:         finishedAt,
-		Output:             output,
-		Status:             gen.V2TaskStatus(taskWithData.Status),
-		Input:              string(taskWithData.Input),
-		TenantId:           uuid.MustParse(sqlchelpers.UUIDToStr(taskWithData.TenantID)),
-		WorkflowId:         uuid.MustParse(sqlchelpers.UUIDToStr(taskWithData.WorkflowID)),
-		ErrorMessage:       &taskWithData.ErrorMessage.String,
+		TaskId:                int(taskWithData.ID),
+		TaskInsertedAt:        taskWithData.InsertedAt.Time,
+		DisplayName:           taskWithData.DisplayName,
+		AdditionalMetadata:    &additionalMetadata,
+		Duration:              durationPtr,
+		StartedAt:             startedAt,
+		FinishedAt:            finishedAt,
+		Output:                output,
+		Status:                gen.V2TaskStatus(taskWithData.Status),
+		Input:                 string(taskWithData.Input),
+		TenantId:              uuid.MustParse(sqlchelpers.UUIDToStr(taskWithData.TenantID)),
+		WorkflowId:            uuid.MustParse(sqlchelpers.UUIDToStr(taskWithData.WorkflowID)),
+		ErrorMessage:          &taskWithData.ErrorMessage.String,
+		WorkflowRunExternalId: parsedWorkflowRunUUID,
 	}
 }
 

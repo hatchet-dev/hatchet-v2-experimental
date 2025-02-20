@@ -93,7 +93,7 @@ type WorkflowRunData struct {
 type OLAPEventRepository interface {
 	ReadTaskRun(ctx context.Context, taskExternalId string) (*timescalev2.V2TasksOlap, error)
 	ReadWorkflowRun(ctx context.Context, tenantId, workflowRunExternalId pgtype.UUID) (*WorkflowRunData, []TaskMetadata, error)
-	ReadTaskRunData(ctx context.Context, tenantId pgtype.UUID, taskId int64, taskInsertedAt pgtype.Timestamptz) (*timescalev2.PopulateSingleTaskRunDataRow, error)
+	ReadTaskRunData(ctx context.Context, tenantId pgtype.UUID, taskId int64, taskInsertedAt pgtype.Timestamptz) (*timescalev2.PopulateSingleTaskRunDataRow, *pgtype.UUID, error)
 	ListTasks(ctx context.Context, tenantId string, opts ListTaskRunOpts) ([]*timescalev2.PopulateTaskRunDataRow, int, error)
 	ListWorkflowRuns(ctx context.Context, tenantId string, opts ListWorkflowRunOpts) ([]*WorkflowRunData, int, error)
 	ListTaskRunEvents(ctx context.Context, tenantId string, taskId int64, taskInsertedAt pgtype.Timestamptz, limit, offset int64) ([]*timescalev2.ListTaskEventsRow, error)
@@ -352,12 +352,30 @@ func (r *olapEventRepository) ReadWorkflowRun(ctx context.Context, tenantId, wor
 	}, taskMetadata, nil
 }
 
-func (r *olapEventRepository) ReadTaskRunData(ctx context.Context, tenantId pgtype.UUID, taskId int64, taskInsertedAt pgtype.Timestamptz) (*timescalev2.PopulateSingleTaskRunDataRow, error) {
-	return r.queries.PopulateSingleTaskRunData(ctx, r.pool, timescalev2.PopulateSingleTaskRunDataParams{
+func (r *olapEventRepository) ReadTaskRunData(ctx context.Context, tenantId pgtype.UUID, taskId int64, taskInsertedAt pgtype.Timestamptz) (*timescalev2.PopulateSingleTaskRunDataRow, *pgtype.UUID, error) {
+	taskRun, err := r.queries.PopulateSingleTaskRunData(ctx, r.pool, timescalev2.PopulateSingleTaskRunDataParams{
 		Taskid:         taskId,
 		Tenantid:       tenantId,
 		Taskinsertedat: taskInsertedAt,
 	})
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	dagId := taskRun.DagID.Int64
+	dagInsertedAt := taskRun.DagInsertedAt
+
+	workflowRunId, err := r.queries.GetWorkflowRunIdFromDagIdInsertedAt(ctx, r.pool, timescalev2.GetWorkflowRunIdFromDagIdInsertedAtParams{
+		Dagid:         dagId,
+		Daginsertedat: dagInsertedAt,
+	})
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return taskRun, &workflowRunId, nil
 }
 
 func (r *olapEventRepository) ListTasks(ctx context.Context, tenantId string, opts ListTaskRunOpts) ([]*timescalev2.PopulateTaskRunDataRow, int, error) {

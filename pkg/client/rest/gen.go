@@ -1186,6 +1186,9 @@ type V2Task struct {
 	// TenantId The ID of the tenant.
 	TenantId   openapi_types.UUID `json:"tenantId"`
 	WorkflowId openapi_types.UUID `json:"workflowId"`
+
+	// WorkflowRunExternalId The external ID of the workflow run.
+	WorkflowRunExternalId *openapi_types.UUID `json:"workflowRunExternalId,omitempty"`
 }
 
 // V2TaskEvent defines model for V2TaskEvent.

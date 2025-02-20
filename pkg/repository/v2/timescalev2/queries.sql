@@ -954,3 +954,11 @@ FROM runs r
 LEFT JOIN metadata m ON r.run_id = m.run_id
 LEFT JOIN error_message e ON r.run_id = e.run_id
 ORDER BY r.inserted_at DESC, r.run_id DESC;
+
+-- name: GetWorkflowRunIdFromDagIdInsertedAt :one
+SELECT external_id
+FROM v2_dags_olap
+WHERE
+    id = @dagId::bigint
+    AND inserted_at = @dagInsertedAt::timestamptz
+;
