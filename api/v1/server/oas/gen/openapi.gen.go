@@ -2311,12 +2311,12 @@ type ServerInterface interface {
 	// Get workflow run input
 	// (GET /api/v1/tenants/{tenant}/workflow-runs/{workflow-run}/input)
 	WorkflowRunGetInput(ctx echo.Context, tenant openapi_types.UUID, workflowRun openapi_types.UUID) error
+	// Get workflow run
+	// (GET /api/v1/tenants/{tenant}/workflow-runs/{workflow-run}/shape)
+	WorkflowRunGetShape(ctx echo.Context, tenant openapi_types.UUID, workflowRun openapi_types.UUID) error
 	// List events for all step runs for a workflow run
 	// (GET /api/v1/tenants/{tenant}/workflow-runs/{workflow-run}/step-run-events)
 	WorkflowRunListStepRunEvents(ctx echo.Context, tenant openapi_types.UUID, workflowRun openapi_types.UUID, params WorkflowRunListStepRunEventsParams) error
-	// Get workflow run
-	// (GET /api/v1/tenants/{tenant}/workflow-runs/{workflow-version-id}/shape)
-	WorkflowRunGetShape(ctx echo.Context, tenant openapi_types.UUID, workflowVersionId openapi_types.UUID) error
 	// Get workflows
 	// (GET /api/v1/tenants/{tenant}/workflows)
 	WorkflowList(ctx echo.Context, tenant openapi_types.UUID, params WorkflowListParams) error
@@ -3762,6 +3762,34 @@ func (w *ServerInterfaceWrapper) WorkflowRunGetInput(ctx echo.Context) error {
 	return err
 }
 
+// WorkflowRunGetShape converts echo context to params.
+func (w *ServerInterfaceWrapper) WorkflowRunGetShape(ctx echo.Context) error {
+	var err error
+	// ------------- Path parameter "tenant" -------------
+	var tenant openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "tenant", runtime.ParamLocationPath, ctx.Param("tenant"), &tenant)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter tenant: %s", err))
+	}
+
+	// ------------- Path parameter "workflow-run" -------------
+	var workflowRun openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithLocation("simple", false, "workflow-run", runtime.ParamLocationPath, ctx.Param("workflow-run"), &workflowRun)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter workflow-run: %s", err))
+	}
+
+	ctx.Set(BearerAuthScopes, []string{})
+
+	ctx.Set(CookieAuthScopes, []string{})
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.WorkflowRunGetShape(ctx, tenant, workflowRun)
+	return err
+}
+
 // WorkflowRunListStepRunEvents converts echo context to params.
 func (w *ServerInterfaceWrapper) WorkflowRunListStepRunEvents(ctx echo.Context) error {
 	var err error
@@ -3796,34 +3824,6 @@ func (w *ServerInterfaceWrapper) WorkflowRunListStepRunEvents(ctx echo.Context) 
 
 	// Invoke the callback with all the unmarshaled arguments
 	err = w.Handler.WorkflowRunListStepRunEvents(ctx, tenant, workflowRun, params)
-	return err
-}
-
-// WorkflowRunGetShape converts echo context to params.
-func (w *ServerInterfaceWrapper) WorkflowRunGetShape(ctx echo.Context) error {
-	var err error
-	// ------------- Path parameter "tenant" -------------
-	var tenant openapi_types.UUID
-
-	err = runtime.BindStyledParameterWithLocation("simple", false, "tenant", runtime.ParamLocationPath, ctx.Param("tenant"), &tenant)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter tenant: %s", err))
-	}
-
-	// ------------- Path parameter "workflow-version-id" -------------
-	var workflowVersionId openapi_types.UUID
-
-	err = runtime.BindStyledParameterWithLocation("simple", false, "workflow-version-id", runtime.ParamLocationPath, ctx.Param("workflow-version-id"), &workflowVersionId)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter workflow-version-id: %s", err))
-	}
-
-	ctx.Set(BearerAuthScopes, []string{})
-
-	ctx.Set(CookieAuthScopes, []string{})
-
-	// Invoke the callback with all the unmarshaled arguments
-	err = w.Handler.WorkflowRunGetShape(ctx, tenant, workflowVersionId)
 	return err
 }
 
@@ -5282,8 +5282,8 @@ func RegisterHandlersWithBaseURL(router EchoRouter, si ServerInterface, baseURL 
 	router.POST(baseURL+"/api/v1/tenants/:tenant/workflow-runs/replay", wrapper.WorkflowRunUpdateReplay)
 	router.GET(baseURL+"/api/v1/tenants/:tenant/workflow-runs/:workflow-run", wrapper.WorkflowRunGet)
 	router.GET(baseURL+"/api/v1/tenants/:tenant/workflow-runs/:workflow-run/input", wrapper.WorkflowRunGetInput)
+	router.GET(baseURL+"/api/v1/tenants/:tenant/workflow-runs/:workflow-run/shape", wrapper.WorkflowRunGetShape)
 	router.GET(baseURL+"/api/v1/tenants/:tenant/workflow-runs/:workflow-run/step-run-events", wrapper.WorkflowRunListStepRunEvents)
-	router.GET(baseURL+"/api/v1/tenants/:tenant/workflow-runs/:workflow-version-id/shape", wrapper.WorkflowRunGetShape)
 	router.GET(baseURL+"/api/v1/tenants/:tenant/workflows", wrapper.WorkflowList)
 	router.POST(baseURL+"/api/v1/tenants/:tenant/workflows/cancel", wrapper.WorkflowRunCancel)
 	router.GET(baseURL+"/api/v1/tenants/:tenant/workflows/crons", wrapper.CronWorkflowList)
@@ -7345,6 +7345,42 @@ func (response WorkflowRunGetInput404JSONResponse) VisitWorkflowRunGetInputRespo
 	return json.NewEncoder(w).Encode(response)
 }
 
+type WorkflowRunGetShapeRequestObject struct {
+	Tenant      openapi_types.UUID `json:"tenant"`
+	WorkflowRun openapi_types.UUID `json:"workflow-run"`
+}
+
+type WorkflowRunGetShapeResponseObject interface {
+	VisitWorkflowRunGetShapeResponse(w http.ResponseWriter) error
+}
+
+type WorkflowRunGetShape200JSONResponse WorkflowRunShape
+
+func (response WorkflowRunGetShape200JSONResponse) VisitWorkflowRunGetShapeResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type WorkflowRunGetShape400JSONResponse APIErrors
+
+func (response WorkflowRunGetShape400JSONResponse) VisitWorkflowRunGetShapeResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type WorkflowRunGetShape403JSONResponse APIErrors
+
+func (response WorkflowRunGetShape403JSONResponse) VisitWorkflowRunGetShapeResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type WorkflowRunListStepRunEventsRequestObject struct {
 	Tenant      openapi_types.UUID `json:"tenant"`
 	WorkflowRun openapi_types.UUID `json:"workflow-run"`
@@ -7387,42 +7423,6 @@ type WorkflowRunListStepRunEvents404JSONResponse APIErrors
 func (response WorkflowRunListStepRunEvents404JSONResponse) VisitWorkflowRunListStepRunEventsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(404)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type WorkflowRunGetShapeRequestObject struct {
-	Tenant            openapi_types.UUID `json:"tenant"`
-	WorkflowVersionId openapi_types.UUID `json:"workflow-version-id"`
-}
-
-type WorkflowRunGetShapeResponseObject interface {
-	VisitWorkflowRunGetShapeResponse(w http.ResponseWriter) error
-}
-
-type WorkflowRunGetShape200JSONResponse WorkflowRunShape
-
-func (response WorkflowRunGetShape200JSONResponse) VisitWorkflowRunGetShapeResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type WorkflowRunGetShape400JSONResponse APIErrors
-
-func (response WorkflowRunGetShape400JSONResponse) VisitWorkflowRunGetShapeResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(400)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type WorkflowRunGetShape403JSONResponse APIErrors
-
-func (response WorkflowRunGetShape403JSONResponse) VisitWorkflowRunGetShapeResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(403)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -9304,9 +9304,9 @@ type StrictServerInterface interface {
 
 	WorkflowRunGetInput(ctx echo.Context, request WorkflowRunGetInputRequestObject) (WorkflowRunGetInputResponseObject, error)
 
-	WorkflowRunListStepRunEvents(ctx echo.Context, request WorkflowRunListStepRunEventsRequestObject) (WorkflowRunListStepRunEventsResponseObject, error)
-
 	WorkflowRunGetShape(ctx echo.Context, request WorkflowRunGetShapeRequestObject) (WorkflowRunGetShapeResponseObject, error)
+
+	WorkflowRunListStepRunEvents(ctx echo.Context, request WorkflowRunListStepRunEventsRequestObject) (WorkflowRunListStepRunEventsResponseObject, error)
 
 	WorkflowList(ctx echo.Context, request WorkflowListRequestObject) (WorkflowListResponseObject, error)
 
@@ -10858,6 +10858,32 @@ func (sh *strictHandler) WorkflowRunGetInput(ctx echo.Context, tenant openapi_ty
 	return nil
 }
 
+// WorkflowRunGetShape operation middleware
+func (sh *strictHandler) WorkflowRunGetShape(ctx echo.Context, tenant openapi_types.UUID, workflowRun openapi_types.UUID) error {
+	var request WorkflowRunGetShapeRequestObject
+
+	request.Tenant = tenant
+	request.WorkflowRun = workflowRun
+
+	handler := func(ctx echo.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.WorkflowRunGetShape(ctx, request.(WorkflowRunGetShapeRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "WorkflowRunGetShape")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		return err
+	} else if validResponse, ok := response.(WorkflowRunGetShapeResponseObject); ok {
+		return validResponse.VisitWorkflowRunGetShapeResponse(ctx.Response())
+	} else if response != nil {
+		return fmt.Errorf("Unexpected response type: %T", response)
+	}
+	return nil
+}
+
 // WorkflowRunListStepRunEvents operation middleware
 func (sh *strictHandler) WorkflowRunListStepRunEvents(ctx echo.Context, tenant openapi_types.UUID, workflowRun openapi_types.UUID, params WorkflowRunListStepRunEventsParams) error {
 	var request WorkflowRunListStepRunEventsRequestObject
@@ -10879,32 +10905,6 @@ func (sh *strictHandler) WorkflowRunListStepRunEvents(ctx echo.Context, tenant o
 		return err
 	} else if validResponse, ok := response.(WorkflowRunListStepRunEventsResponseObject); ok {
 		return validResponse.VisitWorkflowRunListStepRunEventsResponse(ctx.Response())
-	} else if response != nil {
-		return fmt.Errorf("Unexpected response type: %T", response)
-	}
-	return nil
-}
-
-// WorkflowRunGetShape operation middleware
-func (sh *strictHandler) WorkflowRunGetShape(ctx echo.Context, tenant openapi_types.UUID, workflowVersionId openapi_types.UUID) error {
-	var request WorkflowRunGetShapeRequestObject
-
-	request.Tenant = tenant
-	request.WorkflowVersionId = workflowVersionId
-
-	handler := func(ctx echo.Context, request interface{}) (interface{}, error) {
-		return sh.ssi.WorkflowRunGetShape(ctx, request.(WorkflowRunGetShapeRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "WorkflowRunGetShape")
-	}
-
-	response, err := handler(ctx, request)
-
-	if err != nil {
-		return err
-	} else if validResponse, ok := response.(WorkflowRunGetShapeResponseObject); ok {
-		return validResponse.VisitWorkflowRunGetShapeResponse(ctx.Response())
 	} else if response != nil {
 		return fmt.Errorf("Unexpected response type: %T", response)
 	}
@@ -12320,57 +12320,57 @@ var swaggerSpec = []string{
 	"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",
-	"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",
+	"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",
+	"Ox87nZfbl/8NAAD//93vT2+gTAIA",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

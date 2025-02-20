@@ -702,7 +702,7 @@ workflowRun:
       - Workflow
 workflowRunShape:
   get:
-    x-resources: ["tenant"]
+    x-resources: ["tenant", "workflow-run"]
     description: Get a workflow run for a tenant
     operationId: workflow-run:get:shape
     parameters:
@@ -715,9 +715,9 @@ workflowRunShape:
           format: uuid
           minLength: 36
           maxLength: 36
-      - description: The workflow version id
+      - description: The workflow run id
         in: path
-        name: workflow-version-id
+        name: workflow-run
         required: true
         schema:
           type: string

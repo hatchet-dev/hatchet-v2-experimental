@@ -2210,12 +2210,12 @@ export class Api<SecurityDataType = unknown> extends HttpClient<SecurityDataType
    * @tags Workflow
    * @name WorkflowRunGetShape
    * @summary Get workflow run
-   * @request GET:/api/v1/tenants/{tenant}/workflow-runs/{workflow-version-id}/shape
+   * @request GET:/api/v1/tenants/{tenant}/workflow-runs/{workflow-run}/shape
    * @secure
    */
-  workflowRunGetShape = (tenant: string, workflowVersionId: string, params: RequestParams = {}) =>
+  workflowRunGetShape = (tenant: string, workflowRun: string, params: RequestParams = {}) =>
     this.request<WorkflowRunShape, APIErrors>({
-      path: `/api/v1/tenants/${tenant}/workflow-runs/${workflowVersionId}/shape`,
+      path: `/api/v1/tenants/${tenant}/workflow-runs/${workflowRun}/shape`,
       method: 'GET',
       secure: true,
       format: 'json',

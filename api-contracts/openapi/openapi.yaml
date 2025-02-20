@@ -174,7 +174,7 @@ paths:
     $ref: "./paths/workflow/workflow.yaml#/workflowRunsMetrics"
   /api/v1/tenants/{tenant}/workflow-runs/{workflow-run}:
     $ref: "./paths/workflow/workflow.yaml#/workflowRun"
-  /api/v1/tenants/{tenant}/workflow-runs/{workflow-version-id}/shape:
+  /api/v1/tenants/{tenant}/workflow-runs/{workflow-run}/shape:
     $ref: "./paths/workflow/workflow.yaml#/workflowRunShape"
   /api/v1/tenants/{tenant}/step-runs/{step-run}:
     $ref: "./paths/step-run/step-run.yaml#/stepRunScoped"
