@@ -17,6 +17,9 @@ import { V2RunDetailHeader } from './v2components/header';
 import { Badge } from '@/components/ui/badge';
 import { ViewToggle } from './v2components/view-toggle';
 import WorkflowRunVisualizer from './v2components/workflow-run-visualizer-v2';
+import { useAtom } from 'jotai';
+import { preferredWorkflowRunViewAtom } from '@/lib/atoms';
+import { JobMiniMap } from './v2components/mini-map';
 
 export const WORKFLOW_RUN_TERMINAL_STATUSES = [
   WorkflowRunStatus.CANCELLED,
@@ -37,6 +40,7 @@ function statusToBadgeVariant(status: V2TaskStatus) {
 }
 
 export default function ExpandedWorkflowRun() {
+  const [view] = useAtom(preferredWorkflowRunViewAtom);
   const { tenant } = useOutletContext<TenantContextType>();
   const params = useParams();
   const [selectedTaskRunId, setSelectedTaskRunId] = useState<string>();
@@ -82,8 +86,27 @@ export default function ExpandedWorkflowRun() {
           </Badge>
         </div>
         <div className="w-full h-fit flex overflow-auto relative bg-slate-100 dark:bg-slate-900">
-          <WorkflowRunVisualizer setSelectedTaskRunId={handleTaskRunExpand} />
-          {shape && <ViewToggle shape={shape} />}
+          {view == 'graph' &&
+            shape.some((task) => task.children.length > 0) && (
+              <WorkflowRunVisualizer
+                setSelectedTaskRunId={handleTaskRunExpand}
+              />
+            )}
+          {(view == 'minimap' ||
+            (!shape.some((task) => task.children.length > 0) && (
+              <WorkflowRunVisualizer
+                setSelectedTaskRunId={handleTaskRunExpand}
+              />
+            ))) && (
+            <JobMiniMap
+              onClick={(stepRunId) => {
+                if (stepRunId) {
+                  handleTaskRunExpand(stepRunId);
+                }
+              }}
+            />
+          )}
+          <ViewToggle shape={shape} />
         </div>
         <div className="h-4" />
         <Tabs defaultValue="activity">

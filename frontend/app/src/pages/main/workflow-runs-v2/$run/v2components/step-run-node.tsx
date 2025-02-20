@@ -47,6 +47,7 @@ export default memo(({ data }: { data: NodeData }) => {
           'hover:opacity-100 opacity-80',
           'h-[30px]',
         )}
+        onClick={() => data.onClick()}
       >
         {data.task.status == V2TaskStatus.RUNNING && (
           <span className="spark mask-gradient animate-flip before:animate-rotate absolute inset-0 h-[100%] w-[100%] overflow-hidden [mask:linear-gradient(#ccc,_transparent_50%)] before:absolute before:aspect-square before:w-[200%] before:rotate-[-90deg] before:bg-[conic-gradient(from_0deg,transparent_0_340deg,#ccc_360deg)] before:content-[''] before:[inset:0_auto_auto_50%] before:[translate:-50%_-15%]" />
@@ -84,8 +85,10 @@ export default memo(({ data }: { data: NodeData }) => {
             `bg-[#ffffff] dark:bg-[#050c1c]`,
             'h-[30px]',
           )}
-          // FIXME: onClick handler
-          onClick={() => {}}
+          // FIXME: onClick should be implemented
+          onClick={() => {
+            throw new Error('Not implemented');
+          }}
         >
           <div className="truncate flex-grow">
             {data.task.displayName}: {data.childWorkflowsCount} children
