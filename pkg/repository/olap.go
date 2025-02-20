@@ -97,7 +97,7 @@ type OLAPEventRepository interface {
 	ListTasks(ctx context.Context, tenantId string, opts ListTaskRunOpts) ([]*timescalev2.PopulateTaskRunDataRow, int, error)
 	ListWorkflowRuns(ctx context.Context, tenantId string, opts ListWorkflowRunOpts) ([]*WorkflowRunData, int, error)
 	ListTaskRunEvents(ctx context.Context, tenantId string, taskId int64, taskInsertedAt pgtype.Timestamptz, limit, offset int64) ([]*timescalev2.ListTaskEventsRow, error)
-	ListTaskRunEventsByWorkflowRunId(ctx context.Context, tenantId string, workflowRunId uuid.UUID) ([]*timescalev2.ListTaskEventsForWorkflowRunRow, error)
+	ListTaskRunEventsByWorkflowRunId(ctx context.Context, tenantId string, workflowRunId pgtype.UUID) ([]*timescalev2.ListTaskEventsForWorkflowRunRow, error)
 	ReadTaskRunMetrics(ctx context.Context, tenantId string, opts ReadTaskRunMetricsOpts) ([]olap.TaskRunMetric, error)
 	CreateTasks(ctx context.Context, tenantId string, tasks []*sqlcv2.V2Task) error
 	CreateTaskEvents(ctx context.Context, tenantId string, events []timescalev2.CreateTaskEventsOLAPParams) error
@@ -767,10 +767,10 @@ func (r *olapEventRepository) ListTaskRunEvents(ctx context.Context, tenantId st
 	return rows, nil
 }
 
-func (r *olapEventRepository) ListTaskRunEventsByWorkflowRunId(ctx context.Context, tenantId string, workflowRunId uuid.UUID) ([]*timescalev2.ListTaskEventsForWorkflowRunRow, error) {
+func (r *olapEventRepository) ListTaskRunEventsByWorkflowRunId(ctx context.Context, tenantId string, workflowRunId pgtype.UUID) ([]*timescalev2.ListTaskEventsForWorkflowRunRow, error) {
 	rows, err := r.queries.ListTaskEventsForWorkflowRun(ctx, r.pool, timescalev2.ListTaskEventsForWorkflowRunParams{
 		Tenantid:      sqlchelpers.UUIDFromStr(tenantId),
-		Workflowrunid: sqlchelpers.UUIDFromStr(workflowRunId.String()),
+		Workflowrunid: workflowRunId,
 	})
 
 	if err != nil {

@@ -1,23 +1,30 @@
 package workflowruns
 
 import (
-	"fmt"
-
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/labstack/echo/v4"
 
 	"github.com/hatchet-dev/hatchet/api/v1/server/oas/gen"
 	"github.com/hatchet-dev/hatchet/api/v1/server/oas/transformers/v2"
+	"github.com/hatchet-dev/hatchet/pkg/repository"
 	"github.com/hatchet-dev/hatchet/pkg/repository/prisma/db"
 	"github.com/hatchet-dev/hatchet/pkg/repository/prisma/sqlchelpers"
 )
 
+type V2WorkflowRunPopulator struct {
+	WorkflowRun  *repository.WorkflowRunData
+	TaskMetadata []repository.TaskMetadata
+}
+
 func (t *V2WorkflowRunsService) V2WorkflowRunGet(ctx echo.Context, request gen.V2WorkflowRunGetRequestObject) (gen.V2WorkflowRunGetResponseObject, error) {
 	tenant := ctx.Get("tenant").(*db.TenantModel)
+	rawWorkflowRun := ctx.Get("v2-workflow-run").(map[string]interface{})
 
-	fmt.Println(ctx.Get("tenant"), request.V2WorkflowRun)
-	workflowRunId := request.V2WorkflowRun
+	workflowRun := rawWorkflowRun["workflowRun"].(*repository.WorkflowRunData)
+	taskMetadata := rawWorkflowRun["taskMetadata"].([]repository.TaskMetadata)
+
+	workflowRunId := workflowRun.ExternalID
 
 	requestContext := ctx.Request().Context()
 
@@ -26,12 +33,6 @@ func (t *V2WorkflowRunsService) V2WorkflowRunGet(ctx echo.Context, request gen.V
 		tenant.ID,
 		workflowRunId,
 	)
-
-	if err != nil {
-		return nil, err
-	}
-
-	workflowRunPtr, taskMetadata, err := t.config.OLAPRepository.ReadWorkflowRun(requestContext, sqlchelpers.UUIDFromStr(workflowRunId.String()))
 
 	if err != nil {
 		return nil, err
@@ -52,7 +53,6 @@ func (t *V2WorkflowRunsService) V2WorkflowRunGet(ctx echo.Context, request gen.V
 		stepIdToTaskExternalId[task.StepID] = task.ExternalID
 	}
 
-	workflowRun := *workflowRunPtr
 	workflowVersionId := uuid.MustParse(sqlchelpers.UUIDToStr(workflowRun.WorkflowVersionId))
 
 	shape, err := t.config.APIRepository.WorkflowRun().GetWorkflowRunShape(
@@ -63,7 +63,7 @@ func (t *V2WorkflowRunsService) V2WorkflowRunGet(ctx echo.Context, request gen.V
 		return nil, err
 	}
 
-	result, err := transformers.ToWorkflowRunDetails(taskRunEvents, &workflowRun, shape, tasks, stepIdToTaskExternalId)
+	result, err := transformers.ToWorkflowRunDetails(taskRunEvents, workflowRun, shape, tasks, stepIdToTaskExternalId)
 
 	if err != nil {
 		return nil, err
