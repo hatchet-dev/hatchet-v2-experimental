@@ -173,7 +173,7 @@ func (r *TaskRepositoryImpl) UpdateTablePartitions(ctx context.Context) error {
 	for _, partition := range dagPartitions {
 		_, err := r.pool.Exec(
 			ctx,
-			fmt.Sprintf("ALTER TABLE v2_task DETACH PARTITION %s CONCURRENTLY", partition),
+			fmt.Sprintf("ALTER TABLE v2_dag DETACH PARTITION %s CONCURRENTLY", partition),
 		)
 
 		if err != nil {
