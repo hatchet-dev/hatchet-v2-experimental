@@ -49,6 +49,22 @@ func (tc *TasksControllerImpl) processTaskTimeouts(ctx context.Context, tenantId
 		tc.l.Info().Msgf("timed out %d step runs", num)
 	}
 
+	tasksToSendToDispatcher := make([]tasktypes.SignalTaskCancelledPayload, 0)
+
+	for _, task := range tasks {
+		tasksToSendToDispatcher = append(tasksToSendToDispatcher, tasktypes.SignalTaskCancelledPayload{
+			TaskId:     task.ID,
+			WorkerId:   sqlchelpers.UUIDToStr(task.WorkerID),
+			RetryCount: task.RetryCount,
+		})
+	}
+
+	err = tc.sendTaskCancellationsToDispatcher(ctx, tenantId, tasksToSendToDispatcher)
+
+	if err != nil {
+		return false, fmt.Errorf("could not send task cancellations to dispatcher for tenant %s: %w", tenantId, err)
+	}
+
 	for _, task := range tasks {
 		taskId := task.ID
 

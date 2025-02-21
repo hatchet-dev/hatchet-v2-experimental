@@ -9,7 +9,7 @@ import (
 const createTasks = `-- name: CreateTasks :many
 WITH input AS (
     SELECT
-        tenant_id, queue, action_id, step_id, step_readable_id, workflow_id, schedule_timeout, step_timeout, priority, sticky, desired_worker_id, external_id, display_name, input, retry_count, additional_metadata, initial_state, dag_id, dag_inserted_at
+        tenant_id, queue, action_id, step_id, step_readable_id, workflow_id, schedule_timeout, step_timeout, priority, sticky, desired_worker_id, external_id, display_name, input, retry_count, additional_metadata, initial_state, dag_id, dag_inserted_at, concurrency_strategy_ids, concurrency_keys
     FROM
         (
             SELECT
@@ -32,7 +32,9 @@ WITH input AS (
 				unnest(cast($17::text[] as v2_task_initial_state[])) AS initial_state,
                 -- NOTE: these are nullable, so sqlc doesn't support casting to a type
                 unnest($18::bigint[]) AS dag_id,
-                unnest($19::timestamptz[]) AS dag_inserted_at
+                unnest($19::timestamptz[]) AS dag_inserted_at,
+				unnest_nd_1d($20::bigint[][]) AS concurrency_strategy_ids,
+				unnest_nd_1d($21::text[][]) AS concurrency_keys
         ) AS subquery
 )
 INSERT INTO v2_task (
@@ -54,7 +56,9 @@ INSERT INTO v2_task (
     additional_metadata,
 	initial_state,
     dag_id,
-    dag_inserted_at
+    dag_inserted_at,
+	concurrency_strategy_ids,
+	concurrency_keys
 )
 SELECT
     i.tenant_id,
@@ -75,33 +79,37 @@ SELECT
     i.additional_metadata,
 	i.initial_state,
     i.dag_id,
-    i.dag_inserted_at
+    i.dag_inserted_at,
+	i.concurrency_strategy_ids,
+	i.concurrency_keys
 FROM
     input i
 RETURNING
-    id, inserted_at, tenant_id, queue, action_id, step_id, step_readable_id, workflow_id, schedule_timeout, step_timeout, priority, sticky, desired_worker_id, external_id, display_name, input, retry_count, internal_retry_count, app_retry_count, additional_metadata, initial_state, dag_id, dag_inserted_at
+    id, inserted_at, tenant_id, queue, action_id, step_id, step_readable_id, workflow_id, schedule_timeout, step_timeout, priority, sticky, desired_worker_id, external_id, display_name, input, retry_count, internal_retry_count, app_retry_count, additional_metadata, initial_state, dag_id, dag_inserted_at, concurrency_strategy_ids, concurrency_keys
 `
 
 type CreateTasksParams struct {
-	Tenantids           []pgtype.UUID        `json:"tenantids"`
-	Queues              []string             `json:"queues"`
-	Actionids           []string             `json:"actionids"`
-	Stepids             []pgtype.UUID        `json:"stepids"`
-	Stepreadableids     []string             `json:"stepreadableids"`
-	Workflowids         []pgtype.UUID        `json:"workflowids"`
-	Scheduletimeouts    []string             `json:"scheduletimeouts"`
-	Steptimeouts        []string             `json:"steptimeouts"`
-	Priorities          []int32              `json:"priorities"`
-	Stickies            []string             `json:"stickies"`
-	Desiredworkerids    []pgtype.UUID        `json:"desiredworkerids"`
-	Externalids         []pgtype.UUID        `json:"externalids"`
-	Displaynames        []string             `json:"displaynames"`
-	Inputs              [][]byte             `json:"inputs"`
-	Retrycounts         []int32              `json:"retrycounts"`
-	Additionalmetadatas [][]byte             `json:"additionalmetadatas"`
-	InitialStates       []string             `json:"initialstates"`
-	Dagids              []pgtype.Int8        `json:"dagids"`
-	Daginsertedats      []pgtype.Timestamptz `json:"daginsertedats"`
+	Tenantids              []pgtype.UUID        `json:"tenantids"`
+	Queues                 []string             `json:"queues"`
+	Actionids              []string             `json:"actionids"`
+	Stepids                []pgtype.UUID        `json:"stepids"`
+	Stepreadableids        []string             `json:"stepreadableids"`
+	Workflowids            []pgtype.UUID        `json:"workflowids"`
+	Scheduletimeouts       []string             `json:"scheduletimeouts"`
+	Steptimeouts           []string             `json:"steptimeouts"`
+	Priorities             []int32              `json:"priorities"`
+	Stickies               []string             `json:"stickies"`
+	Desiredworkerids       []pgtype.UUID        `json:"desiredworkerids"`
+	Externalids            []pgtype.UUID        `json:"externalids"`
+	Displaynames           []string             `json:"displaynames"`
+	Inputs                 [][]byte             `json:"inputs"`
+	Retrycounts            []int32              `json:"retrycounts"`
+	Additionalmetadatas    [][]byte             `json:"additionalmetadatas"`
+	InitialStates          []string             `json:"initialstates"`
+	Dagids                 []pgtype.Int8        `json:"dagids"`
+	Daginsertedats         []pgtype.Timestamptz `json:"daginsertedats"`
+	ConcurrencyStrategyIds [][]int64            `json:"concurrencyStrategyIds"`
+	ConcurrencyKeys        [][]string           `json:"concurrencyKeys"`
 }
 
 func (q *Queries) CreateTasks(ctx context.Context, db DBTX, arg CreateTasksParams) ([]*V2Task, error) {
@@ -125,6 +133,8 @@ func (q *Queries) CreateTasks(ctx context.Context, db DBTX, arg CreateTasksParam
 		arg.InitialStates,
 		arg.Dagids,
 		arg.Daginsertedats,
+		arg.ConcurrencyStrategyIds,
+		arg.ConcurrencyKeys,
 	)
 	if err != nil {
 		return nil, err
@@ -157,6 +167,8 @@ func (q *Queries) CreateTasks(ctx context.Context, db DBTX, arg CreateTasksParam
 			&i.InitialState,
 			&i.DagID,
 			&i.DagInsertedAt,
+			&i.ConcurrencyStrategyIds,
+			&i.ConcurrencyKeys,
 		); err != nil {
 			return nil, err
 		}

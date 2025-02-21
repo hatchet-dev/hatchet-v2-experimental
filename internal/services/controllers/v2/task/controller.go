@@ -449,21 +449,43 @@ func (tc *TasksControllerImpl) handleTaskCancelled(ctx context.Context, tenantId
 	opts := make([]v2.TaskIdRetryCount, 0)
 
 	msgs := msgqueue.JSONConvert[tasktypes.CancelledTaskPayload](payloads)
+	shouldTasksNotify := make(map[int64]bool)
 
 	for _, msg := range msgs {
 		opts = append(opts, v2.TaskIdRetryCount{
 			Id:         msg.TaskId,
 			RetryCount: msg.RetryCount,
 		})
+
+		shouldTasksNotify[msg.TaskId] = msg.ShouldNotify
 	}
 
-	queues, err := tc.repov2.Tasks().CancelTasks(ctx, tenantId, opts)
+	releasedTasks, err := tc.repov2.Tasks().CancelTasks(ctx, tenantId, opts)
 
 	if err != nil {
 		return err
 	}
 
-	tc.notifyQueuesOnCompletion(ctx, tenantId, queues)
+	tasksToSendToDispatcher := make([]tasktypes.SignalTaskCancelledPayload, 0)
+
+	for _, task := range releasedTasks {
+		if shouldTasksNotify[task.ID] {
+			tasksToSendToDispatcher = append(tasksToSendToDispatcher, tasktypes.SignalTaskCancelledPayload{
+				TaskId:     task.ID,
+				WorkerId:   sqlchelpers.UUIDToStr(task.WorkerID),
+				RetryCount: task.RetryCount,
+			})
+		}
+	}
+
+	// send task cancellations to the dispatcher
+	err = tc.sendTaskCancellationsToDispatcher(ctx, tenantId, tasksToSendToDispatcher)
+
+	if err != nil {
+		return fmt.Errorf("could not send task cancellations to dispatcher: %w", err)
+	}
+
+	tc.notifyQueuesOnCompletion(ctx, tenantId, releasedTasks)
 
 	var outerErr error
 
@@ -500,6 +522,65 @@ func (tc *TasksControllerImpl) handleTaskCancelled(ctx context.Context, tenantId
 	return err
 }
 
+func (tc *TasksControllerImpl) sendTaskCancellationsToDispatcher(ctx context.Context, tenantId string, releasedTasks []tasktypes.SignalTaskCancelledPayload) error {
+	workerIds := make([]string, 0)
+
+	for _, task := range releasedTasks {
+		workerIds = append(workerIds, task.WorkerId)
+	}
+
+	dispatcherIdWorkerIds, err := tc.repo.Worker().GetDispatcherIdsForWorkers(ctx, tenantId, workerIds)
+
+	if err != nil {
+		return fmt.Errorf("could not list dispatcher ids for workers: %w", err)
+	}
+
+	workerIdToDispatcherId := make(map[string]string)
+
+	for dispatcherId, workerIds := range dispatcherIdWorkerIds {
+		for _, workerId := range workerIds {
+			workerIdToDispatcherId[workerId] = dispatcherId
+		}
+	}
+
+	// assemble messages
+	dispatcherIdsToPayloads := make(map[string][]tasktypes.SignalTaskCancelledPayload)
+
+	for _, task := range releasedTasks {
+		workerId := task.WorkerId
+		dispatcherId := workerIdToDispatcherId[workerId]
+
+		dispatcherIdsToPayloads[dispatcherId] = append(dispatcherIdsToPayloads[dispatcherId], task)
+	}
+
+	// send messages
+	for dispatcherId, payloads := range dispatcherIdsToPayloads {
+		msg, err := msgqueue.NewTenantMessage(
+			tenantId,
+			"task-cancelled",
+			false,
+			true,
+			payloads...,
+		)
+
+		if err != nil {
+			return fmt.Errorf("could not create message for task cancellation: %w", err)
+		}
+
+		err = tc.mq.SendMessage(
+			ctx,
+			msgqueue.QueueTypeFromDispatcherID(dispatcherId),
+			msg,
+		)
+
+		if err != nil {
+			return fmt.Errorf("could not send message for task cancellation: %w", err)
+		}
+	}
+
+	return nil
+}
+
 func (tc *TasksControllerImpl) notifyQueuesOnCompletion(ctx context.Context, tenantId string, releasedTasks []*sqlcv2.ReleaseTasksRow) {
 	tenant, err := tc.repo.Tenant().GetTenantByID(ctx, tenantId)
 
@@ -508,21 +589,12 @@ func (tc *TasksControllerImpl) notifyQueuesOnCompletion(ctx context.Context, ten
 		return
 	}
 
-	uniqueQueues := make(map[string]struct{})
+	if tenant.SchedulerPartitionId.Valid {
+		msg, err := tasktypes.NotifyTaskReleased(tenantId, releasedTasks)
 
-	for _, task := range releasedTasks {
-		uniqueQueues[task.Queue] = struct{}{}
-	}
-
-	for queue := range uniqueQueues {
-		if tenant.SchedulerPartitionId.Valid {
-			msg, err := tasktypes.CheckTenantQueueToTask(tenantId, queue, false, true)
-
-			if err != nil {
-				tc.l.Err(err).Msg("could not create message for scheduler partition queue")
-				continue
-			}
-
+		if err != nil {
+			tc.l.Err(err).Msg("could not create message for scheduler partition queue")
+		} else {
 			err = tc.mq.SendMessage(
 				ctx,
 				msgqueue.QueueTypeFromPartitionIDAndController(tenant.SchedulerPartitionId.String, msgqueue.Scheduler),
@@ -675,15 +747,12 @@ func (tc *TasksControllerImpl) signalTasksCreated(ctx context.Context, tenantId 
 		return err
 	}
 
-	for queue := range queues {
-		if tenant.SchedulerPartitionId.Valid {
-			msg, err := tasktypes.CheckTenantQueueToTask(tenantId, queue, true, false)
+	if tenant.SchedulerPartitionId.Valid {
+		msg, err := tasktypes.NotifyTaskCreated(tenantId, tasks)
 
-			if err != nil {
-				tc.l.Err(err).Msg("could not create message for scheduler partition queue")
-				continue
-			}
-
+		if err != nil {
+			tc.l.Err(err).Msg("could not create message for scheduler partition queue")
+		} else {
 			err = tc.mq.SendMessage(
 				ctx,
 				msgqueue.QueueTypeFromPartitionIDAndController(tenant.SchedulerPartitionId.String, msgqueue.Scheduler),

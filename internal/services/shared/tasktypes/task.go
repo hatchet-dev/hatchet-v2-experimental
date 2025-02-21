@@ -29,9 +29,11 @@ type TriggerTaskPayload struct {
 }
 
 func TriggerTaskMessage(tenantId string, taskExternalId, name string, data []byte, additionalMetadata []byte, parentTaskId *int64, childIndex *int64, childKey *string) (*msgqueue.Message, error) {
-	return msgqueue.NewSingletonTenantMessage(
+	return msgqueue.NewTenantMessage(
 		tenantId,
 		"task-trigger",
+		false,
+		true,
 		TriggerTaskPayload{
 			TaskExternalId:     taskExternalId,
 			WorkflowName:       name,
@@ -41,8 +43,6 @@ func TriggerTaskMessage(tenantId string, taskExternalId, name string, data []byt
 			ChildIndex:         childIndex,
 			ChildKey:           childKey,
 		},
-		false,
-		true,
 	)
 }
 
@@ -58,16 +58,16 @@ type CompletedTaskPayload struct {
 }
 
 func CompletedTaskMessage(tenantId string, taskId int64, retryCount int32, output []byte) (*msgqueue.Message, error) {
-	return msgqueue.NewSingletonTenantMessage(
+	return msgqueue.NewTenantMessage(
 		tenantId,
 		"task-completed",
+		false,
+		true,
 		CompletedTaskPayload{
 			TaskId:     taskId,
 			RetryCount: retryCount,
 			Output:     output,
 		},
-		false,
-		true,
 	)
 }
 
@@ -86,17 +86,17 @@ type FailedTaskPayload struct {
 }
 
 func FailedTaskMessage(tenantId string, taskId int64, retryCount int32, isAppError bool, errorMsg string) (*msgqueue.Message, error) {
-	return msgqueue.NewSingletonTenantMessage(
+	return msgqueue.NewTenantMessage(
 		tenantId,
 		"task-failed",
+		false,
+		true,
 		FailedTaskPayload{
 			TaskId:     taskId,
 			RetryCount: retryCount,
 			IsAppError: isAppError,
 			ErrorMsg:   errorMsg,
 		},
-		false,
-		true,
 	)
 }
 
@@ -109,18 +109,33 @@ type CancelledTaskPayload struct {
 
 	// (required) the reason for cancellation
 	EventType timescalev2.V2EventTypeOlap
+
+	// (optional) whether the task should notify the worker
+	ShouldNotify bool
 }
 
-func CancelledTaskMessage(tenantId string, taskId int64, retryCount int32, eventType timescalev2.V2EventTypeOlap) (*msgqueue.Message, error) {
-	return msgqueue.NewSingletonTenantMessage(
+func CancelledTaskMessage(tenantId string, taskId int64, retryCount int32, eventType timescalev2.V2EventTypeOlap, shouldNotify bool) (*msgqueue.Message, error) {
+	return msgqueue.NewTenantMessage(
 		tenantId,
 		"task-cancelled",
-		CancelledTaskPayload{
-			TaskId:     taskId,
-			RetryCount: retryCount,
-			EventType:  eventType,
-		},
 		false,
 		true,
+		CancelledTaskPayload{
+			TaskId:       taskId,
+			RetryCount:   retryCount,
+			EventType:    eventType,
+			ShouldNotify: shouldNotify,
+		},
 	)
+}
+
+type SignalTaskCancelledPayload struct {
+	// (required) the worker id
+	WorkerId string `validate:"required,uuid"`
+
+	// (required) the task id
+	TaskId int64 `validate:"required"`
+
+	// (required) the retry count
+	RetryCount int32
 }

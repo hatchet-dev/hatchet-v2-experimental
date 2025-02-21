@@ -8,6 +8,7 @@ import (
 )
 
 type SchedulerRepository interface {
+	Concurrency() ConcurrencyRepository
 	Lease() LeaseRepository
 	QueueFactory() QueueFactoryRepository
 	RateLimit() RateLimitRepository
@@ -17,6 +18,7 @@ type SchedulerRepository interface {
 type LeaseRepository interface {
 	ListQueues(ctx context.Context, tenantId pgtype.UUID) ([]*sqlcv2.V2Queue, error)
 	ListActiveWorkers(ctx context.Context, tenantId pgtype.UUID) ([]*ListActiveWorkersResult, error)
+	ListConcurrencyStrategies(ctx context.Context, tenantId pgtype.UUID) ([]*sqlcv2.V2StepConcurrency, error)
 
 	AcquireOrExtendLeases(ctx context.Context, tenantId pgtype.UUID, kind sqlcv2.LeaseKind, resourceIds []string, existingLeases []*sqlcv2.Lease) ([]*sqlcv2.Lease, error)
 	ReleaseLeases(ctx context.Context, tenantId pgtype.UUID, leases []*sqlcv2.Lease) error
@@ -47,6 +49,7 @@ type AssignmentRepository interface {
 }
 
 type schedulerRepository struct {
+	concurrency  ConcurrencyRepository
 	lease        LeaseRepository
 	queueFactory QueueFactoryRepository
 	rateLimit    RateLimitRepository
@@ -55,11 +58,16 @@ type schedulerRepository struct {
 
 func newSchedulerRepository(shared *sharedRepository) *schedulerRepository {
 	return &schedulerRepository{
+		concurrency:  newConcurrencyRepository(shared),
 		lease:        newLeaseRepository(shared),
 		queueFactory: newQueueFactoryRepository(shared),
 		rateLimit:    newRateLimitRepository(shared),
 		assignment:   newAssignmentRepository(shared),
 	}
+}
+
+func (d *schedulerRepository) Concurrency() ConcurrencyRepository {
+	return d.concurrency
 }
 
 func (d *schedulerRepository) Lease() LeaseRepository {

@@ -188,25 +188,46 @@ func (d *queueRepository) MarkQueueItemsProcessed(ctx context.Context, r *Assign
 	durPrepare := time.Since(checkpoint)
 	checkpoint = time.Now()
 
-	idsToUnqueue := make([]int64, len(r.Assigned))
-	taskIds := make([]int64, len(r.Assigned))
-	workerIds := make([]pgtype.UUID, len(r.Assigned))
+	idsToUnqueue := make([]int64, 0, len(r.Assigned))
+	queueItemIdsToAssignedItem := make(map[int64]*AssignedItem, len(r.Assigned))
+	taskIdToAssignedItem := make(map[int64]*AssignedItem, len(r.Assigned))
 
-	for i, assignedItem := range r.Assigned {
-		idsToUnqueue[i] = assignedItem.QueueItem.ID
-		taskIds[i] = assignedItem.QueueItem.TaskID
-		workerIds[i] = assignedItem.WorkerId
-	}
-
-	unassignedTaskIds := make([]int64, 0, len(r.Unassigned))
-
-	for _, id := range r.Unassigned {
-		unassignedTaskIds = append(unassignedTaskIds, id.TaskID)
+	for _, assignedItem := range r.Assigned {
+		idsToUnqueue = append(idsToUnqueue, assignedItem.QueueItem.ID)
+		queueItemIdsToAssignedItem[assignedItem.QueueItem.ID] = assignedItem
+		taskIdToAssignedItem[assignedItem.QueueItem.TaskID] = assignedItem
 	}
 
 	for _, id := range r.SchedulingTimedOut {
 		idsToUnqueue = append(idsToUnqueue, id.ID)
 	}
+
+	queuedItemIds, err := d.queries.BulkQueueItems(ctx, tx, idsToUnqueue)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	queuedItemsMap := make(map[int64]struct{}, len(queuedItemIds))
+
+	for _, id := range queuedItemIds {
+		queuedItemsMap[id] = struct{}{}
+	}
+
+	taskIds := make([]int64, 0, len(r.Assigned))
+	workerIds := make([]pgtype.UUID, 0, len(r.Assigned))
+
+	// if there are any idsToUnqueue that are not in the queuedItems, this means they were
+	// deleted from the v2_queue_items table, so we should not assign them
+	for id, assignedItem := range queueItemIdsToAssignedItem {
+		if _, ok := queuedItemsMap[id]; ok {
+			taskIds = append(taskIds, assignedItem.QueueItem.TaskID)
+			workerIds = append(workerIds, assignedItem.WorkerId)
+		}
+	}
+
+	timeAfterBulkQueueItems := time.Since(checkpoint)
+	checkpoint = time.Now()
 
 	updatedTasks, err := d.queries.UpdateTasksToAssigned(ctx, tx, sqlcv2.UpdateTasksToAssignedParams{
 		Taskids:   taskIds,
@@ -219,15 +240,6 @@ func (d *queueRepository) MarkQueueItemsProcessed(ctx context.Context, r *Assign
 	}
 
 	timeAfterUpdateStepRuns := time.Since(checkpoint)
-	checkpoint = time.Now()
-
-	err = d.queries.BulkQueueItems(ctx, tx, idsToUnqueue)
-
-	if err != nil {
-		return nil, nil, err
-	}
-
-	timeAfterBulkQueueItems := time.Since(checkpoint)
 
 	if err := commit(ctx); err != nil {
 		return nil, nil, err
@@ -237,12 +249,6 @@ func (d *queueRepository) MarkQueueItemsProcessed(ctx context.Context, r *Assign
 		// if we committed, we can update the min id
 		d.updateMinId()
 	}()
-
-	taskIdToAssignedItem := make(map[int64]*AssignedItem, len(updatedTasks))
-
-	for _, assignedItem := range r.Assigned {
-		taskIdToAssignedItem[assignedItem.QueueItem.TaskID] = assignedItem
-	}
 
 	succeeded = make([]*AssignedItem, 0, len(r.Assigned))
 	failed = make([]*AssignedItem, 0, len(r.Assigned))

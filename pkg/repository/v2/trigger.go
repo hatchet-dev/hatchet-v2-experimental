@@ -516,17 +516,29 @@ func (r *TriggerRepositoryImpl) createDAGs(ctx context.Context, tx sqlcv2.DBTX, 
 			continue
 		}
 
+		input := opt.Input
+
+		if len(input) == 0 {
+			input = []byte("{}")
+		}
+
+		additionalMeta := opt.AdditionalMetadata
+
+		if len(additionalMeta) == 0 {
+			additionalMeta = []byte("{}")
+		}
+
 		dagDataParams = append(dagDataParams, sqlcv2.CreateDAGDataParams{
 			DagID:              dag.ID,
 			DagInsertedAt:      dag.InsertedAt,
-			Input:              opt.Input,
-			AdditionalMetadata: opt.AdditionalMetadata,
+			Input:              input,
+			AdditionalMetadata: additionalMeta,
 		})
 
 		res = append(res, &DAGWithData{
 			V2Dag:              dag,
-			Input:              opt.Input,
-			AdditionalMetadata: opt.AdditionalMetadata,
+			Input:              input,
+			AdditionalMetadata: additionalMeta,
 		})
 	}
 

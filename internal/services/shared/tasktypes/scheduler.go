@@ -1,24 +1,82 @@
 package tasktypes
 
-import "github.com/hatchet-dev/hatchet/internal/msgqueue"
+import (
+	"github.com/hatchet-dev/hatchet/internal/msgqueue"
+	"github.com/hatchet-dev/hatchet/pkg/repository/v2/sqlcv2"
+)
 
-type CheckTenantQueuePayload struct {
-	IsStepQueued   bool   `json:"is_step_queued"`
-	IsSlotReleased bool   `json:"is_slot_released"`
-	QueueName      string `json:"queue_name"`
+type CheckTenantQueuesPayload struct {
+	SlotsReleased bool     `json:"slots_released"`
+	QueueNames    []string `json:"queue_name"`
+	StrategyIds   []int64  `json:"strategy_ids"`
 }
 
-func CheckTenantQueueToTask(tenantId, queueName string, isStepQueued bool, isSlotReleased bool) (*msgqueue.Message, error) {
-	return msgqueue.NewSingletonTenantMessage(
+func NotifyTaskReleased(tenantId string, tasks []*sqlcv2.ReleaseTasksRow) (*msgqueue.Message, error) {
+	uniqueQueueNames := make(map[string]struct{})
+	uniqueStrategies := make(map[int64]struct{})
+
+	for _, task := range tasks {
+		uniqueQueueNames[task.Queue] = struct{}{}
+
+		for _, strategyId := range task.ConcurrencyStrategyIds {
+			uniqueStrategies[strategyId] = struct{}{}
+		}
+	}
+
+	payload := CheckTenantQueuesPayload{
+		QueueNames:    make([]string, 0, len(uniqueQueueNames)),
+		StrategyIds:   make([]int64, 0, len(uniqueStrategies)),
+		SlotsReleased: true,
+	}
+
+	for queueName := range uniqueQueueNames {
+		payload.QueueNames = append(payload.QueueNames, queueName)
+	}
+
+	for strategyId := range uniqueStrategies {
+		payload.StrategyIds = append(payload.StrategyIds, strategyId)
+	}
+
+	return msgqueue.NewTenantMessage(
 		tenantId,
 		"check-tenant-queue",
-		CheckTenantQueuePayload{
-			IsStepQueued:   isStepQueued,
-			IsSlotReleased: isSlotReleased,
-			QueueName:      queueName,
-		},
 		true,
 		false,
+		payload,
+	)
+}
+
+func NotifyTaskCreated(tenantId string, tasks []*sqlcv2.V2Task) (*msgqueue.Message, error) {
+	uniqueQueueNames := make(map[string]struct{})
+	uniqueStrategies := make(map[int64]struct{})
+
+	for _, task := range tasks {
+		uniqueQueueNames[task.Queue] = struct{}{}
+
+		for _, strategyId := range task.ConcurrencyStrategyIds {
+			uniqueStrategies[strategyId] = struct{}{}
+		}
+	}
+
+	payload := CheckTenantQueuesPayload{
+		QueueNames:  make([]string, 0, len(uniqueQueueNames)),
+		StrategyIds: make([]int64, 0, len(uniqueStrategies)),
+	}
+
+	for queueName := range uniqueQueueNames {
+		payload.QueueNames = append(payload.QueueNames, queueName)
+	}
+
+	for strategyId := range uniqueStrategies {
+		payload.StrategyIds = append(payload.StrategyIds, strategyId)
+	}
+
+	return msgqueue.NewTenantMessage(
+		tenantId,
+		"check-tenant-queue",
+		true,
+		false,
+		payload,
 	)
 }
 

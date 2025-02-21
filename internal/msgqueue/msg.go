@@ -25,16 +25,22 @@ type Message struct {
 	Retries int `json:"retries"`
 }
 
-func NewSingletonTenantMessage[T any](tenantId, id string, payload T, immediatelyExpire, persistent bool) (*Message, error) {
-	payloadBytes, err := json.Marshal(payload)
+func NewTenantMessage[T any](tenantId, id string, immediatelyExpire, persistent bool, payloads ...T) (*Message, error) {
+	payloadByteArr := make([][]byte, len(payloads))
 
-	if err != nil {
-		return nil, err
+	for i, payload := range payloads {
+		payloadBytes, err := json.Marshal(payload)
+
+		if err != nil {
+			return nil, err
+		}
+
+		payloadByteArr[i] = payloadBytes
 	}
 
 	return &Message{
 		ID:                id,
-		Payloads:          [][]byte{payloadBytes},
+		Payloads:          payloadByteArr,
 		TenantID:          tenantId,
 		ImmediatelyExpire: immediatelyExpire,
 		Persistent:        persistent,

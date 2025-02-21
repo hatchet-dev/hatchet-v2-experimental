@@ -22,16 +22,16 @@ type InternalEventTaskPayload struct {
 }
 
 func NewInternalEventMessage(tenantId string, timestamp time.Time, key string, data []byte) (*msgqueue.Message, error) {
-	return msgqueue.NewSingletonTenantMessage(
+	return msgqueue.NewTenantMessage(
 		tenantId,
 		"internal-event",
+		false,
+		true,
 		InternalEventTaskPayload{
 			EventTimestamp: timestamp,
 			EventKey:       key,
 			EventData:      data,
 		},
-		false,
-		true,
 	)
 }
 

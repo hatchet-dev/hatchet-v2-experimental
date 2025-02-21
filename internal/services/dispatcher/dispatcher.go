@@ -379,6 +379,8 @@ func (d *DispatcherImpl) handleTask(ctx context.Context, task *msgqueue.Message)
 		// err = d.a.WrapErr(d.handleGroupKeyActionAssignedTask(ctx, task), map[string]interface{}{})
 	case "task-assigned-bulk":
 		err = d.a.WrapErr(d.handleTaskBulkAssignedTask(ctx, task), map[string]interface{}{})
+	case "task-cancelled":
+		err = d.a.WrapErr(d.handleTaskCancelled(ctx, task), map[string]interface{}{})
 	case "step-run-assigned-bulk":
 		panic("not called in v2")
 		// err = d.a.WrapErr(d.handleStepRunBulkAssignedTask(ctx, task), map[string]interface{}{})
@@ -647,6 +649,81 @@ func (d *DispatcherImpl) handleTaskBulkAssignedTask(ctx context.Context, msg *ms
 	}
 
 	return nil
+}
+
+func (d *DispatcherImpl) handleTaskCancelled(ctx context.Context, msg *msgqueue.Message) error {
+	ctx, span := telemetry.NewSpanWithCarrier(ctx, "tasks-cancelled", msg.OtelCarrier)
+	defer span.End()
+
+	// we set a timeout of 25 seconds because we don't want to hold the semaphore for longer than the visibility timeout (30 seconds)
+	// on the worker
+	ctx, cancel := context.WithTimeout(ctx, 25*time.Second)
+	defer cancel()
+
+	msgs := msgqueue.JSONConvert[tasktypes.SignalTaskCancelledPayload](msg.Payloads)
+
+	taskIds := make([]int64, 0)
+
+	for _, innerMsg := range msgs {
+		taskIds = append(taskIds, innerMsg.TaskId)
+	}
+
+	tasks, err := d.v2repo.Tasks().ListTasks(ctx, msg.TenantID, taskIds)
+
+	if err != nil {
+		return fmt.Errorf("could not list tasks: %w", err)
+	}
+
+	taskIdsToTasks := make(map[int64]*sqlcv2.V2Task)
+
+	for _, task := range tasks {
+		taskIdsToTasks[task.ID] = task
+	}
+
+	// group by worker id
+	workerIdToTasks := make(map[string][]*sqlcv2.V2Task)
+
+	for _, msg := range msgs {
+		if _, ok := workerIdToTasks[msg.WorkerId]; !ok {
+			workerIdToTasks[msg.WorkerId] = []*sqlcv2.V2Task{}
+		}
+
+		task, ok := taskIdsToTasks[msg.TaskId]
+
+		if !ok {
+			d.l.Warn().Msgf("task %d not found", msg.TaskId)
+			continue
+		}
+
+		workerIdToTasks[msg.WorkerId] = append(workerIdToTasks[msg.WorkerId], task)
+	}
+
+	var multiErr error
+
+	for workerId, tasks := range workerIdToTasks {
+		// get the worker for this task
+		workers, err := d.workers.Get(workerId)
+
+		if err != nil && !errors.Is(err, ErrWorkerNotFound) {
+			return fmt.Errorf("could not get worker: %w", err)
+		} else if errors.Is(err, ErrWorkerNotFound) {
+			// if the worker is not found, we can ignore this task
+			d.l.Debug().Msgf("worker %s not found, ignoring task", workerId)
+			continue
+		}
+
+		for _, w := range workers {
+			for _, task := range tasks {
+				err = w.CancelTask(ctx, msg.TenantID, task)
+
+				if err != nil {
+					multiErr = multierror.Append(multiErr, fmt.Errorf("could not send job to worker: %w", err))
+				}
+			}
+		}
+	}
+
+	return multiErr
 }
 
 // func (d *DispatcherImpl) handleStepRunBulkAssignedTask(ctx context.Context, task *msgqueue.Message) error {

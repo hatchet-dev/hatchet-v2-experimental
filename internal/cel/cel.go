@@ -82,7 +82,7 @@ func WithInput(input map[string]interface{}) InputOpts {
 	}
 }
 
-func WithParents(parents map[string]map[string]interface{}) InputOpts {
+func WithParents(parents any) InputOpts {
 	return func(w Input) {
 		w["parents"] = parents
 	}
@@ -166,7 +166,7 @@ func (p *CELParser) ParseStepRun(stepRunExpr string) (cel.Program, error) {
 }
 
 func (p *CELParser) ParseAndEvalStepRun(stepRunExpr string, in Input) (*StepRunOut, error) {
-	prg, err := p.ParseWorkflowString(stepRunExpr)
+	prg, err := p.ParseStepRun(stepRunExpr)
 	if err != nil {
 		return nil, err
 	}

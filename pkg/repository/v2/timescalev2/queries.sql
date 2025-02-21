@@ -544,7 +544,6 @@ WITH locked_events AS (
         e.task_id,
         e.task_inserted_at,
         e.retry_count,
-        e.worker_id,
         MAX(e.readable_status) AS max_readable_status
     FROM
         locked_events e
@@ -555,7 +554,20 @@ WITH locked_events AS (
             AND e.task_inserted_at = mrc.task_inserted_at
             AND e.retry_count = mrc.max_retry_count
     GROUP BY
-        e.tenant_id, e.task_id, e.task_inserted_at, e.retry_count, e.worker_id
+        e.tenant_id, e.task_id, e.task_inserted_at, e.retry_count
+), latest_worker_id AS (
+    SELECT
+        tenant_id,
+        task_id,
+        task_inserted_at,
+        retry_count,
+        MAX(worker_id::text) AS worker_id
+    FROM
+        locked_events
+    WHERE
+        worker_id IS NOT NULL
+    GROUP BY
+        tenant_id, task_id, task_inserted_at, retry_count
 ), locked_tasks AS (
     SELECT
         t.tenant_id,
@@ -577,9 +589,12 @@ WITH locked_events AS (
     SET
         readable_status = e.max_readable_status,
         latest_retry_count = e.retry_count,
-        latest_worker_id = CASE WHEN e.worker_id IS NOT NULL THEN e.worker_id ELSE t.latest_worker_id END
+        latest_worker_id = CASE WHEN lw.worker_id::uuid IS NOT NULL THEN lw.worker_id::uuid ELSE t.latest_worker_id END
     FROM
         updatable_events e
+    LEFT JOIN
+        latest_worker_id lw ON
+            (e.tenant_id, e.task_id, e.task_inserted_at, e.retry_count) = (lw.tenant_id, lw.task_id, lw.task_inserted_at, lw.retry_count)
     WHERE
         (t.tenant_id, t.id, t.inserted_at) = (e.tenant_id, e.task_id, e.task_inserted_at)
         AND

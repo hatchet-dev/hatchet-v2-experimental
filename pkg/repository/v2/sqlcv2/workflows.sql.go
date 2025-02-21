@@ -11,12 +11,47 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const listStepExpressions = `-- name: ListStepExpressions :many
+SELECT
+    key, "stepId", expression, kind
+FROM
+    "StepExpression"
+WHERE
+    "stepId" = ANY($1::uuid[])
+`
+
+func (q *Queries) ListStepExpressions(ctx context.Context, db DBTX, stepids []pgtype.UUID) ([]*StepExpression, error) {
+	rows, err := db.Query(ctx, listStepExpressions, stepids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []*StepExpression
+	for rows.Next() {
+		var i StepExpression
+		if err := rows.Scan(
+			&i.Key,
+			&i.StepId,
+			&i.Expression,
+			&i.Kind,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, &i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listStepsByIds = `-- name: ListStepsByIds :many
 SELECT
     s.id, s."createdAt", s."updatedAt", s."deletedAt", s."readableId", s."tenantId", s."jobId", s."actionId", s.timeout, s."customUserData", s.retries, s."retryBackoffFactor", s."retryMaxBackoff", s."scheduleTimeout",
     wv."id" as "workflowVersionId",
     w."name" as "workflowName",
-    w."id" as "workflowId"
+    w."id" as "workflowId",
+    COUNT(sc.id) as "concurrencyCount"
 FROM
     "Step" s
 JOIN
@@ -25,11 +60,15 @@ JOIN
     "WorkflowVersion" wv ON wv."id" = j."workflowVersionId"
 JOIN
     "Workflow" w ON w."id" = wv."workflowId"
+LEFT JOIN
+    v2_step_concurrency sc ON sc.workflow_id = w."id" AND sc.step_id = s."id"
 WHERE
     s."id" = ANY($1::uuid[])
     AND w."tenantId" = $2::uuid
     AND w."deletedAt" IS NULL
     AND wv."deletedAt" IS NULL
+GROUP BY
+    s."id", wv."id", w."name", w."id"
 `
 
 type ListStepsByIdsParams struct {
@@ -55,6 +94,7 @@ type ListStepsByIdsRow struct {
 	WorkflowVersionId  pgtype.UUID      `json:"workflowVersionId"`
 	WorkflowName       string           `json:"workflowName"`
 	WorkflowId         pgtype.UUID      `json:"workflowId"`
+	ConcurrencyCount   int64            `json:"concurrencyCount"`
 }
 
 func (q *Queries) ListStepsByIds(ctx context.Context, db DBTX, arg ListStepsByIdsParams) ([]*ListStepsByIdsRow, error) {
@@ -84,6 +124,7 @@ func (q *Queries) ListStepsByIds(ctx context.Context, db DBTX, arg ListStepsById
 			&i.WorkflowVersionId,
 			&i.WorkflowName,
 			&i.WorkflowId,
+			&i.ConcurrencyCount,
 		); err != nil {
 			return nil, err
 		}

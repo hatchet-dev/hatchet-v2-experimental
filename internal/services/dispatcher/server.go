@@ -114,7 +114,19 @@ func (worker *subscribedWorker) StartTaskFromBulk(
 		inputBytes = task.Input
 	}
 
-	stepRunId := fmt.Sprintf("id-%d", task.ID)
+	action := populateAssignedAction(tenantId, task)
+
+	action.ActionType = contracts.ActionType_START_STEP_RUN
+	action.ActionPayload = string(inputBytes)
+
+	worker.sendMu.Lock()
+	defer worker.sendMu.Unlock()
+
+	return worker.stream.Send(action)
+}
+
+func populateAssignedAction(tenantId string, task *sqlcv2.V2Task) *contracts.AssignedAction {
+	stepRunId := fmt.Sprintf("id-%d-%d", task.ID, task.RetryCount)
 
 	action := &contracts.AssignedAction{
 		TenantId:      tenantId,
@@ -123,9 +135,7 @@ func (worker *subscribedWorker) StartTaskFromBulk(
 		JobRunId:      sqlchelpers.UUIDToStr(task.ExternalID), // FIXME
 		StepId:        sqlchelpers.UUIDToStr(task.StepID),
 		StepRunId:     stepRunId,
-		ActionType:    contracts.ActionType_START_STEP_RUN,
 		ActionId:      task.ActionID,
-		ActionPayload: string(inputBytes),
 		StepName:      task.StepReadableID,
 		WorkflowRunId: sqlchelpers.UUIDToStr(task.ExternalID),
 		RetryCount:    task.RetryCount,
@@ -150,10 +160,7 @@ func (worker *subscribedWorker) StartTaskFromBulk(
 	// 	action.ParentWorkflowRunId = &parentId
 	// }
 
-	worker.sendMu.Lock()
-	defer worker.sendMu.Unlock()
-
-	return worker.stream.Send(action)
+	return action
 }
 
 func (worker *subscribedWorker) StartStepRunFromBulk(
@@ -259,6 +266,24 @@ func (worker *subscribedWorker) CancelStepRun(
 		WorkflowRunId: sqlchelpers.UUIDToStr(stepRun.WorkflowRunId),
 		RetryCount:    stepRun.SRRetryCount,
 	})
+}
+
+func (worker *subscribedWorker) CancelTask(
+	ctx context.Context,
+	tenantId string,
+	task *sqlcv2.V2Task,
+) error {
+	ctx, span := telemetry.NewSpan(ctx, "cancel-task") // nolint:ineffassign
+	defer span.End()
+
+	action := populateAssignedAction(tenantId, task)
+
+	action.ActionType = contracts.ActionType_CANCEL_STEP_RUN
+
+	worker.sendMu.Lock()
+	defer worker.sendMu.Unlock()
+
+	return worker.stream.Send(action)
 }
 
 func (s *DispatcherImpl) Register(ctx context.Context, request *contracts.WorkerRegisterRequest) (*contracts.WorkerRegisterResponse, error) {
@@ -1184,22 +1209,38 @@ func waitFor(wg *sync.WaitGroup, timeout time.Duration, l *zerolog.Logger) {
 
 func (s *DispatcherImpl) SendStepActionEvent(ctx context.Context, request *contracts.StepActionEvent) (*contracts.ActionEventResponse, error) {
 	if strings.HasPrefix(request.StepRunId, "id-") {
-		taskIdStr := strings.TrimPrefix(request.StepRunId, "id-")
+		taskIdRetryCountStr := strings.TrimPrefix(request.StepRunId, "id-")
+
+		parts := strings.Split(taskIdRetryCountStr, "-")
+
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("invalid task id %s", request.StepRunId)
+		}
+
+		taskIdStr := parts[0]
+		retryCountStr := parts[1]
+
 		taskId, err := strconv.ParseInt(taskIdStr, 10, 64)
 
 		if err != nil {
 			return nil, fmt.Errorf("could not parse task id: %w", err)
 		}
 
+		retryCount, err := strconv.ParseInt(retryCountStr, 10, 64)
+
+		if err != nil {
+			return nil, fmt.Errorf("could not parse retry count: %w", err)
+		}
+
 		switch request.EventType {
 		case contracts.StepActionEventType_STEP_EVENT_TYPE_STARTED:
-			return s.handleTaskStarted(ctx, taskId, request)
+			return s.handleTaskStarted(ctx, taskId, int32(retryCount), request)
 		case contracts.StepActionEventType_STEP_EVENT_TYPE_ACKNOWLEDGED:
 			panic("unimplemented")
 		case contracts.StepActionEventType_STEP_EVENT_TYPE_COMPLETED:
-			return s.handleTaskCompleted(ctx, taskId, request)
+			return s.handleTaskCompleted(ctx, taskId, int32(retryCount), request)
 		case contracts.StepActionEventType_STEP_EVENT_TYPE_FAILED:
-			return s.handleTaskFailed(ctx, taskId, request)
+			return s.handleTaskFailed(ctx, taskId, int32(retryCount), request)
 		}
 	}
 
@@ -1340,7 +1381,7 @@ func (d *DispatcherImpl) RefreshTimeout(ctx context.Context, request *contracts.
 // 		RetryCount:    &sr.SRRetryCount,
 // 	}
 
-// 	msg, err := msgqueue.NewSingletonTenantMessage(
+// 	msg, err := msgqueue.NewTenantMessage(
 // 		tenantId,
 // 		"step-run-started",
 // 		payload,
@@ -1364,18 +1405,18 @@ func (d *DispatcherImpl) RefreshTimeout(ctx context.Context, request *contracts.
 // 	}, nil
 // }
 
-func (s *DispatcherImpl) handleTaskStarted(inputCtx context.Context, taskId int64, request *contracts.StepActionEvent) (*contracts.ActionEventResponse, error) {
+func (s *DispatcherImpl) handleTaskStarted(inputCtx context.Context, taskId int64, retryCount int32, request *contracts.StepActionEvent) (*contracts.ActionEventResponse, error) {
 	tenant := inputCtx.Value("tenant").(*dbsqlc.Tenant)
 	tenantId := sqlchelpers.UUIDToStr(tenant.ID)
 
-	if request.RetryCount == nil {
-		return nil, fmt.Errorf("retry count is required in v2")
-	}
+	// if request.RetryCount == nil {
+	// 	return nil, fmt.Errorf("retry count is required in v2")
+	// }
 
 	msg, err := tasktypes.MonitoringEventMessageFromActionEvent(
 		tenantId,
 		taskId,
-		*request.RetryCount,
+		retryCount,
 		request,
 	)
 
@@ -1395,19 +1436,19 @@ func (s *DispatcherImpl) handleTaskStarted(inputCtx context.Context, taskId int6
 	}, nil
 }
 
-func (s *DispatcherImpl) handleTaskCompleted(inputCtx context.Context, taskId int64, request *contracts.StepActionEvent) (*contracts.ActionEventResponse, error) {
+func (s *DispatcherImpl) handleTaskCompleted(inputCtx context.Context, taskId int64, retryCount int32, request *contracts.StepActionEvent) (*contracts.ActionEventResponse, error) {
 	tenant := inputCtx.Value("tenant").(*dbsqlc.Tenant)
 	tenantId := sqlchelpers.UUIDToStr(tenant.ID)
 
-	if request.RetryCount == nil {
-		return nil, fmt.Errorf("retry count is required in v2")
-	}
+	// if request.RetryCount == nil {
+	// 	return nil, fmt.Errorf("retry count is required in v2")
+	// }
 
 	go func() {
 		olapMsg, err := tasktypes.MonitoringEventMessageFromActionEvent(
 			tenantId,
 			taskId,
-			*request.RetryCount,
+			retryCount,
 			request,
 		)
 
@@ -1441,19 +1482,19 @@ func (s *DispatcherImpl) handleTaskCompleted(inputCtx context.Context, taskId in
 	}, nil
 }
 
-func (s *DispatcherImpl) handleTaskFailed(inputCtx context.Context, taskId int64, request *contracts.StepActionEvent) (*contracts.ActionEventResponse, error) {
+func (s *DispatcherImpl) handleTaskFailed(inputCtx context.Context, taskId int64, retryCount int32, request *contracts.StepActionEvent) (*contracts.ActionEventResponse, error) {
 	tenant := inputCtx.Value("tenant").(*dbsqlc.Tenant)
 	tenantId := sqlchelpers.UUIDToStr(tenant.ID)
 
-	if request.RetryCount == nil {
-		return nil, fmt.Errorf("retry count is required in v2")
-	}
+	// if request.RetryCount == nil {
+	// 	return nil, fmt.Errorf("retry count is required in v2")
+	// }
 
 	go func() {
 		olapMsg, err := tasktypes.MonitoringEventMessageFromActionEvent(
 			tenantId,
 			taskId,
-			*request.RetryCount,
+			retryCount,
 			request,
 		)
 

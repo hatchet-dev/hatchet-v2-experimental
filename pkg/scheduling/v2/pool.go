@@ -29,10 +29,13 @@ type SchedulingPool struct {
 	cf *sharedConfig
 
 	resultsCh chan *QueueResults
+
+	concurrencyResultsCh chan *ConcurrencyResults
 }
 
 func NewSchedulingPool(repo v2.SchedulerRepository, l *zerolog.Logger, singleQueueLimit int) (*SchedulingPool, func() error, error) {
 	resultsCh := make(chan *QueueResults, 1000)
+	concurrencyResultsCh := make(chan *ConcurrencyResults, 1000)
 
 	s := &SchedulingPool{
 		Extensions: &Extensions{},
@@ -41,8 +44,9 @@ func NewSchedulingPool(repo v2.SchedulerRepository, l *zerolog.Logger, singleQue
 			l:                l,
 			singleQueueLimit: singleQueueLimit,
 		},
-		resultsCh: resultsCh,
-		setMu:     newMu(l),
+		resultsCh:            resultsCh,
+		concurrencyResultsCh: concurrencyResultsCh,
+		setMu:                newMu(l),
 	}
 
 	return s, func() error {
@@ -53,6 +57,10 @@ func NewSchedulingPool(repo v2.SchedulerRepository, l *zerolog.Logger, singleQue
 
 func (p *SchedulingPool) GetResultsCh() chan *QueueResults {
 	return p.resultsCh
+}
+
+func (p *SchedulingPool) GetConcurrencyResultsCh() chan *ConcurrencyResults {
+	return p.concurrencyResultsCh
 }
 
 func (p *SchedulingPool) cleanup() {
@@ -136,21 +144,21 @@ func (p *SchedulingPool) cleanupTenants(toCleanup []*tenantManager) {
 	wg.Wait()
 }
 
-func (p *SchedulingPool) RefreshAll(ctx context.Context, tenantId string) {
-	if tm := p.getTenantManager(tenantId, false); tm != nil {
-		tm.refreshAll(ctx)
-	}
-}
-
 func (p *SchedulingPool) Replenish(ctx context.Context, tenantId string) {
 	if tm := p.getTenantManager(tenantId, false); tm != nil {
 		tm.replenish(ctx)
 	}
 }
 
-func (p *SchedulingPool) Queue(ctx context.Context, tenantId string, queueName string) {
+func (p *SchedulingPool) NotifyQueues(ctx context.Context, tenantId string, queueNames []string) {
 	if tm := p.getTenantManager(tenantId, false); tm != nil {
-		tm.queue(ctx, queueName)
+		tm.queue(ctx, queueNames)
+	}
+}
+
+func (p *SchedulingPool) NotifyConcurrency(ctx context.Context, tenantId string, strategyIds []int64) {
+	if tm := p.getTenantManager(tenantId, false); tm != nil {
+		tm.notifyConcurrency(ctx, strategyIds)
 	}
 }
 
@@ -159,7 +167,7 @@ func (p *SchedulingPool) getTenantManager(tenantId string, storeIfNotFound bool)
 
 	if !ok {
 		if storeIfNotFound {
-			tm = newTenantManager(p.cf, tenantId, p.resultsCh, p.Extensions)
+			tm = newTenantManager(p.cf, tenantId, p.resultsCh, p.concurrencyResultsCh, p.Extensions)
 			p.tenants.Store(tenantId, tm)
 		} else {
 			return nil

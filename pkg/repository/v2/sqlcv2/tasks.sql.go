@@ -11,8 +11,21 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const createConcurrencyPartition = `-- name: CreateConcurrencyPartition :exec
+SELECT create_v2_range_partition(
+    'v2_concurrency_slot',
+    $1::date
+)
+`
+
+func (q *Queries) CreateConcurrencyPartition(ctx context.Context, db DBTX, date pgtype.Date) error {
+	_, err := db.Exec(ctx, createConcurrencyPartition, date)
+	return err
+}
+
 const createTaskPartition = `-- name: CreateTaskPartition :exec
-SELECT create_v2_task_partition(
+SELECT create_v2_range_partition(
+    'v2_task',
     $1::date
 )
 `
@@ -153,6 +166,36 @@ func (q *Queries) FailTaskInternalFailure(ctx context.Context, db DBTX, arg Fail
 	return items, nil
 }
 
+const listConcurrencyPartitionsBeforeDate = `-- name: ListConcurrencyPartitionsBeforeDate :many
+SELECT
+    p::text AS partition_name
+FROM
+    get_v2_partitions_before_date(
+        'v2_concurrency_slot',
+        $1::date
+    ) AS p
+`
+
+func (q *Queries) ListConcurrencyPartitionsBeforeDate(ctx context.Context, db DBTX, date pgtype.Date) ([]string, error) {
+	rows, err := db.Query(ctx, listConcurrencyPartitionsBeforeDate, date)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var partition_name string
+		if err := rows.Scan(&partition_name); err != nil {
+			return nil, err
+		}
+		items = append(items, partition_name)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMatchingSignalEvents = `-- name: ListMatchingSignalEvents :many
 WITH input AS (
     SELECT
@@ -273,7 +316,8 @@ const listTaskPartitionsBeforeDate = `-- name: ListTaskPartitionsBeforeDate :man
 SELECT
     p::text AS partition_name
 FROM
-    get_v2_task_partitions_before(
+    get_v2_partitions_before_date(
+        'v2_task',
         $1::date
     ) AS p
 `
@@ -300,7 +344,7 @@ func (q *Queries) ListTaskPartitionsBeforeDate(ctx context.Context, db DBTX, dat
 
 const listTasks = `-- name: ListTasks :many
 SELECT
-    id, inserted_at, tenant_id, queue, action_id, step_id, step_readable_id, workflow_id, schedule_timeout, step_timeout, priority, sticky, desired_worker_id, external_id, display_name, input, retry_count, internal_retry_count, app_retry_count, additional_metadata, dag_id, dag_inserted_at, parent_external_id, child_index, child_key, initial_state
+    id, inserted_at, tenant_id, queue, action_id, step_id, step_readable_id, workflow_id, schedule_timeout, step_timeout, priority, sticky, desired_worker_id, external_id, display_name, input, retry_count, internal_retry_count, app_retry_count, additional_metadata, dag_id, dag_inserted_at, parent_external_id, child_index, child_key, initial_state, concurrency_strategy_ids, concurrency_keys, retry_backoff_factor, retry_max_backoff
 FROM
     v2_task
 WHERE
@@ -349,6 +393,10 @@ func (q *Queries) ListTasks(ctx context.Context, db DBTX, arg ListTasksParams) (
 			&i.ChildIndex,
 			&i.ChildKey,
 			&i.InitialState,
+			&i.ConcurrencyStrategyIds,
+			&i.ConcurrencyKeys,
+			&i.RetryBackoffFactor,
+			&i.RetryMaxBackoff,
 		); err != nil {
 			return nil, err
 		}
@@ -495,7 +543,8 @@ const processTaskTimeouts = `-- name: ProcessTaskTimeouts :many
 WITH expired_runtimes AS (
     SELECT
         task_id,
-        retry_count
+        retry_count,
+        worker_id
     FROM
         v2_task_runtime
     WHERE
@@ -510,7 +559,8 @@ WITH expired_runtimes AS (
     SELECT
         v2_task.id,
         v2_task.retry_count,
-        v2_task.step_id
+        v2_task.step_id, 
+        expired_runtimes.worker_id
     FROM
         v2_task
     JOIN
@@ -547,7 +597,7 @@ WITH expired_runtimes AS (
         AND tasks_to_steps."retries" > v2_task.app_retry_count
 )
 SELECT
-    id, retry_count, step_id
+    id, retry_count, step_id, worker_id
 FROM
     locked_tasks
 `
@@ -561,6 +611,7 @@ type ProcessTaskTimeoutsRow struct {
 	ID         int64       `json:"id"`
 	RetryCount int32       `json:"retry_count"`
 	StepID     pgtype.UUID `json:"step_id"`
+	WorkerID   pgtype.UUID `json:"worker_id"`
 }
 
 func (q *Queries) ProcessTaskTimeouts(ctx context.Context, db DBTX, arg ProcessTaskTimeoutsParams) ([]*ProcessTaskTimeoutsRow, error) {
@@ -572,7 +623,12 @@ func (q *Queries) ProcessTaskTimeouts(ctx context.Context, db DBTX, arg ProcessT
 	var items []*ProcessTaskTimeoutsRow
 	for rows.Next() {
 		var i ProcessTaskTimeoutsRow
-		if err := rows.Scan(&i.ID, &i.RetryCount, &i.StepID); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.RetryCount,
+			&i.StepID,
+			&i.WorkerID,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, &i)
@@ -596,7 +652,8 @@ WITH input AS (
 ), runtimes_to_delete AS (
     SELECT
         task_id,
-        retry_count
+        retry_count,
+        worker_id
     FROM
         v2_task_runtime
     WHERE
@@ -615,7 +672,10 @@ SELECT
     t.id,
     t.inserted_at,
     t.external_id,
-    t.step_readable_id
+    t.step_readable_id,
+    r.worker_id,
+    t.retry_count,
+    t.concurrency_strategy_ids
 FROM
     v2_task t
 JOIN
@@ -628,11 +688,14 @@ type ReleaseTasksParams struct {
 }
 
 type ReleaseTasksRow struct {
-	Queue          string             `json:"queue"`
-	ID             int64              `json:"id"`
-	InsertedAt     pgtype.Timestamptz `json:"inserted_at"`
-	ExternalID     pgtype.UUID        `json:"external_id"`
-	StepReadableID string             `json:"step_readable_id"`
+	Queue                  string             `json:"queue"`
+	ID                     int64              `json:"id"`
+	InsertedAt             pgtype.Timestamptz `json:"inserted_at"`
+	ExternalID             pgtype.UUID        `json:"external_id"`
+	StepReadableID         string             `json:"step_readable_id"`
+	WorkerID               pgtype.UUID        `json:"worker_id"`
+	RetryCount             int32              `json:"retry_count"`
+	ConcurrencyStrategyIds []int64            `json:"concurrency_strategy_ids"`
 }
 
 func (q *Queries) ReleaseTasks(ctx context.Context, db DBTX, arg ReleaseTasksParams) ([]*ReleaseTasksRow, error) {
@@ -650,6 +713,9 @@ func (q *Queries) ReleaseTasks(ctx context.Context, db DBTX, arg ReleaseTasksPar
 			&i.InsertedAt,
 			&i.ExternalID,
 			&i.StepReadableID,
+			&i.WorkerID,
+			&i.RetryCount,
+			&i.ConcurrencyStrategyIds,
 		); err != nil {
 			return nil, err
 		}
