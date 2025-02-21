@@ -12,7 +12,6 @@ import (
 	"github.com/hatchet-dev/hatchet/pkg/repository/prisma/dbsqlc"
 	"github.com/hatchet-dev/hatchet/pkg/repository/prisma/sqlchelpers"
 	"github.com/hatchet-dev/hatchet/pkg/repository/v2/olapv2"
-	"github.com/hatchet-dev/hatchet/pkg/repository/v2/timescalev2"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/oapi-codegen/runtime/types"
 )
@@ -160,7 +159,7 @@ func ToTaskRunEventMany(
 }
 
 func ToWorkflowRunTaskRunEventsMany(
-	events []*timescalev2.ListTaskEventsForWorkflowRunRow,
+	events []*olapv2.ListTaskEventsForWorkflowRunRow,
 ) gen.V2TaskEventList {
 	toReturn := make([]gen.V2TaskEvent, len(events))
 
@@ -278,10 +277,10 @@ func ToTask(taskWithData *olapv2.PopulateSingleTaskRunDataRow, workflowRunExtern
 }
 
 func ToWorkflowRunDetails(
-	taskRunEvents []*timescalev2.ListTaskEventsForWorkflowRunRow,
+	taskRunEvents []*olapv2.ListTaskEventsForWorkflowRunRow,
 	workflowRun *repository.WorkflowRunData,
 	shape []*dbsqlc.GetWorkflowRunShapeRow,
-	tasks []*timescalev2.PopulateTaskRunDataRow,
+	tasks []*olapv2.PopulateTaskRunDataRow,
 	stepIdToTaskExternalId map[pgtype.UUID]pgtype.UUID,
 ) (gen.V2WorkflowRunDetails, error) {
 	workflowVersionId := uuid.MustParse(sqlchelpers.UUIDToStr(workflowRun.WorkflowVersionId))
