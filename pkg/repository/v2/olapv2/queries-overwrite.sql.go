@@ -1,4 +1,4 @@
-package timescalev2
+package olapv2
 
 import (
 	"context"
