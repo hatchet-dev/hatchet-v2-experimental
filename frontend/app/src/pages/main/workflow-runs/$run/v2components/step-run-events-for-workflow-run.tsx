@@ -21,11 +21,15 @@ export function StepRunEvents({
   }
 
   const eventsQuery = useQuery({
-    ...queries.v2TaskEvents.list(tenantId, taskRunId, {
-      // TODO: Pagination here
-      limit: 50,
-      offset: 0,
-    }),
+    ...queries.v2TaskEvents.list(
+      tenantId,
+      {
+        // TODO: Pagination here
+        limit: 50,
+        offset: 0,
+      },
+      taskRunId,
+    ),
     refetchInterval: () => {
       return 5000;
     },

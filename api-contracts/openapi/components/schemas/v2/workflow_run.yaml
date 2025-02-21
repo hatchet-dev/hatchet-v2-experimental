@@ -37,6 +37,17 @@ V2WorkflowRun:
     errorMessage:
       type: string
       description: The error message of the task run (for the latest run)
+    workflowVersionId:
+      type: string
+      format: uuid
+      description: The ID of the workflow version.
+    input:
+      type: object
+      description: The input of the task run.
+    createdAt:
+      type: string
+      format: date-time
+      description: The timestamp the task run was created.
   required:
     - metadata
     - id
@@ -45,6 +56,7 @@ V2WorkflowRun:
     - displayName
     - workflowId
     - output
+    - input
 
 V2WorkflowRunList:
   type: object
@@ -59,3 +71,51 @@ V2WorkflowRunList:
   required:
     - pagination
     - rows
+
+WorkflowRunShapeItemForWorkflowRunDetails:
+  type: object
+  properties:
+    taskExternalId:
+      type: string
+      format: uuid
+      minLength: 36
+      maxLength: 36
+    childrenExternalIds:
+      type: array
+      items:
+        type: string
+        format: uuid
+        minLength: 36
+        maxLength: 36
+    taskName:
+      type: string
+  required:
+    - taskExternalId
+    - childrenExternalIds
+    - taskName
+
+WorkflowRunShapeForWorkflowRunDetails:
+  type: array
+  items:
+    $ref: "#/WorkflowRunShapeItemForWorkflowRunDetails"
+
+V2WorkflowRunDetails:
+  properties:
+    run:
+      $ref: "#/V2WorkflowRun"
+    taskEvents:
+      type: array
+      items:
+        $ref: "./task.yaml#/V2TaskEvent"
+      description: The list of task events for the workflow run
+    shape:
+      $ref: "#/WorkflowRunShapeForWorkflowRunDetails"
+    tasks:
+      type: array
+      items:
+        $ref: "./task.yaml#/V2TaskSummary"
+  required:
+    - run
+    - taskEvents
+    - shape
+    - tasks

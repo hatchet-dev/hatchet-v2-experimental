@@ -7,9 +7,12 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hatchet-dev/hatchet/api/v1/server/oas/gen"
+	"github.com/hatchet-dev/hatchet/pkg/repository"
 	"github.com/hatchet-dev/hatchet/pkg/repository/olap"
+	"github.com/hatchet-dev/hatchet/pkg/repository/prisma/dbsqlc"
 	"github.com/hatchet-dev/hatchet/pkg/repository/prisma/sqlchelpers"
 	"github.com/hatchet-dev/hatchet/pkg/repository/v2/timescalev2"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/oapi-codegen/runtime/types"
 )
 
@@ -41,6 +44,8 @@ func ToTaskSummary(task *timescalev2.PopulateTaskRunDataRow) gen.V2TaskSummary {
 		durationPtr = &duration
 	}
 
+	taskExternalId := uuid.MustParse(sqlchelpers.UUIDToStr(task.ExternalID))
+
 	return gen.V2TaskSummary{
 		Metadata: gen.APIResourceMeta{
 			Id:        sqlchelpers.UUIDToStr(task.ExternalID),
@@ -58,6 +63,7 @@ func ToTaskSummary(task *timescalev2.PopulateTaskRunDataRow) gen.V2TaskSummary {
 		WorkflowId:         uuid.MustParse(sqlchelpers.UUIDToStr(task.WorkflowID)),
 		TaskId:             int(task.ID),
 		TaskInsertedAt:     task.InsertedAt.Time,
+		TaskExternalId:     taskExternalId,
 	}
 }
 
@@ -152,6 +158,35 @@ func ToTaskRunEventMany(
 	}
 }
 
+func ToWorkflowRunTaskRunEventsMany(
+	events []*timescalev2.ListTaskEventsForWorkflowRunRow,
+) gen.V2TaskEventList {
+	toReturn := make([]gen.V2TaskEvent, len(events))
+
+	for i, event := range events {
+		workerId := uuid.MustParse(sqlchelpers.UUIDToStr(event.WorkerID))
+		output := string(event.Output)
+		taskExternalId := uuid.MustParse(sqlchelpers.UUIDToStr(event.TaskExternalID))
+
+		toReturn[i] = gen.V2TaskEvent{
+			ErrorMessage:    &event.ErrorMessage.String,
+			EventType:       gen.V2TaskEventType(event.EventType),
+			Id:              int(event.ID),
+			Message:         event.AdditionalEventMessage.String,
+			Output:          &output,
+			TaskDisplayName: &event.DisplayName,
+			TaskId:          taskExternalId,
+			Timestamp:       event.EventTimestamp.Time,
+			WorkerId:        &workerId,
+		}
+	}
+
+	return gen.V2TaskEventList{
+		Rows:       &toReturn,
+		Pagination: &gen.PaginationResponse{},
+	}
+}
+
 func ToTaskRunMetrics(metrics *[]olap.TaskRunMetric) gen.V2TaskRunMetrics {
 	statuses := []gen.V2TaskStatus{
 		gen.V2TaskStatusCANCELLED,
@@ -182,7 +217,7 @@ func ToTaskRunMetrics(metrics *[]olap.TaskRunMetric) gen.V2TaskRunMetrics {
 	return toReturn
 }
 
-func ToTask(taskWithData *timescalev2.PopulateSingleTaskRunDataRow) gen.V2Task {
+func ToTask(taskWithData *timescalev2.PopulateSingleTaskRunDataRow, workflowRunExternalId *pgtype.UUID) gen.V2Task {
 	additionalMetadata := jsonToMap(taskWithData.AdditionalMetadata)
 
 	var finishedAt *time.Time
@@ -211,24 +246,110 @@ func ToTask(taskWithData *timescalev2.PopulateSingleTaskRunDataRow) gen.V2Task {
 		output = &outputStr
 	}
 
+	var parsedWorkflowRunUUID *uuid.UUID
+
+	if workflowRunExternalId != nil && workflowRunExternalId.Valid {
+		id := uuid.MustParse(sqlchelpers.UUIDToStr(*workflowRunExternalId))
+		parsedWorkflowRunUUID = &id
+	}
+
 	return gen.V2Task{
 		Metadata: gen.APIResourceMeta{
 			Id:        sqlchelpers.UUIDToStr(taskWithData.ExternalID),
 			CreatedAt: taskWithData.InsertedAt.Time,
 			UpdatedAt: taskWithData.InsertedAt.Time,
 		},
-		TaskId:             int(taskWithData.ID),
-		TaskInsertedAt:     taskWithData.InsertedAt.Time,
-		DisplayName:        taskWithData.DisplayName,
-		AdditionalMetadata: &additionalMetadata,
-		Duration:           durationPtr,
-		StartedAt:          startedAt,
-		FinishedAt:         finishedAt,
-		Output:             output,
-		Status:             gen.V2TaskStatus(taskWithData.Status),
-		Input:              string(taskWithData.Input),
-		TenantId:           uuid.MustParse(sqlchelpers.UUIDToStr(taskWithData.TenantID)),
-		WorkflowId:         uuid.MustParse(sqlchelpers.UUIDToStr(taskWithData.WorkflowID)),
-		ErrorMessage:       &taskWithData.ErrorMessage.String,
+		TaskId:                int(taskWithData.ID),
+		TaskInsertedAt:        taskWithData.InsertedAt.Time,
+		DisplayName:           taskWithData.DisplayName,
+		AdditionalMetadata:    &additionalMetadata,
+		Duration:              durationPtr,
+		StartedAt:             startedAt,
+		FinishedAt:            finishedAt,
+		Output:                output,
+		Status:                gen.V2TaskStatus(taskWithData.Status),
+		Input:                 string(taskWithData.Input),
+		TenantId:              uuid.MustParse(sqlchelpers.UUIDToStr(taskWithData.TenantID)),
+		WorkflowId:            uuid.MustParse(sqlchelpers.UUIDToStr(taskWithData.WorkflowID)),
+		ErrorMessage:          &taskWithData.ErrorMessage.String,
+		WorkflowRunExternalId: parsedWorkflowRunUUID,
 	}
+}
+
+func ToWorkflowRunDetails(
+	taskRunEvents []*timescalev2.ListTaskEventsForWorkflowRunRow,
+	workflowRun *repository.WorkflowRunData,
+	shape []*dbsqlc.GetWorkflowRunShapeRow,
+	tasks []*timescalev2.PopulateTaskRunDataRow,
+	stepIdToTaskExternalId map[pgtype.UUID]pgtype.UUID,
+) (gen.V2WorkflowRunDetails, error) {
+	workflowVersionId := uuid.MustParse(sqlchelpers.UUIDToStr(workflowRun.WorkflowVersionId))
+	duration := int(workflowRun.FinishedAt.Time.Sub(workflowRun.StartedAt.Time).Milliseconds())
+	input := jsonToMap(workflowRun.Input)
+
+	parsedWorkflowRun := gen.V2WorkflowRun{
+		AdditionalMetadata: &map[string]interface{}{},
+		CreatedAt:          &workflowRun.CreatedAt.Time,
+		DisplayName:        workflowRun.DisplayName,
+		Duration:           &duration,
+		ErrorMessage:       &workflowRun.ErrorMessage,
+		FinishedAt:         &workflowRun.FinishedAt.Time,
+		Metadata: gen.APIResourceMeta{
+			Id:        sqlchelpers.UUIDToStr(workflowRun.ExternalID),
+			CreatedAt: workflowRun.InsertedAt.Time,
+			UpdatedAt: workflowRun.InsertedAt.Time,
+		},
+		StartedAt:         &workflowRun.StartedAt.Time,
+		Status:            gen.V2TaskStatus(workflowRun.ReadableStatus),
+		TenantId:          uuid.MustParse(sqlchelpers.UUIDToStr(workflowRun.TenantID)),
+		WorkflowId:        uuid.MustParse(sqlchelpers.UUIDToStr(workflowRun.WorkflowID)),
+		WorkflowVersionId: &workflowVersionId,
+		Input:             input,
+	}
+
+	shapeRows := make([]gen.WorkflowRunShapeItemForWorkflowRunDetails, len(shape))
+
+	for i, shapeRow := range shape {
+		parentExternalId := uuid.MustParse(sqlchelpers.UUIDToStr(stepIdToTaskExternalId[shapeRow.Parentstepid]))
+		ChildrenExternalIds := make([]uuid.UUID, len(shapeRow.Childrenstepids))
+		taskName := shapeRow.Stepname.String
+
+		for c, child := range shapeRow.Childrenstepids {
+			ChildrenExternalIds[c] = uuid.MustParse(sqlchelpers.UUIDToStr(stepIdToTaskExternalId[child]))
+		}
+
+		shapeRows[i] = gen.WorkflowRunShapeItemForWorkflowRunDetails{
+			ChildrenExternalIds: ChildrenExternalIds,
+			TaskExternalId:      parentExternalId,
+			TaskName:            taskName,
+		}
+	}
+
+	parsedTaskEvents := make([]gen.V2TaskEvent, len(taskRunEvents))
+
+	for i, event := range taskRunEvents {
+		workerId := uuid.MustParse(sqlchelpers.UUIDToStr(event.WorkerID))
+		output := string(event.Output)
+
+		parsedTaskEvents[i] = gen.V2TaskEvent{
+			ErrorMessage:    &event.ErrorMessage.String,
+			EventType:       gen.V2TaskEventType(event.EventType),
+			Id:              int(event.ID),
+			Message:         event.AdditionalEventMessage.String,
+			Output:          &output,
+			TaskDisplayName: &event.DisplayName,
+			Timestamp:       event.EventTimestamp.Time,
+			WorkerId:        &workerId,
+			TaskId:          uuid.MustParse(sqlchelpers.UUIDToStr(event.TaskExternalID)),
+		}
+	}
+
+	parsedTasks := ToTaskSummaryRows(tasks)
+
+	return gen.V2WorkflowRunDetails{
+		Run:        parsedWorkflowRun,
+		Shape:      shapeRows,
+		TaskEvents: parsedTaskEvents,
+		Tasks:      parsedTasks,
+	}, nil
 }

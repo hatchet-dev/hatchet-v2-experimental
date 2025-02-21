@@ -13,8 +13,8 @@ import StepRunDetail, {
 import { Separator } from '@/components/ui/separator';
 import { CodeHighlighter } from '@/components/ui/code-highlighter';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
-import { V2RunDetailHeader } from './v2components/header';
 import { Badge } from '@/components/ui/badge';
+import { V2RunDetailHeader } from '../../workflow-runs-v2/$run/v2components/header';
 
 export const WORKFLOW_RUN_TERMINAL_STATUSES = [
   WorkflowRunStatus.CANCELLED,
@@ -80,7 +80,7 @@ export default function ExpandedWorkflowRun() {
   return (
     <div className="flex-grow h-full w-full">
       <div className="mx-auto max-w-7xl pt-2 px-4 sm:px-6 lg:px-8">
-        <V2RunDetailHeader taskRunId={params.run} />
+        <V2RunDetailHeader />
         <Separator className="my-4" />
         <div className="flex flex-row gap-x-4">
           <p className="font-semibold">Status</p>

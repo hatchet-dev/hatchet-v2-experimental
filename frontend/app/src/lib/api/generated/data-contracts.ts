@@ -66,6 +66,13 @@ export interface V2TaskSummary {
   /** The ID of the task. */
   taskId: number;
   /**
+   * The external ID of the task.
+   * @format uuid
+   * @minLength 36
+   * @maxLength 36
+   */
+  taskExternalId: string;
+  /**
    * The timestamp the task was inserted.
    * @format date-time
    */
@@ -179,6 +186,13 @@ export interface V2Task {
   output?: string;
   /** The error message of the task run (for the latest run) */
   errorMessage?: string;
+  /**
+   * The external ID of the workflow run.
+   * @format uuid
+   * @minLength 36
+   * @maxLength 36
+   */
+  workflowRunExternalId?: string;
 }
 
 export enum V2TaskEventType {
@@ -216,6 +230,7 @@ export interface V2TaskEvent {
   output?: string;
   /** @format uuid */
   workerId?: string;
+  taskDisplayName?: string;
 }
 
 export interface V2TaskEventList {
@@ -262,12 +277,45 @@ export interface V2WorkflowRun {
   output: object;
   /** The error message of the task run (for the latest run) */
   errorMessage?: string;
+  /**
+   * The ID of the workflow version.
+   * @format uuid
+   */
+  workflowVersionId?: string;
+  /** The input of the task run. */
+  input: object;
+  /**
+   * The timestamp the task run was created.
+   * @format date-time
+   */
+  createdAt?: string;
 }
 
 export interface V2WorkflowRunList {
   pagination: PaginationResponse;
   /** The list of workflow runs */
   rows: V2WorkflowRun[];
+}
+
+export interface WorkflowRunShapeItemForWorkflowRunDetails {
+  /**
+   * @format uuid
+   * @minLength 36
+   * @maxLength 36
+   */
+  taskExternalId: string;
+  childrenExternalIds: string[];
+  taskName: string;
+}
+
+export type WorkflowRunShapeForWorkflowRunDetails = WorkflowRunShapeItemForWorkflowRunDetails[];
+
+export interface V2WorkflowRunDetails {
+  run: V2WorkflowRun;
+  /** The list of task events for the workflow run */
+  taskEvents: V2TaskEvent[];
+  shape: WorkflowRunShapeForWorkflowRunDetails;
+  tasks: V2TaskSummary[];
 }
 
 export interface V2TaskRunMetric {

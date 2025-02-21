@@ -2,6 +2,7 @@ import React from 'react';
 import {
   StepRun,
   StepRunStatus,
+  V2Task,
   V2TaskStatus,
   WorkflowRun,
   queries,
@@ -10,11 +11,15 @@ import { useQuery } from '@tanstack/react-query';
 import invariant from 'tiny-invariant';
 import { Button } from '@/components/ui/button';
 import { Loading } from '@/components/ui/loading';
-import { ArrowPathIcon, XCircleIcon } from '@heroicons/react/24/outline';
+import {
+  ArrowPathIcon,
+  LinkIcon,
+  XCircleIcon,
+} from '@heroicons/react/24/outline';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { StepRunEvents } from '../step-run-events-for-workflow-run';
-import { useOutletContext } from 'react-router-dom';
+import { Link, useOutletContext } from 'react-router-dom';
 import { TenantContextType } from '@/lib/outlet';
 import { TaskRunsTable as WorkflowRunsTable } from '../../../components/workflow-runs-table';
 import { useTenant } from '@/lib/atoms';
@@ -34,6 +39,7 @@ export enum TabOption {
 interface StepRunDetailProps {
   taskRunId: string;
   defaultOpenTab?: TabOption;
+  showViewTaskRunButton?: boolean;
 }
 
 export const STEP_RUN_TERMINAL_STATUSES = [
@@ -43,42 +49,58 @@ export const STEP_RUN_TERMINAL_STATUSES = [
   StepRunStatus.SUCCEEDED,
 ];
 
+const TaskRunPermalinkOrBacklink = ({
+  taskRun,
+  showViewTaskRunButton,
+}: {
+  taskRun: V2Task;
+  showViewTaskRunButton: boolean;
+}) => {
+  if (showViewTaskRunButton) {
+    return (
+      <Link to={`/task-runs/${taskRun.metadata.id}`}>
+        <Button size={'sm'} className="px-2 py-2 gap-2" variant={'outline'}>
+          <LinkIcon className="w-4 h-4" />
+          View Task Run
+        </Button>
+      </Link>
+    );
+  } else if (taskRun.workflowRunExternalId) {
+    return (
+      <Link to={`/workflow-runs/${taskRun.workflowRunExternalId}`}>
+        <Button size={'sm'} className="px-2 py-2 gap-2" variant={'outline'}>
+          <LinkIcon className="w-4 h-4" />
+          View Workflow Run
+        </Button>
+      </Link>
+    );
+  } else {
+    return null;
+  }
+};
+
 const StepRunDetail: React.FC<StepRunDetailProps> = ({
   taskRunId,
   defaultOpenTab = TabOption.Output,
+  showViewTaskRunButton,
 }) => {
   const { tenant } = useTenant();
 
   const tenantId = tenant?.metadata.id;
-
-  if (!tenantId) {
-    throw new Error('Tenant not found');
-  }
-
-  const errors: string[] = [];
-
-  const eventsQuery = useQuery({
-    ...queries.v2TaskEvents.list(tenantId, taskRunId, {
-      offset: 0,
-      limit: 50,
-    }),
-    refetchInterval: () => {
-      return 5000;
-    },
-  });
+  invariant(tenantId);
 
   const taskRunQuery = useQuery({
     ...queries.v2Tasks.get(taskRunId),
+    refetchInterval: 5000,
   });
 
-  const events = eventsQuery.data?.rows || [];
   const taskRun = taskRunQuery.data;
 
-  if (eventsQuery.isLoading || taskRunQuery.isLoading) {
+  if (taskRunQuery.isLoading) {
     return <Loading />;
   }
 
-  if (events.length === 0 || !taskRun) {
+  if (!taskRun) {
     return <div>No events found</div>;
   }
 
@@ -130,16 +152,11 @@ const StepRunDetail: React.FC<StepRunDetailProps> = ({
           <XCircleIcon className="w-4 h-4" />
           Cancel
         </Button>
+        <TaskRunPermalinkOrBacklink
+          taskRun={taskRun}
+          showViewTaskRunButton={showViewTaskRunButton || false}
+        />
       </div>
-      {errors && errors.length > 0 && (
-        <div className="mt-4">
-          {errors.map((error, index) => (
-            <div key={index} className="text-red-500">
-              {error}
-            </div>
-          ))}
-        </div>
-      )}
       <div className="flex flex-row gap-2 items-center">
         <V2StepRunSummary taskRunId={taskRunId} />
       </div>
@@ -204,7 +221,7 @@ const StepRunDetail: React.FC<StepRunDetailProps> = ({
         <StepRunEvents
           taskRunId={taskRunId}
           onClick={() => {}}
-          taskDisplayName={taskRun.displayName}
+          fallbackTaskDisplayName={taskRun.displayName}
         />
       </div>
     </div>
