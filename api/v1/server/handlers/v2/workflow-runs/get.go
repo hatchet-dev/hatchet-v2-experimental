@@ -12,17 +12,12 @@ import (
 	"github.com/hatchet-dev/hatchet/pkg/repository/prisma/sqlchelpers"
 )
 
-type V2WorkflowRunPopulator struct {
-	WorkflowRun  *repository.WorkflowRunData
-	TaskMetadata []repository.TaskMetadata
-}
-
 func (t *V2WorkflowRunsService) V2WorkflowRunGet(ctx echo.Context, request gen.V2WorkflowRunGetRequestObject) (gen.V2WorkflowRunGetResponseObject, error) {
 	tenant := ctx.Get("tenant").(*db.TenantModel)
-	rawWorkflowRun := ctx.Get("v2-workflow-run").(map[string]interface{})
+	rawWorkflowRun := ctx.Get("v2-workflow-run").(*repository.V2WorkflowRunPopulator)
 
-	workflowRun := rawWorkflowRun["workflowRun"].(*repository.WorkflowRunData)
-	taskMetadata := rawWorkflowRun["taskMetadata"].([]repository.TaskMetadata)
+	workflowRun := rawWorkflowRun.WorkflowRun
+	taskMetadata := rawWorkflowRun.TaskMetadata
 
 	workflowRunId := workflowRun.ExternalID
 

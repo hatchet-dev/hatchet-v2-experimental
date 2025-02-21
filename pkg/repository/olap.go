@@ -90,9 +90,14 @@ type WorkflowRunData struct {
 	Input              []byte                           `json:"input"`
 }
 
+type V2WorkflowRunPopulator struct {
+	WorkflowRun  *WorkflowRunData
+	TaskMetadata []TaskMetadata
+}
+
 type OLAPEventRepository interface {
 	ReadTaskRun(ctx context.Context, taskExternalId string) (*timescalev2.V2TasksOlap, error)
-	ReadWorkflowRun(ctx context.Context, workflowRunExternalId pgtype.UUID) (*WorkflowRunData, []TaskMetadata, error)
+	ReadWorkflowRun(ctx context.Context, workflowRunExternalId pgtype.UUID) (*V2WorkflowRunPopulator, error)
 	ReadTaskRunData(ctx context.Context, tenantId pgtype.UUID, taskId int64, taskInsertedAt pgtype.Timestamptz) (*timescalev2.PopulateSingleTaskRunDataRow, *pgtype.UUID, error)
 	ListTasks(ctx context.Context, tenantId string, opts ListTaskRunOpts) ([]*timescalev2.PopulateTaskRunDataRow, int, error)
 	ListWorkflowRuns(ctx context.Context, tenantId string, opts ListWorkflowRunOpts) ([]*WorkflowRunData, int, error)
@@ -318,35 +323,38 @@ func ParseTaskMetadata(jsonData []byte) ([]TaskMetadata, error) {
 	return tasks, nil
 }
 
-func (r *olapEventRepository) ReadWorkflowRun(ctx context.Context, workflowRunExternalId pgtype.UUID) (*WorkflowRunData, []TaskMetadata, error) {
+func (r *olapEventRepository) ReadWorkflowRun(ctx context.Context, workflowRunExternalId pgtype.UUID) (*V2WorkflowRunPopulator, error) {
 	row, err := r.queries.ReadWorkflowRunByExternalId(ctx, r.pool, workflowRunExternalId)
 
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	taskMetadata, err := ParseTaskMetadata(row.TaskMetadata)
 
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	return &WorkflowRunData{
-		TenantID:           row.TenantID,
-		InsertedAt:         row.InsertedAt,
-		ExternalID:         row.ExternalID,
-		ReadableStatus:     row.ReadableStatus,
-		Kind:               row.Kind,
-		WorkflowID:         row.WorkflowID,
-		DisplayName:        row.DisplayName,
-		AdditionalMetadata: row.AdditionalMetadata,
-		CreatedAt:          row.CreatedAt,
-		StartedAt:          row.StartedAt,
-		FinishedAt:         row.FinishedAt,
-		ErrorMessage:       row.ErrorMessage.String,
-		WorkflowVersionId:  row.WorkflowVersionID,
-		Input:              row.Input,
-	}, taskMetadata, nil
+	return &V2WorkflowRunPopulator{
+		WorkflowRun: &WorkflowRunData{
+			TenantID:           row.TenantID,
+			InsertedAt:         row.InsertedAt,
+			ExternalID:         row.ExternalID,
+			ReadableStatus:     row.ReadableStatus,
+			Kind:               row.Kind,
+			WorkflowID:         row.WorkflowID,
+			DisplayName:        row.DisplayName,
+			AdditionalMetadata: row.AdditionalMetadata,
+			CreatedAt:          row.CreatedAt,
+			StartedAt:          row.StartedAt,
+			FinishedAt:         row.FinishedAt,
+			ErrorMessage:       row.ErrorMessage.String,
+			WorkflowVersionId:  row.WorkflowVersionID,
+			Input:              row.Input,
+		},
+		TaskMetadata: taskMetadata,
+	}, nil
 }
 
 func (r *olapEventRepository) ReadTaskRunData(ctx context.Context, tenantId pgtype.UUID, taskId int64, taskInsertedAt pgtype.Timestamptz) (*timescalev2.PopulateSingleTaskRunDataRow, *pgtype.UUID, error) {
