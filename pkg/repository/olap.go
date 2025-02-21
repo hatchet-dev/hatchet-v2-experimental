@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -85,14 +86,23 @@ type WorkflowRunData struct {
 	StartedAt          pgtype.Timestamptz          `json:"started_at"`
 	FinishedAt         pgtype.Timestamptz          `json:"finished_at"`
 	ErrorMessage       string                      `json:"error_message"`
+	WorkflowVersionId  pgtype.UUID                 `json:"workflow_version_id"`
+	Input              []byte                      `json:"input"`
+}
+
+type V2WorkflowRunPopulator struct {
+	WorkflowRun  *WorkflowRunData
+	TaskMetadata []TaskMetadata
 }
 
 type OLAPEventRepository interface {
 	ReadTaskRun(ctx context.Context, taskExternalId string) (*olapv2.V2TasksOlap, error)
-	ReadTaskRunData(ctx context.Context, tenantId pgtype.UUID, taskId int64, taskInsertedAt pgtype.Timestamptz) (*olapv2.PopulateSingleTaskRunDataRow, error)
+	ReadWorkflowRun(ctx context.Context, workflowRunExternalId pgtype.UUID) (*V2WorkflowRunPopulator, error)
+	ReadTaskRunData(ctx context.Context, tenantId pgtype.UUID, taskId int64, taskInsertedAt pgtype.Timestamptz) (*olapv2.PopulateSingleTaskRunDataRow, *pgtype.UUID, error)
 	ListTasks(ctx context.Context, tenantId string, opts ListTaskRunOpts) ([]*olapv2.PopulateTaskRunDataRow, int, error)
 	ListWorkflowRuns(ctx context.Context, tenantId string, opts ListWorkflowRunOpts) ([]*WorkflowRunData, int, error)
 	ListTaskRunEvents(ctx context.Context, tenantId string, taskId int64, taskInsertedAt pgtype.Timestamptz, limit, offset int64) ([]*olapv2.ListTaskEventsRow, error)
+	ListTaskRunEventsByWorkflowRunId(ctx context.Context, tenantId string, workflowRunId pgtype.UUID) ([]*olapv2.ListTaskEventsForWorkflowRunRow, error)
 	ReadTaskRunMetrics(ctx context.Context, tenantId string, opts ReadTaskRunMetricsOpts) ([]olap.TaskRunMetric, error)
 	CreateTasks(ctx context.Context, tenantId string, tasks []*sqlcv2.V2Task) error
 	CreateTaskEvents(ctx context.Context, tenantId string, events []olapv2.CreateTaskEventsOLAPParams) error
@@ -102,6 +112,7 @@ type OLAPEventRepository interface {
 	UpdateDAGStatuses(ctx context.Context, tenantId string) (bool, error)
 	ReadDAG(ctx context.Context, dagExternalId string) (*olapv2.V2DagsOlap, error)
 	ListTasksByDAGId(ctx context.Context, tenantId string, dagIds []pgtype.UUID) ([]*olapv2.PopulateTaskRunDataRow, map[int64]uuid.UUID, error)
+	ListTasksByIdAndInsertedAt(ctx context.Context, tenantId string, taskMetadata []TaskMetadata) ([]*olapv2.PopulateTaskRunDataRow, error)
 }
 
 type olapEventRepository struct {
@@ -315,28 +326,78 @@ func (r *olapEventRepository) ReadTaskRun(ctx context.Context, taskExternalId st
 	}, nil
 }
 
-func (r *olapEventRepository) ReadTaskRunData(ctx context.Context, tenantId pgtype.UUID, taskId int64, taskInsertedAt pgtype.Timestamptz) (*olapv2.PopulateSingleTaskRunDataRow, error) {
-	return r.queries.PopulateSingleTaskRunData(ctx, r.pool, olapv2.PopulateSingleTaskRunDataParams{
+type TaskMetadata struct {
+	TaskID         int64     `json:"task_id"`
+	TaskInsertedAt time.Time `json:"task_inserted_at"`
+}
+
+func ParseTaskMetadata(jsonData []byte) ([]TaskMetadata, error) {
+	var tasks []TaskMetadata
+	err := json.Unmarshal(jsonData, &tasks)
+	if err != nil {
+		return nil, err
+	}
+	return tasks, nil
+}
+
+func (r *olapEventRepository) ReadWorkflowRun(ctx context.Context, workflowRunExternalId pgtype.UUID) (*V2WorkflowRunPopulator, error) {
+	row, err := r.queries.ReadWorkflowRunByExternalId(ctx, r.pool, workflowRunExternalId)
+
+	if err != nil {
+		return nil, err
+	}
+
+	taskMetadata, err := ParseTaskMetadata(row.TaskMetadata)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &V2WorkflowRunPopulator{
+		WorkflowRun: &WorkflowRunData{
+			TenantID:           row.TenantID,
+			InsertedAt:         row.InsertedAt,
+			ExternalID:         row.ExternalID,
+			ReadableStatus:     row.ReadableStatus,
+			Kind:               row.Kind,
+			WorkflowID:         row.WorkflowID,
+			DisplayName:        row.DisplayName,
+			AdditionalMetadata: row.AdditionalMetadata,
+			CreatedAt:          row.CreatedAt,
+			StartedAt:          row.StartedAt,
+			FinishedAt:         row.FinishedAt,
+			ErrorMessage:       row.ErrorMessage.String,
+			WorkflowVersionId:  row.WorkflowVersionID,
+			Input:              row.Input,
+		},
+		TaskMetadata: taskMetadata,
+	}, nil
+}
+
+func (r *olapEventRepository) ReadTaskRunData(ctx context.Context, tenantId pgtype.UUID, taskId int64, taskInsertedAt pgtype.Timestamptz) (*olapv2.PopulateSingleTaskRunDataRow, *pgtype.UUID, error) {
+	taskRun, err := r.queries.PopulateSingleTaskRunData(ctx, r.pool, olapv2.PopulateSingleTaskRunDataParams{
 		Taskid:         taskId,
 		Tenantid:       tenantId,
 		Taskinsertedat: taskInsertedAt,
 	})
-}
 
-func uniq[T comparable](arr []T) []T {
-	const t = true
-
-	seen := make(map[T]bool)
-	uniq := make([]T, 0)
-
-	for _, item := range arr {
-		if _, ok := seen[item]; !ok {
-			seen[item] = t
-			uniq = append(uniq, item)
-		}
+	if err != nil {
+		return nil, nil, err
 	}
 
-	return uniq
+	dagId := taskRun.DagID.Int64
+	dagInsertedAt := taskRun.DagInsertedAt
+
+	workflowRunId, err := r.queries.GetWorkflowRunIdFromDagIdInsertedAt(ctx, r.pool, olapv2.GetWorkflowRunIdFromDagIdInsertedAtParams{
+		Dagid:         dagId,
+		Daginsertedat: dagInsertedAt,
+	})
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return taskRun, &workflowRunId, nil
 }
 
 func (r *olapEventRepository) ListTasks(ctx context.Context, tenantId string, opts ListTaskRunOpts) ([]*olapv2.PopulateTaskRunDataRow, int, error) {
@@ -434,7 +495,7 @@ func (r *olapEventRepository) ListTasks(ctx context.Context, tenantId string, op
 		return nil, 0, err
 	}
 
-	count, err := r.queries.CountTasks(ctx, r.pool, countParams)
+	count, err := r.queries.CountTasks(ctx, tx, countParams)
 
 	if err != nil {
 		count = int64(len(tasksWithData))
@@ -493,6 +554,40 @@ func (r *olapEventRepository) ListTasksByDAGId(ctx context.Context, tenantId str
 	}
 
 	return tasksWithData, taskIdToDagExternalId, nil
+}
+
+func (r *olapEventRepository) ListTasksByIdAndInsertedAt(ctx context.Context, tenantId string, taskMetadata []TaskMetadata) ([]*olapv2.PopulateTaskRunDataRow, error) {
+	tx, err := r.pool.Begin(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	defer tx.Rollback(ctx)
+
+	taskIds := make([]int64, 0)
+	taskInsertedAts := make([]pgtype.Timestamptz, 0)
+
+	for _, metadata := range taskMetadata {
+		taskIds = append(taskIds, metadata.TaskID)
+		taskInsertedAts = append(taskInsertedAts, sqlchelpers.TimestamptzFromTime(metadata.TaskInsertedAt))
+	}
+
+	tasksWithData, err := r.queries.PopulateTaskRunData(ctx, tx, olapv2.PopulateTaskRunDataParams{
+		Taskids:         taskIds,
+		Taskinsertedats: taskInsertedAts,
+		Tenantid:        sqlchelpers.UUIDFromStr(tenantId),
+	})
+
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+
+	return tasksWithData, nil
 }
 
 func (r *olapEventRepository) ListWorkflowRuns(ctx context.Context, tenantId string, opts ListWorkflowRunOpts) ([]*WorkflowRunData, int, error) {
@@ -616,7 +711,7 @@ func (r *olapEventRepository) ListWorkflowRuns(ctx context.Context, tenantId str
 		tasksToPopulated[externalId] = task
 	}
 
-	count, err := r.queries.CountWorkflowRuns(ctx, r.pool, countParams)
+	count, err := r.queries.CountWorkflowRuns(ctx, tx, countParams)
 
 	if err != nil {
 		r.l.Error().Msgf("error counting workflow runs: %v", err)
@@ -653,6 +748,7 @@ func (r *olapEventRepository) ListWorkflowRuns(ctx context.Context, tenantId str
 				FinishedAt:         dag.FinishedAt,
 				ErrorMessage:       dag.ErrorMessage.String,
 				Kind:               olapv2.V2RunKindDAG,
+				WorkflowVersionId:  dag.WorkflowVersionID,
 			})
 		} else {
 			task, ok := tasksToPopulated[externalId]
@@ -687,6 +783,19 @@ func (r *olapEventRepository) ListTaskRunEvents(ctx context.Context, tenantId st
 		Tenantid:       sqlchelpers.UUIDFromStr(tenantId),
 		Taskid:         taskId,
 		Taskinsertedat: taskInsertedAt,
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return rows, nil
+}
+
+func (r *olapEventRepository) ListTaskRunEventsByWorkflowRunId(ctx context.Context, tenantId string, workflowRunId pgtype.UUID) ([]*olapv2.ListTaskEventsForWorkflowRunRow, error) {
+	rows, err := r.queries.ListTaskEventsForWorkflowRun(ctx, r.pool, olapv2.ListTaskEventsForWorkflowRunParams{
+		Tenantid:      sqlchelpers.UUIDFromStr(tenantId),
+		Workflowrunid: workflowRunId,
 	})
 
 	if err != nil {

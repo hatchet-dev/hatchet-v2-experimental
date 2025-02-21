@@ -215,6 +215,16 @@ export const queries = createQueryKeyStore({
       queryKey: ['v2:workflow-run:list', tenant, query],
       queryFn: async () => (await api.v2WorkflowRunList(tenant, query)).data,
     }),
+    listTaskEvents: (workflowRunId: string) => ({
+      queryKey: ['v2:workflow-run:list-tasks', workflowRunId],
+      queryFn: async () =>
+        (await api.v2WorkflowRunTaskEventsList(workflowRunId)).data,
+    }),
+    details: (workflowRunId: string) => ({
+      queryKey: ['workflow-run-details:get', workflowRunId],
+      queryFn: async () =>
+        (await api.v2WorkflowRunGet(workflowRunId)).data,
+    }),
   },
   v2Tasks: {
     list: (tenant: string, query: V2ListTaskRunsQuery) => ({
@@ -237,9 +247,29 @@ export const queries = createQueryKeyStore({
     }),
   },
   v2TaskEvents: {
-    list: (tenant: string, task: string, query: ListWorkflowRunsQuery) => ({
-      queryKey: ['v2:workflow-run:list', tenant, task, query],
-      queryFn: async () => (await api.v2TaskEventList(task, query)).data,
+    list: (
+      tenant: string,
+      query: ListWorkflowRunsQuery,
+      taskRunId?: string | undefined,
+      workflowRunId?: string | undefined,
+    ) => ({
+      queryKey: [
+        'v2:workflow-run:list',
+        tenant,
+        taskRunId,
+        workflowRunId,
+        query,
+      ],
+      queryFn: async () => {
+        if (taskRunId) {
+          return (await api.v2TaskEventList(taskRunId, query)).data;
+        } else if (workflowRunId) {
+          return (await api.v2WorkflowRunTaskEventsList(workflowRunId))
+            .data;
+        } else {
+          throw new Error('Either task or workflowRunId must be set');
+        }
+      },
     }),
   },
   v2TaskRuns: {
@@ -259,10 +289,10 @@ export const queries = createQueryKeyStore({
       queryKey: ['workflow-run:list', tenant, query],
       queryFn: async () => (await api.workflowRunList(tenant, query)).data,
     }),
-    shape: (tenant: string, workflowRun: string) => ({
-      queryKey: ['workflow-run:get:shape', tenant, workflowRun],
+    shape: (tenant: string, workflowVersionId: string) => ({
+      queryKey: ['workflow-run:get:shape', tenant, workflowVersionId],
       queryFn: async () =>
-        (await api.workflowRunGetShape(tenant, workflowRun)).data,
+        (await api.workflowRunGetShape(tenant, workflowVersionId)).data,
     }),
     get: (tenant: string, workflowRun: string) => ({
       queryKey: ['workflow-run:get', tenant, workflowRun],

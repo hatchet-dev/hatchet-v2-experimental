@@ -72,6 +72,10 @@ func (w *workflowRunAPIRepository) WorkflowRunMetricsCount(ctx context.Context, 
 	return workflowRunMetricsCount(context.Background(), w.pool, w.queries, tenantId, opts)
 }
 
+func (w *workflowRunAPIRepository) GetWorkflowRunShape(ctx context.Context, workflowVersionId uuid.UUID) ([]*dbsqlc.GetWorkflowRunShapeRow, error) {
+	return w.queries.GetWorkflowRunShape(ctx, w.pool, sqlchelpers.UUIDFromStr(workflowVersionId.String()))
+}
+
 func (w *workflowRunAPIRepository) ListScheduledWorkflows(ctx context.Context, tenantId string, opts *repository.ListScheduledWorkflowsOpts) ([]*dbsqlc.ListScheduledWorkflowsRow, int64, error) {
 	if err := w.v.Validate(opts); err != nil {
 		return nil, 0, err

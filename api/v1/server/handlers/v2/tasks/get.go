@@ -11,13 +11,13 @@ import (
 func (t *TasksService) V2TaskGet(ctx echo.Context, request gen.V2TaskGetRequestObject) (gen.V2TaskGetResponseObject, error) {
 	task := ctx.Get("task").(*olapv2.V2TasksOlap)
 
-	taskWithData, err := t.config.EngineRepository.OLAP().ReadTaskRunData(ctx.Request().Context(), task.TenantID, task.ID, task.InsertedAt)
+	taskWithData, workflowRunExternalId, err := t.config.EngineRepository.OLAP().ReadTaskRunData(ctx.Request().Context(), task.TenantID, task.ID, task.InsertedAt)
 
 	if err != nil {
 		return nil, err
 	}
 
-	result := transformers.ToTask(taskWithData)
+	result := transformers.ToTask(taskWithData, workflowRunExternalId)
 
 	return gen.V2TaskGet200JSONResponse(
 		result,
