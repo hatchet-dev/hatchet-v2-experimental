@@ -58,10 +58,14 @@ const StepRunDetail: React.FC<StepRunDetailProps> = ({
   const errors: string[] = [];
 
   const eventsQuery = useQuery({
-    ...queries.v2TaskEvents.list(tenantId, taskRunId, {
-      offset: 0,
-      limit: 50,
-    }),
+    ...queries.v2TaskEvents.list(
+      tenantId,
+      {
+        offset: 0,
+        limit: 50,
+      },
+      taskRunId,
+    ),
     refetchInterval: () => {
       return 5000;
     },

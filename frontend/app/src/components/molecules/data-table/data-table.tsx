@@ -163,7 +163,6 @@ export function DataTable<TData extends IDGetter<TData>, TValue>({
     getFacetedUniqueValues: getFacetedUniqueValues(),
     getSubRows: getSubRows,
     onExpandedChange: setExpanded,
-    // TODO: Figure this out
     getRowCanExpand: (row) => row.subRows.length > 0,
     manualSorting,
     manualFiltering,

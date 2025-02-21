@@ -497,6 +497,7 @@ export function WorkflowRunsTable({
       workflowName: workflowKeys?.rows?.find(
         (r) => r.metadata.id == row.workflowId,
       )?.name,
+      input: {},
     }),
   );
 
@@ -650,7 +651,6 @@ export function WorkflowRunsTable({
         columns={columns(onAdditionalMetadataClick)}
         columnVisibility={columnVisibility}
         setColumnVisibility={setColumnVisibility}
-        // TODO: This is a hack - fix this type
         data={data}
         filters={filters}
         actions={actions}

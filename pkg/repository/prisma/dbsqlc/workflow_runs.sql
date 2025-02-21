@@ -1573,3 +1573,18 @@ JOIN "JobRun" jr ON wr."id" = jr."workflowRunId"
 JOIN "StepRun" sr ON jr."id" = sr."jobRunId"
 JOIN "Step" s ON sr."stepId" = s."id"
 WHERE sr."error" IS NOT NULL;
+
+
+
+-- name: GetWorkflowRunShape :many
+SELECT
+    s.id AS parentStepId,
+    s."readableId" AS stepName,
+    ARRAY_AGG(so."B")::uuid[] AS childrenStepIds
+FROM "WorkflowVersion" v
+JOIN "Job" j ON v."id" = j."workflowVersionId"
+JOIN "Step" s ON j."id" = s."jobId"
+LEFT JOIN "_StepOrder" so ON so."A" = s.id
+WHERE v.id = @workflowVersionId::uuid
+GROUP BY s.id, s."readableId"
+;

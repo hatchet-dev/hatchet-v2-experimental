@@ -316,3 +316,5 @@ V2WorkflowRun:
   $ref: "./v2/workflow_run.yaml#/V2WorkflowRun"
 V2WorkflowRunList:
   $ref: "./v2/workflow_run.yaml#/V2WorkflowRunList"
+V2WorkflowRunDetails:
+  $ref: "./v2/workflow_run.yaml#/V2WorkflowRunDetails"

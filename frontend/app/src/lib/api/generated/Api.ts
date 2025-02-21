@@ -90,6 +90,7 @@ import {
   V2TaskRunMetrics,
   V2TaskStatus,
   V2TaskSummaryList,
+  V2WorkflowRunDetails,
   V2WorkflowRunList,
   WebhookWorkerCreateRequest,
   WebhookWorkerCreated,
@@ -298,6 +299,56 @@ export class Api<SecurityDataType = unknown> extends HttpClient<SecurityDataType
   ) =>
     this.request<V2WorkflowRunList, APIErrors>({
       path: `/api/v2/tenants/${tenant}/workflow-runs`,
+      method: 'GET',
+      query: query,
+      secure: true,
+      format: 'json',
+      ...params,
+    });
+  /**
+   * @description Get a workflow run and its metadata to display on the "detail" page
+   *
+   * @tags Workflow Runs
+   * @name V2WorkflowRunGet
+   * @summary List tasks
+   * @request GET:/api/v2/workflow-runs/{v2-workflow-run}
+   * @secure
+   */
+  v2WorkflowRunGet = (v2WorkflowRun: string, params: RequestParams = {}) =>
+    this.request<V2WorkflowRunDetails, APIErrors>({
+      path: `/api/v2/workflow-runs/${v2WorkflowRun}`,
+      method: 'GET',
+      secure: true,
+      format: 'json',
+      ...params,
+    });
+  /**
+   * @description List all tasks for a workflow run
+   *
+   * @tags Workflow Runs
+   * @name V2WorkflowRunTaskEventsList
+   * @summary List tasks
+   * @request GET:/api/v2/workflow-runs/{v2-workflow-run}/task-events
+   * @secure
+   */
+  v2WorkflowRunTaskEventsList = (
+    v2WorkflowRun: string,
+    query?: {
+      /**
+       * The number to skip
+       * @format int64
+       */
+      offset?: number;
+      /**
+       * The number to limit by
+       * @format int64
+       */
+      limit?: number;
+    },
+    params: RequestParams = {},
+  ) =>
+    this.request<V2TaskEventList, APIErrors>({
+      path: `/api/v2/workflow-runs/${v2WorkflowRun}/task-events`,
       method: 'GET',
       query: query,
       secure: true,

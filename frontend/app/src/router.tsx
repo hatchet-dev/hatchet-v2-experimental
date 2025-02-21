@@ -182,7 +182,16 @@ const routes: RouteObject[] = [
               {
                 path: '/workflow-runs/:run',
                 lazy: async () =>
-                  import('./pages/main/workflow-runs/$run').then((res) => {
+                  import('./pages/main/workflow-runs-v2/$run').then((res) => {
+                    return {
+                      Component: res.default,
+                    };
+                  }),
+              },
+              {
+                path: '/task-runs/:run',
+                lazy: async () =>
+                  import('./pages/main/task-runs-v2/$run').then((res) => {
                     return {
                       Component: res.default,
                     };

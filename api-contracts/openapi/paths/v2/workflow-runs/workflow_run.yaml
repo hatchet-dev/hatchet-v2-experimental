@@ -90,3 +90,94 @@ listWorkflowRuns:
     summary: List workflow runs
     tags:
       - Workflow Runs
+
+
+listTaskEventsForWorkflowRun:
+  get:
+    x-resources: ["tenant", "v2-workflow-run"]
+    description: List all tasks for a workflow run
+    operationId: v2-workflow-run:task-events:list
+    parameters:
+      - description: The number to skip
+        in: query
+        name: offset
+        required: false
+        schema:
+          type: integer
+          format: int64
+      - description: The number to limit by
+        in: query
+        name: limit
+        required: false
+        schema:
+          type: integer
+          format: int64
+      - description: The workflow run id to find runs for
+        in: path
+        name: v2-workflow-run
+        required: true
+        schema:
+          type: string
+          format: uuid
+          minLength: 36
+          maxLength: 36
+    responses:
+      "200":
+        content:
+          application/json:
+            schema:
+              $ref: "../../../components/schemas/_index.yaml#/V2TaskEventList"
+        description: Successfully listed the tasks
+      "400":
+        content:
+          application/json:
+            schema:
+              $ref: "../../../components/schemas/_index.yaml#/APIErrors"
+        description: A malformed or bad request
+      "403":
+        content:
+          application/json:
+            schema:
+              $ref: "../../../components/schemas/_index.yaml#/APIErrors"
+        description: Forbidden
+    summary: List tasks
+    tags:
+      - Workflow Runs
+
+getWorkflowRunDetails:
+  get:
+    x-resources: ["tenant", "v2-workflow-run"]
+    description: Get a workflow run and its metadata to display on the "detail" page
+    operationId: v2-workflow-run:get
+    parameters:
+      - description: The workflow run id to get
+        in: path
+        name: v2-workflow-run
+        required: true
+        schema:
+          type: string
+          format: uuid
+          minLength: 36
+          maxLength: 36
+    responses:
+      "200":
+        content:
+          application/json:
+            schema:
+              $ref: "../../../components/schemas/_index.yaml#/V2WorkflowRunDetails"
+        description: Successfully listed the tasks
+      "400":
+        content:
+          application/json:
+            schema:
+              $ref: "../../../components/schemas/_index.yaml#/APIErrors"
+        description: A malformed or bad request
+      "403":
+        content:
+          application/json:
+            schema:
+              $ref: "../../../components/schemas/_index.yaml#/APIErrors"
+        description: Forbidden
+    summary: List tasks
+    tags:
+      - Workflow Runs
