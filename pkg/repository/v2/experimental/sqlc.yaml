@@ -7,6 +7,7 @@ sql:
       - queries.sql
     schema:
       - ./tsdb_tables.sql
+      - ../../../../sql/schema/experimental.sql
       - ../../../../sql/schema/olap.sql
     strict_order_by: false
     gen:

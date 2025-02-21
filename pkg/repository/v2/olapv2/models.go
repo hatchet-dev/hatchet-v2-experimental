@@ -243,28 +243,6 @@ func (ns NullV2StickyStrategyOlap) Value() (driver.Value, error) {
 	return string(ns.V2StickyStrategyOlap), nil
 }
 
-type V2CaggStatusMetrics struct {
-	Bucket         interface{} `json:"bucket"`
-	TenantID       pgtype.UUID `json:"tenant_id"`
-	WorkflowID     pgtype.UUID `json:"workflow_id"`
-	QueuedCount    int64       `json:"queued_count"`
-	RunningCount   int64       `json:"running_count"`
-	CompletedCount int64       `json:"completed_count"`
-	CancelledCount int64       `json:"cancelled_count"`
-	FailedCount    int64       `json:"failed_count"`
-}
-
-type V2CaggTaskEventsMinute struct {
-	Bucket         interface{} `json:"bucket"`
-	TenantID       pgtype.UUID `json:"tenant_id"`
-	WorkflowID     pgtype.UUID `json:"workflow_id"`
-	QueuedCount    int64       `json:"queued_count"`
-	RunningCount   int64       `json:"running_count"`
-	CompletedCount int64       `json:"completed_count"`
-	CancelledCount int64       `json:"cancelled_count"`
-	FailedCount    int64       `json:"failed_count"`
-}
-
 type V2DagToTaskOlap struct {
 	DagID          int64              `json:"dag_id"`
 	DagInsertedAt  pgtype.Timestamptz `json:"dag_inserted_at"`
