@@ -6,12 +6,11 @@ sql:
     queries:
       - queries.sql
     schema:
-      - ./tsdb_tables.sql
       - ../../../../sql/schema/timescale.sql
     strict_order_by: false
     gen:
       go:
-        package: "timescalev2"
+        package: "olapv2"
         sql_package: "pgx/v5"
         out: "."
         emit_exact_table_names: true

@@ -3,7 +3,7 @@
 //   sqlc v1.24.0
 // source: copyfrom.go
 
-package timescalev2
+package olapv2
 
 import (
 	"context"

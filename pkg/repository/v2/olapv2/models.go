@@ -2,7 +2,7 @@
 // versions:
 //   sqlc v1.24.0
 
-package timescalev2
+package olapv2
 
 import (
 	"database/sql/driver"
@@ -241,26 +241,6 @@ func (ns NullV2StickyStrategyOlap) Value() (driver.Value, error) {
 		return nil, nil
 	}
 	return string(ns.V2StickyStrategyOlap), nil
-}
-
-type TimescaledbInformationContinuousAggregates struct {
-	MaterializationHypertableName string `json:"materialization_hypertable_name"`
-}
-
-type TimescaledbInformationJobHistory struct {
-	JobID     int64            `json:"job_id"`
-	StartTime pgtype.Timestamp `json:"start_time"`
-	Succeeded bool             `json:"succeeded"`
-}
-
-type TimescaledbInformationJobStats struct {
-	JobID                int64            `json:"job_id"`
-	LastSuccessfulFinish pgtype.Timestamp `json:"last_successful_finish"`
-}
-
-type TimescaledbInformationJobs struct {
-	JobID          int64  `json:"job_id"`
-	HypertableName string `json:"hypertable_name"`
 }
 
 type V2CaggStatusMetrics struct {

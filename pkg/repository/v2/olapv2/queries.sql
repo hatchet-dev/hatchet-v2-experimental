@@ -170,21 +170,6 @@ INSERT INTO v2_task_events_olap (
     $13
 );
 
--- name: GetTenantStatusMetrics :one
-SELECT
-  COALESCE(SUM(queued_count), 0)::bigint AS total_queued,
-  COALESCE(SUM(running_count), 0)::bigint AS total_running,
-  COALESCE(SUM(completed_count), 0)::bigint AS total_completed,
-  COALESCE(SUM(cancelled_count), 0)::bigint AS total_cancelled,
-  COALESCE(SUM(failed_count), 0)::bigint AS total_failed
-FROM v2_cagg_status_metrics
-WHERE
-    tenant_id = @tenantId::uuid
-    AND bucket >= time_bucket('5 minutes', @createdAfter::timestamptz)
-    AND (
-        sqlc.narg('workflowIds')::uuid[] IS NULL OR workflow_id = ANY(sqlc.narg('workflowIds')::uuid[])
-    );
-
 -- name: ReadTaskByExternalID :one
 WITH lookup_task AS (
     SELECT
@@ -502,21 +487,6 @@ LEFT JOIN
     error_message e ON e.task_id = t.id
 ORDER BY t.inserted_at DESC, t.id DESC;
 
--- name: GetTaskPointMetrics :many
-SELECT
-    time_bucket(COALESCE(sqlc.narg('interval')::interval, '1 minute'), bucket)::timestamptz as bucket_2,
-    SUM(completed_count)::int as completed_count,
-    SUM(failed_count)::int as failed_count
-FROM
-    v2_cagg_task_events_minute
-WHERE
-    tenant_id = @tenantId::uuid AND
-    -- timestamptz makes this fast, apparently:
-    -- https://www.timescale.com/forum/t/very-slow-query-planning-time-in-postgresql/255/8
-    bucket >= time_bucket('1 minute', @createdAfter::timestamptz) AND
-    bucket <= time_bucket('1 minute', @createdBefore::timestamptz)
-GROUP BY bucket_2
-ORDER BY bucket_2;
 
 -- name: UpdateTaskStatuses :one
 WITH locked_events AS (
@@ -831,7 +801,7 @@ LEFT JOIN error_message e ON r.run_id = e.run_id
 ORDER BY r.inserted_at DESC, r.run_id DESC;
 
 
--- name: GetTaskPointMetricsWithoutTimescale :many
+-- name: GetTaskPointMetrics :many
 SELECT
     DATE_BIN(
         COALESCE(sqlc.narg('interval')::INTERVAL, '1 minute'),
@@ -849,7 +819,7 @@ GROUP BY bucket
 ORDER BY bucket;
 
 
--- name: GetTenantStatusMetricsWithoutTimescale :one
+-- name: GetTenantStatusMetrics :one
 SELECT
     DATE_BIN(
         '1 minute',

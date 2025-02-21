@@ -3,7 +3,7 @@
 //   sqlc v1.24.0
 // source: queries.sql
 
-package timescalev2
+package olapv2
 
 import (
 	"context"
@@ -132,61 +132,6 @@ type CreateTasksOLAPParams struct {
 
 const getTaskPointMetrics = `-- name: GetTaskPointMetrics :many
 SELECT
-    time_bucket(COALESCE($1::interval, '1 minute'), bucket)::timestamptz as bucket_2,
-    SUM(completed_count)::int as completed_count,
-    SUM(failed_count)::int as failed_count
-FROM
-    v2_cagg_task_events_minute
-WHERE
-    tenant_id = $2::uuid AND
-    -- timestamptz makes this fast, apparently:
-    -- https://www.timescale.com/forum/t/very-slow-query-planning-time-in-postgresql/255/8
-    bucket >= time_bucket('1 minute', $3::timestamptz) AND
-    bucket <= time_bucket('1 minute', $4::timestamptz)
-GROUP BY bucket_2
-ORDER BY bucket_2
-`
-
-type GetTaskPointMetricsParams struct {
-	Interval      pgtype.Interval    `json:"interval"`
-	Tenantid      pgtype.UUID        `json:"tenantid"`
-	Createdafter  pgtype.Timestamptz `json:"createdafter"`
-	Createdbefore pgtype.Timestamptz `json:"createdbefore"`
-}
-
-type GetTaskPointMetricsRow struct {
-	Bucket2        pgtype.Timestamptz `json:"bucket_2"`
-	CompletedCount int32              `json:"completed_count"`
-	FailedCount    int32              `json:"failed_count"`
-}
-
-func (q *Queries) GetTaskPointMetrics(ctx context.Context, db DBTX, arg GetTaskPointMetricsParams) ([]*GetTaskPointMetricsRow, error) {
-	rows, err := db.Query(ctx, getTaskPointMetrics,
-		arg.Interval,
-		arg.Tenantid,
-		arg.Createdafter,
-		arg.Createdbefore,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []*GetTaskPointMetricsRow
-	for rows.Next() {
-		var i GetTaskPointMetricsRow
-		if err := rows.Scan(&i.Bucket2, &i.CompletedCount, &i.FailedCount); err != nil {
-			return nil, err
-		}
-		items = append(items, &i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getTaskPointMetricsWithoutTimescale = `-- name: GetTaskPointMetricsWithoutTimescale :many
-SELECT
     DATE_BIN(
         COALESCE($1::INTERVAL, '1 minute'),
         task_inserted_at,
@@ -203,21 +148,21 @@ GROUP BY bucket
 ORDER BY bucket
 `
 
-type GetTaskPointMetricsWithoutTimescaleParams struct {
+type GetTaskPointMetricsParams struct {
 	Interval      pgtype.Interval    `json:"interval"`
 	Tenantid      pgtype.UUID        `json:"tenantid"`
 	Createdafter  pgtype.Timestamptz `json:"createdafter"`
 	Createdbefore pgtype.Timestamptz `json:"createdbefore"`
 }
 
-type GetTaskPointMetricsWithoutTimescaleRow struct {
+type GetTaskPointMetricsRow struct {
 	Bucket         pgtype.Timestamptz `json:"bucket"`
 	CompletedCount int64              `json:"completed_count"`
 	FailedCount    int64              `json:"failed_count"`
 }
 
-func (q *Queries) GetTaskPointMetricsWithoutTimescale(ctx context.Context, db DBTX, arg GetTaskPointMetricsWithoutTimescaleParams) ([]*GetTaskPointMetricsWithoutTimescaleRow, error) {
-	rows, err := db.Query(ctx, getTaskPointMetricsWithoutTimescale,
+func (q *Queries) GetTaskPointMetrics(ctx context.Context, db DBTX, arg GetTaskPointMetricsParams) ([]*GetTaskPointMetricsRow, error) {
+	rows, err := db.Query(ctx, getTaskPointMetrics,
 		arg.Interval,
 		arg.Tenantid,
 		arg.Createdafter,
@@ -227,9 +172,9 @@ func (q *Queries) GetTaskPointMetricsWithoutTimescale(ctx context.Context, db DB
 		return nil, err
 	}
 	defer rows.Close()
-	var items []*GetTaskPointMetricsWithoutTimescaleRow
+	var items []*GetTaskPointMetricsRow
 	for rows.Next() {
-		var i GetTaskPointMetricsWithoutTimescaleRow
+		var i GetTaskPointMetricsRow
 		if err := rows.Scan(&i.Bucket, &i.CompletedCount, &i.FailedCount); err != nil {
 			return nil, err
 		}
@@ -242,49 +187,6 @@ func (q *Queries) GetTaskPointMetricsWithoutTimescale(ctx context.Context, db DB
 }
 
 const getTenantStatusMetrics = `-- name: GetTenantStatusMetrics :one
-SELECT
-  COALESCE(SUM(queued_count), 0)::bigint AS total_queued,
-  COALESCE(SUM(running_count), 0)::bigint AS total_running,
-  COALESCE(SUM(completed_count), 0)::bigint AS total_completed,
-  COALESCE(SUM(cancelled_count), 0)::bigint AS total_cancelled,
-  COALESCE(SUM(failed_count), 0)::bigint AS total_failed
-FROM v2_cagg_status_metrics
-WHERE
-    tenant_id = $1::uuid
-    AND bucket >= time_bucket('5 minutes', $2::timestamptz)
-    AND (
-        $3::uuid[] IS NULL OR workflow_id = ANY($3::uuid[])
-    )
-`
-
-type GetTenantStatusMetricsParams struct {
-	Tenantid     pgtype.UUID        `json:"tenantid"`
-	Createdafter pgtype.Timestamptz `json:"createdafter"`
-	WorkflowIds  []pgtype.UUID      `json:"workflowIds"`
-}
-
-type GetTenantStatusMetricsRow struct {
-	TotalQueued    int64 `json:"total_queued"`
-	TotalRunning   int64 `json:"total_running"`
-	TotalCompleted int64 `json:"total_completed"`
-	TotalCancelled int64 `json:"total_cancelled"`
-	TotalFailed    int64 `json:"total_failed"`
-}
-
-func (q *Queries) GetTenantStatusMetrics(ctx context.Context, db DBTX, arg GetTenantStatusMetricsParams) (*GetTenantStatusMetricsRow, error) {
-	row := db.QueryRow(ctx, getTenantStatusMetrics, arg.Tenantid, arg.Createdafter, arg.WorkflowIds)
-	var i GetTenantStatusMetricsRow
-	err := row.Scan(
-		&i.TotalQueued,
-		&i.TotalRunning,
-		&i.TotalCompleted,
-		&i.TotalCancelled,
-		&i.TotalFailed,
-	)
-	return &i, err
-}
-
-const getTenantStatusMetricsWithoutTimescale = `-- name: GetTenantStatusMetricsWithoutTimescale :one
 SELECT
     DATE_BIN(
         '1 minute',
@@ -309,13 +211,13 @@ GROUP BY tenant_id, workflow_id, bucket
 ORDER BY bucket DESC
 `
 
-type GetTenantStatusMetricsWithoutTimescaleParams struct {
+type GetTenantStatusMetricsParams struct {
 	Tenantid     pgtype.UUID        `json:"tenantid"`
 	Createdafter pgtype.Timestamptz `json:"createdafter"`
 	WorkflowIds  []pgtype.UUID      `json:"workflowIds"`
 }
 
-type GetTenantStatusMetricsWithoutTimescaleRow struct {
+type GetTenantStatusMetricsRow struct {
 	Bucket         pgtype.Timestamptz `json:"bucket"`
 	TenantID       pgtype.UUID        `json:"tenant_id"`
 	WorkflowID     pgtype.UUID        `json:"workflow_id"`
@@ -326,9 +228,9 @@ type GetTenantStatusMetricsWithoutTimescaleRow struct {
 	FailedCount    int64              `json:"failed_count"`
 }
 
-func (q *Queries) GetTenantStatusMetricsWithoutTimescale(ctx context.Context, db DBTX, arg GetTenantStatusMetricsWithoutTimescaleParams) (*GetTenantStatusMetricsWithoutTimescaleRow, error) {
-	row := db.QueryRow(ctx, getTenantStatusMetricsWithoutTimescale, arg.Tenantid, arg.Createdafter, arg.WorkflowIds)
-	var i GetTenantStatusMetricsWithoutTimescaleRow
+func (q *Queries) GetTenantStatusMetrics(ctx context.Context, db DBTX, arg GetTenantStatusMetricsParams) (*GetTenantStatusMetricsRow, error) {
+	row := db.QueryRow(ctx, getTenantStatusMetrics, arg.Tenantid, arg.Createdafter, arg.WorkflowIds)
+	var i GetTenantStatusMetricsRow
 	err := row.Scan(
 		&i.Bucket,
 		&i.TenantID,
