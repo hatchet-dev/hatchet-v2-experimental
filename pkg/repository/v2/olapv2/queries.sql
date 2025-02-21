@@ -807,7 +807,7 @@ SELECT
         COALESCE(sqlc.narg('interval')::INTERVAL, '1 minute'),
         task_inserted_at,
         TIMESTAMPTZ '1970-01-01 00:00:00+00'
-    ) :: TIMESTAMPTZ AS bucket,
+    ) :: TIMESTAMPTZ AS bucket_2,
     COUNT(*) FILTER (WHERE readable_status = 'COMPLETED') AS completed_count,
     COUNT(*) FILTER (WHERE readable_status = 'FAILED') AS failed_count
 FROM
@@ -815,8 +815,8 @@ FROM
 WHERE
     tenant_id = @tenantId::UUID
     AND task_inserted_at BETWEEN @createdAfter::TIMESTAMPTZ AND @createdBefore::TIMESTAMPTZ
-GROUP BY bucket
-ORDER BY bucket;
+GROUP BY bucket_2
+ORDER BY bucket_2;
 
 
 -- name: GetTenantStatusMetrics :one
@@ -828,11 +828,11 @@ SELECT
     ) :: TIMESTAMPTZ AS bucket,
     tenant_id,
     workflow_id,
-    COUNT(*) FILTER (WHERE readable_status = 'QUEUED') AS queued_count,
-    COUNT(*) FILTER (WHERE readable_status = 'RUNNING') AS running_count,
-    COUNT(*) FILTER (WHERE readable_status = 'COMPLETED') AS completed_count,
-    COUNT(*) FILTER (WHERE readable_status = 'CANCELLED') AS cancelled_count,
-    COUNT(*) FILTER (WHERE readable_status = 'FAILED') AS failed_count
+    COUNT(*) FILTER (WHERE readable_status = 'QUEUED') AS total_queued,
+    COUNT(*) FILTER (WHERE readable_status = 'RUNNING') AS total_running,
+    COUNT(*) FILTER (WHERE readable_status = 'COMPLETED') AS total_completed,
+    COUNT(*) FILTER (WHERE readable_status = 'CANCELLED') AS total_cancelled,
+    COUNT(*) FILTER (WHERE readable_status = 'FAILED') AS total_failed
 FROM v2_statuses_olap
 WHERE
     tenant_id = @tenantId::UUID

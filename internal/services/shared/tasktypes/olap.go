@@ -7,8 +7,8 @@ import (
 	"github.com/hatchet-dev/hatchet/internal/msgqueue"
 	"github.com/hatchet-dev/hatchet/internal/services/dispatcher/contracts"
 	v2 "github.com/hatchet-dev/hatchet/pkg/repository/v2"
+	"github.com/hatchet-dev/hatchet/pkg/repository/v2/olapv2"
 	"github.com/hatchet-dev/hatchet/pkg/repository/v2/sqlcv2"
-	"github.com/hatchet-dev/hatchet/pkg/repository/v2/timescalev2"
 )
 
 type CreatedTaskPayload struct {
@@ -50,7 +50,7 @@ type CreateMonitoringEventPayload struct {
 
 	WorkerId *string `json:"worker_id,omitempty"`
 
-	EventType timescalev2.V2EventTypeOlap `json:"event_type"`
+	EventType olapv2.V2EventTypeOlap `json:"event_type"`
 
 	EventTimestamp time.Time `json:"event_timestamp" validate:"required"`
 	EventPayload   string    `json:"event_payload" validate:"required"`
@@ -68,11 +68,11 @@ func MonitoringEventMessageFromActionEvent(tenantId string, taskId int64, retryC
 
 	switch request.EventType {
 	case contracts.StepActionEventType_STEP_EVENT_TYPE_COMPLETED:
-		payload.EventType = timescalev2.V2EventTypeOlapFINISHED
+		payload.EventType = olapv2.V2EventTypeOlapFINISHED
 	case contracts.StepActionEventType_STEP_EVENT_TYPE_FAILED:
-		payload.EventType = timescalev2.V2EventTypeOlapFAILED
+		payload.EventType = olapv2.V2EventTypeOlapFAILED
 	case contracts.StepActionEventType_STEP_EVENT_TYPE_STARTED:
-		payload.EventType = timescalev2.V2EventTypeOlapSTARTED
+		payload.EventType = olapv2.V2EventTypeOlapSTARTED
 	default:
 		return nil, fmt.Errorf("unknown event type: %s", request.EventType.String())
 	}

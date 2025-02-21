@@ -27,8 +27,8 @@ import (
 	"github.com/hatchet-dev/hatchet/pkg/repository"
 	"github.com/hatchet-dev/hatchet/pkg/repository/prisma/sqlchelpers"
 	v2 "github.com/hatchet-dev/hatchet/pkg/repository/v2"
+	"github.com/hatchet-dev/hatchet/pkg/repository/v2/olapv2"
 	"github.com/hatchet-dev/hatchet/pkg/repository/v2/sqlcv2"
-	"github.com/hatchet-dev/hatchet/pkg/repository/v2/timescalev2"
 )
 
 type TasksController interface {
@@ -420,7 +420,7 @@ func (tc *TasksControllerImpl) handleTaskFailed(ctx context.Context, tenantId st
 			tasktypes.CreateMonitoringEventPayload{
 				TaskId:         taskId,
 				RetryCount:     task.RetryCount,
-				EventType:      timescalev2.V2EventTypeOlapQUEUED,
+				EventType:      olapv2.V2EventTypeOlapQUEUED,
 				EventTimestamp: time.Now(),
 			},
 		)
@@ -724,7 +724,7 @@ func (tc *TasksControllerImpl) signalTasksCreated(ctx context.Context, tenantId 
 			tasktypes.CreateMonitoringEventPayload{
 				TaskId:         task.ID,
 				RetryCount:     0,
-				EventType:      timescalev2.V2EventTypeOlapQUEUED,
+				EventType:      olapv2.V2EventTypeOlapQUEUED,
 				EventTimestamp: time.Now(),
 			},
 		)
@@ -829,7 +829,7 @@ func (tc *TasksControllerImpl) signalTasksCreatedAndCancelled(ctx context.Contex
 		msg, err = tasktypes.MonitoringEventMessageFromInternal(tenantId, tasktypes.CreateMonitoringEventPayload{
 			TaskId:         taskCp.ID,
 			RetryCount:     taskCp.RetryCount,
-			EventType:      timescalev2.V2EventTypeOlapCANCELLED,
+			EventType:      olapv2.V2EventTypeOlapCANCELLED,
 			EventTimestamp: time.Now(),
 		})
 
@@ -915,7 +915,7 @@ func (tc *TasksControllerImpl) signalTasksCreatedAndSkipped(ctx context.Context,
 		msg, err = tasktypes.MonitoringEventMessageFromInternal(tenantId, tasktypes.CreateMonitoringEventPayload{
 			TaskId:         taskCp.ID,
 			RetryCount:     taskCp.RetryCount,
-			EventType:      timescalev2.V2EventTypeOlapSKIPPED,
+			EventType:      olapv2.V2EventTypeOlapSKIPPED,
 			EventTimestamp: time.Now(),
 		})
 

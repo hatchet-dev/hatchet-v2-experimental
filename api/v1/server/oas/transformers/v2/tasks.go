@@ -9,7 +9,7 @@ import (
 	"github.com/hatchet-dev/hatchet/api/v1/server/oas/gen"
 	"github.com/hatchet-dev/hatchet/pkg/repository/olap"
 	"github.com/hatchet-dev/hatchet/pkg/repository/prisma/sqlchelpers"
-	"github.com/hatchet-dev/hatchet/pkg/repository/v2/timescalev2"
+	"github.com/hatchet-dev/hatchet/pkg/repository/v2/olapv2"
 	"github.com/oapi-codegen/runtime/types"
 )
 
@@ -19,7 +19,7 @@ func jsonToMap(jsonBytes []byte) map[string]interface{} {
 	return result
 }
 
-func ToTaskSummary(task *timescalev2.PopulateTaskRunDataRow) gen.V2TaskSummary {
+func ToTaskSummary(task *olapv2.PopulateTaskRunDataRow) gen.V2TaskSummary {
 	additionalMetadata := jsonToMap(task.AdditionalMetadata)
 
 	var finishedAt *time.Time
@@ -62,7 +62,7 @@ func ToTaskSummary(task *timescalev2.PopulateTaskRunDataRow) gen.V2TaskSummary {
 }
 
 func ToTaskSummaryRows(
-	tasks []*timescalev2.PopulateTaskRunDataRow,
+	tasks []*olapv2.PopulateTaskRunDataRow,
 ) []gen.V2TaskSummary {
 	toReturn := make([]gen.V2TaskSummary, len(tasks))
 
@@ -74,7 +74,7 @@ func ToTaskSummaryRows(
 }
 
 func ToDagChildren(
-	tasks []*timescalev2.PopulateTaskRunDataRow,
+	tasks []*olapv2.PopulateTaskRunDataRow,
 	taskIdToDagExternalId map[int64]uuid.UUID,
 ) []gen.V2DagChildren {
 	dagIdToTasks := make(map[uuid.UUID][]gen.V2TaskSummary)
@@ -97,7 +97,7 @@ func ToDagChildren(
 }
 
 func ToTaskSummaryMany(
-	tasks []*timescalev2.PopulateTaskRunDataRow,
+	tasks []*olapv2.PopulateTaskRunDataRow,
 	total int, limit, offset int64,
 ) gen.V2TaskSummaryList {
 	toReturn := ToTaskSummaryRows(tasks)
@@ -117,7 +117,7 @@ func ToTaskSummaryMany(
 }
 
 func ToTaskRunEventMany(
-	events []*timescalev2.ListTaskEventsRow,
+	events []*olapv2.ListTaskEventsRow,
 	taskExternalId string,
 ) gen.V2TaskEventList {
 	toReturn := make([]gen.V2TaskEvent, len(events))
@@ -182,7 +182,7 @@ func ToTaskRunMetrics(metrics *[]olap.TaskRunMetric) gen.V2TaskRunMetrics {
 	return toReturn
 }
 
-func ToTask(taskWithData *timescalev2.PopulateSingleTaskRunDataRow) gen.V2Task {
+func ToTask(taskWithData *olapv2.PopulateSingleTaskRunDataRow) gen.V2Task {
 	additionalMetadata := jsonToMap(taskWithData.AdditionalMetadata)
 
 	var finishedAt *time.Time

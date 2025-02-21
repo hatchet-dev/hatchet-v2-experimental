@@ -136,7 +136,7 @@ SELECT
         COALESCE($1::INTERVAL, '1 minute'),
         task_inserted_at,
         TIMESTAMPTZ '1970-01-01 00:00:00+00'
-    ) :: TIMESTAMPTZ AS bucket,
+    ) :: TIMESTAMPTZ AS bucket_2,
     COUNT(*) FILTER (WHERE readable_status = 'COMPLETED') AS completed_count,
     COUNT(*) FILTER (WHERE readable_status = 'FAILED') AS failed_count
 FROM
@@ -144,8 +144,8 @@ FROM
 WHERE
     tenant_id = $2::UUID
     AND task_inserted_at BETWEEN $3::TIMESTAMPTZ AND $4::TIMESTAMPTZ
-GROUP BY bucket
-ORDER BY bucket
+GROUP BY bucket_2
+ORDER BY bucket_2
 `
 
 type GetTaskPointMetricsParams struct {
@@ -156,7 +156,7 @@ type GetTaskPointMetricsParams struct {
 }
 
 type GetTaskPointMetricsRow struct {
-	Bucket         pgtype.Timestamptz `json:"bucket"`
+	Bucket2        pgtype.Timestamptz `json:"bucket_2"`
 	CompletedCount int64              `json:"completed_count"`
 	FailedCount    int64              `json:"failed_count"`
 }
@@ -175,7 +175,7 @@ func (q *Queries) GetTaskPointMetrics(ctx context.Context, db DBTX, arg GetTaskP
 	var items []*GetTaskPointMetricsRow
 	for rows.Next() {
 		var i GetTaskPointMetricsRow
-		if err := rows.Scan(&i.Bucket, &i.CompletedCount, &i.FailedCount); err != nil {
+		if err := rows.Scan(&i.Bucket2, &i.CompletedCount, &i.FailedCount); err != nil {
 			return nil, err
 		}
 		items = append(items, &i)
@@ -195,11 +195,11 @@ SELECT
     ) :: TIMESTAMPTZ AS bucket,
     tenant_id,
     workflow_id,
-    COUNT(*) FILTER (WHERE readable_status = 'QUEUED') AS queued_count,
-    COUNT(*) FILTER (WHERE readable_status = 'RUNNING') AS running_count,
-    COUNT(*) FILTER (WHERE readable_status = 'COMPLETED') AS completed_count,
-    COUNT(*) FILTER (WHERE readable_status = 'CANCELLED') AS cancelled_count,
-    COUNT(*) FILTER (WHERE readable_status = 'FAILED') AS failed_count
+    COUNT(*) FILTER (WHERE readable_status = 'QUEUED') AS total_queued,
+    COUNT(*) FILTER (WHERE readable_status = 'RUNNING') AS total_running,
+    COUNT(*) FILTER (WHERE readable_status = 'COMPLETED') AS total_completed,
+    COUNT(*) FILTER (WHERE readable_status = 'CANCELLED') AS total_cancelled,
+    COUNT(*) FILTER (WHERE readable_status = 'FAILED') AS total_failed
 FROM v2_statuses_olap
 WHERE
     tenant_id = $1::UUID
@@ -221,11 +221,11 @@ type GetTenantStatusMetricsRow struct {
 	Bucket         pgtype.Timestamptz `json:"bucket"`
 	TenantID       pgtype.UUID        `json:"tenant_id"`
 	WorkflowID     pgtype.UUID        `json:"workflow_id"`
-	QueuedCount    int64              `json:"queued_count"`
-	RunningCount   int64              `json:"running_count"`
-	CompletedCount int64              `json:"completed_count"`
-	CancelledCount int64              `json:"cancelled_count"`
-	FailedCount    int64              `json:"failed_count"`
+	TotalQueued    int64              `json:"total_queued"`
+	TotalRunning   int64              `json:"total_running"`
+	TotalCompleted int64              `json:"total_completed"`
+	TotalCancelled int64              `json:"total_cancelled"`
+	TotalFailed    int64              `json:"total_failed"`
 }
 
 func (q *Queries) GetTenantStatusMetrics(ctx context.Context, db DBTX, arg GetTenantStatusMetricsParams) (*GetTenantStatusMetricsRow, error) {
@@ -235,11 +235,11 @@ func (q *Queries) GetTenantStatusMetrics(ctx context.Context, db DBTX, arg GetTe
 		&i.Bucket,
 		&i.TenantID,
 		&i.WorkflowID,
-		&i.QueuedCount,
-		&i.RunningCount,
-		&i.CompletedCount,
-		&i.CancelledCount,
-		&i.FailedCount,
+		&i.TotalQueued,
+		&i.TotalRunning,
+		&i.TotalCompleted,
+		&i.TotalCancelled,
+		&i.TotalFailed,
 	)
 	return &i, err
 }
