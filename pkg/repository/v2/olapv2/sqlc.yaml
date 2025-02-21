@@ -6,7 +6,7 @@ sql:
     queries:
       - queries.sql
     schema:
-      - ../../../../sql/schema/timescale.sql
+      - ../../../../sql/schema/olap.sql
     strict_order_by: false
     gen:
       go:
