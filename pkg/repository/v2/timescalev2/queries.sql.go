@@ -187,36 +187,40 @@ func (q *Queries) GetTaskPointMetrics(ctx context.Context, db DBTX, arg GetTaskP
 
 const getTaskPointMetricsWithoutTimescale = `-- name: GetTaskPointMetricsWithoutTimescale :many
 SELECT
-    DATE_BIN(COALESCE($1::interval, '1 minute'), task_inserted_at, TIMESTAMPTZ $2::timestamptz) AS bucket,
+    DATE_BIN(
+        COALESCE($1::INTERVAL, '1 minute'),
+        task_inserted_at,
+        TIMESTAMPTZ '1970-01-01 00:00:00+00'
+    ) :: TIMESTAMPTZ AS bucket,
     COUNT(*) FILTER (WHERE readable_status = 'COMPLETED') AS completed_count,
     COUNT(*) FILTER (WHERE readable_status = 'FAILED') AS failed_count
 FROM
     v2_task_events_olap
 WHERE
-    tenant_id = $3::uuid AND
-    task_inserted_at BETWEEN $2::timestamptz AND $4::timestamptz
+    tenant_id = $2::UUID
+    AND task_inserted_at BETWEEN $3::TIMESTAMPTZ AND $4::TIMESTAMPTZ
 GROUP BY bucket
 ORDER BY bucket
 `
 
 type GetTaskPointMetricsWithoutTimescaleParams struct {
 	Interval      pgtype.Interval    `json:"interval"`
-	Createdafter  pgtype.Timestamptz `json:"createdafter"`
 	Tenantid      pgtype.UUID        `json:"tenantid"`
+	Createdafter  pgtype.Timestamptz `json:"createdafter"`
 	Createdbefore pgtype.Timestamptz `json:"createdbefore"`
 }
 
 type GetTaskPointMetricsWithoutTimescaleRow struct {
-	Bucket         interface{} `json:"bucket"`
-	CompletedCount int64       `json:"completed_count"`
-	FailedCount    int64       `json:"failed_count"`
+	Bucket         pgtype.Timestamptz `json:"bucket"`
+	CompletedCount int64              `json:"completed_count"`
+	FailedCount    int64              `json:"failed_count"`
 }
 
 func (q *Queries) GetTaskPointMetricsWithoutTimescale(ctx context.Context, db DBTX, arg GetTaskPointMetricsWithoutTimescaleParams) ([]*GetTaskPointMetricsWithoutTimescaleRow, error) {
 	rows, err := db.Query(ctx, getTaskPointMetricsWithoutTimescale,
 		arg.Interval,
-		arg.Createdafter,
 		arg.Tenantid,
+		arg.Createdafter,
 		arg.Createdbefore,
 	)
 	if err != nil {
@@ -282,7 +286,11 @@ func (q *Queries) GetTenantStatusMetrics(ctx context.Context, db DBTX, arg GetTe
 
 const getTenantStatusMetricsWithoutTimescale = `-- name: GetTenantStatusMetricsWithoutTimescale :one
 SELECT
-    TIMESTAMP WITH TIME ZONE 'epoch' + INTERVAL '1 second' * ROUND(EXTRACT('epoch' FROM inserted_at) / 300) * 300 AS bucket,
+    DATE_BIN(
+        '1 minute',
+        inserted_at,
+        TIMESTAMPTZ '1970-01-01 00:00:00+00'
+    ) :: TIMESTAMPTZ AS bucket,
     tenant_id,
     workflow_id,
     COUNT(*) FILTER (WHERE readable_status = 'QUEUED') AS queued_count,
@@ -292,10 +300,10 @@ SELECT
     COUNT(*) FILTER (WHERE readable_status = 'FAILED') AS failed_count
 FROM v2_statuses_olap
 WHERE
-    tenant_id = $1::uuid
-    AND inserted_at >= $2::timestamptz
+    tenant_id = $1::UUID
+    AND inserted_at >= $2::TIMESTAMPTZ
     AND (
-        $3::uuid[] IS NULL OR workflow_id = ANY($3::uuid[])
+        $3::UUID[] IS NULL OR workflow_id = ANY($3::UUID[])
     )
 GROUP BY tenant_id, workflow_id, bucket
 ORDER BY bucket DESC
@@ -308,14 +316,14 @@ type GetTenantStatusMetricsWithoutTimescaleParams struct {
 }
 
 type GetTenantStatusMetricsWithoutTimescaleRow struct {
-	Bucket         int32       `json:"bucket"`
-	TenantID       pgtype.UUID `json:"tenant_id"`
-	WorkflowID     pgtype.UUID `json:"workflow_id"`
-	QueuedCount    int64       `json:"queued_count"`
-	RunningCount   int64       `json:"running_count"`
-	CompletedCount int64       `json:"completed_count"`
-	CancelledCount int64       `json:"cancelled_count"`
-	FailedCount    int64       `json:"failed_count"`
+	Bucket         pgtype.Timestamptz `json:"bucket"`
+	TenantID       pgtype.UUID        `json:"tenant_id"`
+	WorkflowID     pgtype.UUID        `json:"workflow_id"`
+	QueuedCount    int64              `json:"queued_count"`
+	RunningCount   int64              `json:"running_count"`
+	CompletedCount int64              `json:"completed_count"`
+	CancelledCount int64              `json:"cancelled_count"`
+	FailedCount    int64              `json:"failed_count"`
 }
 
 func (q *Queries) GetTenantStatusMetricsWithoutTimescale(ctx context.Context, db DBTX, arg GetTenantStatusMetricsWithoutTimescaleParams) (*GetTenantStatusMetricsWithoutTimescaleRow, error) {

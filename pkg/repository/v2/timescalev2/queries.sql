@@ -833,21 +833,29 @@ ORDER BY r.inserted_at DESC, r.run_id DESC;
 
 -- name: GetTaskPointMetricsWithoutTimescale :many
 SELECT
-    DATE_BIN(COALESCE(sqlc.narg('interval')::interval, '1 minute'), task_inserted_at, TIMESTAMPTZ @createdAfter::timestamptz) AS bucket,
+    DATE_BIN(
+        COALESCE(sqlc.narg('interval')::INTERVAL, '1 minute'),
+        task_inserted_at,
+        TIMESTAMPTZ '1970-01-01 00:00:00+00'
+    ) :: TIMESTAMPTZ AS bucket,
     COUNT(*) FILTER (WHERE readable_status = 'COMPLETED') AS completed_count,
     COUNT(*) FILTER (WHERE readable_status = 'FAILED') AS failed_count
 FROM
     v2_task_events_olap
 WHERE
-    tenant_id = @tenantId::uuid AND
-    task_inserted_at BETWEEN @createdAfter::timestamptz AND @createdBefore::timestamptz
+    tenant_id = @tenantId::UUID
+    AND task_inserted_at BETWEEN @createdAfter::TIMESTAMPTZ AND @createdBefore::TIMESTAMPTZ
 GROUP BY bucket
 ORDER BY bucket;
 
 
 -- name: GetTenantStatusMetricsWithoutTimescale :one
 SELECT
-    TIMESTAMP WITH TIME ZONE 'epoch' + INTERVAL '1 second' * ROUND(EXTRACT('epoch' FROM inserted_at) / 300) * 300 AS bucket,
+    DATE_BIN(
+        '1 minute',
+        inserted_at,
+        TIMESTAMPTZ '1970-01-01 00:00:00+00'
+    ) :: TIMESTAMPTZ AS bucket,
     tenant_id,
     workflow_id,
     COUNT(*) FILTER (WHERE readable_status = 'QUEUED') AS queued_count,
@@ -857,10 +865,10 @@ SELECT
     COUNT(*) FILTER (WHERE readable_status = 'FAILED') AS failed_count
 FROM v2_statuses_olap
 WHERE
-    tenant_id = @tenantId::uuid
-    AND inserted_at >= @createdAfter::timestamptz
+    tenant_id = @tenantId::UUID
+    AND inserted_at >= @createdAfter::TIMESTAMPTZ
     AND (
-        sqlc.narg('workflowIds')::uuid[] IS NULL OR workflow_id = ANY(sqlc.narg('workflowIds')::uuid[])
+        sqlc.narg('workflowIds')::UUID[] IS NULL OR workflow_id = ANY(sqlc.narg('workflowIds')::UUID[])
     )
 GROUP BY tenant_id, workflow_id, bucket
 ORDER BY bucket DESC
