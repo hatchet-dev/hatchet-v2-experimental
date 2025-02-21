@@ -368,16 +368,20 @@ func (r *olapEventRepository) ReadTaskRunData(ctx context.Context, tenantId pgty
 		return nil, nil, err
 	}
 
-	dagId := taskRun.DagID.Int64
-	dagInsertedAt := taskRun.DagInsertedAt
+	workflowRunId := taskRun.ExternalID
 
-	workflowRunId, err := r.queries.GetWorkflowRunIdFromDagIdInsertedAt(ctx, r.pool, timescalev2.GetWorkflowRunIdFromDagIdInsertedAtParams{
-		Dagid:         dagId,
-		Daginsertedat: dagInsertedAt,
-	})
+	if taskRun.DagID.Valid {
+		dagId := taskRun.DagID.Int64
+		dagInsertedAt := taskRun.DagInsertedAt
 
-	if err != nil {
-		return nil, nil, err
+		workflowRunId, err = r.queries.GetWorkflowRunIdFromDagIdInsertedAt(ctx, r.pool, timescalev2.GetWorkflowRunIdFromDagIdInsertedAtParams{
+			Dagid:         dagId,
+			Daginsertedat: dagInsertedAt,
+		})
+
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 
 	return taskRun, &workflowRunId, nil

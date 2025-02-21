@@ -51,6 +51,9 @@ type InternalEventMatchResults struct {
 	// The list of tasks which were created in a queued state
 	CreatedQueuedTasks []*sqlcv2.V2Task
 
+	// A list of tasks which are created in a failed state
+	CreatedFailedTasks []*sqlcv2.V2Task
+
 	// A list of tasks which are created in a directly cancelled state
 	CreatedCancelledTasks []*sqlcv2.V2Task
 
@@ -294,6 +297,8 @@ func (m *MatchRepositoryImpl) ProcessInternalEventMatches(ctx context.Context, t
 				res.CreatedCancelledTasks = append(res.CreatedCancelledTasks, task)
 			} else if task.InitialState == sqlcv2.V2TaskInitialStateSKIPPED {
 				res.CreatedSkippedTasks = append(res.CreatedSkippedTasks, task)
+			} else if task.InitialState == sqlcv2.V2TaskInitialStateFAILED {
+				res.CreatedFailedTasks = append(res.CreatedFailedTasks, task)
 			}
 		}
 	}

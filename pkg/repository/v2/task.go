@@ -77,7 +77,7 @@ type TaskRepository interface {
 
 	FailTasks(ctx context.Context, tenantId string, tasks []FailTaskOpts) (retriedTasks []TaskIdRetryCount, queues []*sqlcv2.ReleaseTasksRow, err error)
 
-	CancelTasks(ctx context.Context, tenantId string, tasks []TaskIdRetryCount) ([]*sqlcv2.ReleaseTasksRow, error)
+	CancelTasks(ctx context.Context, tenantId string, tasks []TaskIdRetryCount) ([]*sqlcv2.ReleaseTasksRow, []*sqlcv2.V2Task, error)
 
 	ListTasks(ctx context.Context, tenantId string, tasks []int64) ([]*sqlcv2.V2Task, error)
 
@@ -405,7 +405,7 @@ func (r *TaskRepositoryImpl) FailTasks(ctx context.Context, tenantId string, fai
 	return retriedTasks, releasedTasks, nil
 }
 
-func (r *TaskRepositoryImpl) CancelTasks(ctx context.Context, tenantId string, tasks []TaskIdRetryCount) ([]*sqlcv2.ReleaseTasksRow, error) {
+func (r *TaskRepositoryImpl) CancelTasks(ctx context.Context, tenantId string, tasks []TaskIdRetryCount) ([]*sqlcv2.ReleaseTasksRow, []*sqlcv2.V2Task, error) {
 	// TODO: ADD BACK VALIDATION
 	// if err := r.v.Validate(tasks); err != nil {
 	// 	fmt.Println("FAILED VALIDATION HERE!!!")
@@ -416,7 +416,7 @@ func (r *TaskRepositoryImpl) CancelTasks(ctx context.Context, tenantId string, t
 	tx, commit, rollback, err := sqlchelpers.PrepareTx(ctx, r.pool, r.l, 5000)
 
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	defer rollback()
@@ -425,15 +425,27 @@ func (r *TaskRepositoryImpl) CancelTasks(ctx context.Context, tenantId string, t
 	releasedTasks, err := r.cancelTasks(ctx, tx, tenantId, tasks)
 
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+
+	taskIds := make([]int64, len(tasks))
+
+	for i, task := range tasks {
+		taskIds[i] = task.Id
+	}
+
+	resTasks, err := r.listTasks(ctx, tx, tenantId, taskIds)
+
+	if err != nil {
+		return nil, nil, err
 	}
 
 	// commit the transaction
 	if err := commit(ctx); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return releasedTasks, nil
+	return releasedTasks, resTasks, nil
 }
 
 func (r *sharedRepository) cancelTasks(ctx context.Context, dbtx sqlcv2.DBTX, tenantId string, tasks []TaskIdRetryCount) ([]*sqlcv2.ReleaseTasksRow, error) {
@@ -463,7 +475,11 @@ func (r *sharedRepository) cancelTasks(ctx context.Context, dbtx sqlcv2.DBTX, te
 }
 
 func (r *TaskRepositoryImpl) ListTasks(ctx context.Context, tenantId string, tasks []int64) ([]*sqlcv2.V2Task, error) {
-	return r.queries.ListTasks(ctx, r.pool, sqlcv2.ListTasksParams{
+	return r.listTasks(ctx, r.pool, tenantId, tasks)
+}
+
+func (r *sharedRepository) listTasks(ctx context.Context, dbtx sqlcv2.DBTX, tenantId string, tasks []int64) ([]*sqlcv2.V2Task, error) {
+	return r.queries.ListTasks(ctx, dbtx, sqlcv2.ListTasksParams{
 		TenantID: sqlchelpers.UUIDFromStr(tenantId),
 		Ids:      tasks,
 	})
@@ -783,60 +799,64 @@ func (r *sharedRepository) insertTasks(
 			dagInsertedAts[i] = task.DagInsertedAt
 		}
 
-		// if we have a step expression, evaluate the expression
-		if strats, ok := concurrencyStrats[task.StepId]; ok {
-			taskConcurrencyKeys := make([]string, 0)
-			taskStrategyIds := make([]int64, 0)
-			var failTaskError error
+		// only check for concurrency if the task is in a queued state, otherwise we don't need to
+		// evaluate the expression
+		if task.InitialState == sqlcv2.V2TaskInitialStateQUEUED {
+			// if we have a step expression, evaluate the expression
+			if strats, ok := concurrencyStrats[task.StepId]; ok {
+				taskConcurrencyKeys := make([]string, 0)
+				taskStrategyIds := make([]int64, 0)
+				var failTaskError error
 
-			for _, strat := range strats {
-				var additionalMeta map[string]interface{}
+				for _, strat := range strats {
+					var additionalMeta map[string]interface{}
 
-				if len(additionalMetadatas[i]) > 0 {
-					if err := json.Unmarshal(additionalMetadatas[i], &additionalMeta); err != nil {
-						failTaskError = fmt.Errorf("failed to process additional metadata: not a json object")
-						break
+					if len(additionalMetadatas[i]) > 0 {
+						if err := json.Unmarshal(additionalMetadatas[i], &additionalMeta); err != nil {
+							failTaskError = fmt.Errorf("failed to process additional metadata: not a json object")
+							break
+						}
 					}
-				}
 
-				res, err := r.celParser.ParseAndEvalStepRun(strat.Expression, cel.NewInput(
-					cel.WithInput(task.Input.Input),
-					cel.WithAdditionalMetadata(additionalMeta),
-					cel.WithWorkflowRunID(task.ExternalId),
-					cel.WithParents(task.Input.TriggerData),
-				))
+					res, err := r.celParser.ParseAndEvalStepRun(strat.Expression, cel.NewInput(
+						cel.WithInput(task.Input.Input),
+						cel.WithAdditionalMetadata(additionalMeta),
+						cel.WithWorkflowRunID(task.ExternalId),
+						cel.WithParents(task.Input.TriggerData),
+					))
 
-				if err != nil {
-					failTaskError = fmt.Errorf("failed to parse step expression: %w", err)
-					break
-				}
-
-				if res.String == nil {
-					prefix := "expected string output for concurrency key"
-
-					if res.Int != nil {
-						failTaskError = fmt.Errorf("%s, got int", prefix)
+					if err != nil {
+						failTaskError = fmt.Errorf("failed to parse step expression: %w", err)
 						break
 					}
 
-					failTaskError = fmt.Errorf("%s, got unknown type", prefix)
-					break
+					if res.String == nil {
+						prefix := "expected string output for concurrency key"
+
+						if res.Int != nil {
+							failTaskError = fmt.Errorf("%s, got int", prefix)
+							break
+						}
+
+						failTaskError = fmt.Errorf("%s, got unknown type", prefix)
+						break
+					}
+
+					taskConcurrencyKeys = append(taskConcurrencyKeys, *res.String)
+					taskStrategyIds = append(taskStrategyIds, strat.ID)
+					initialStates[i] = string(sqlcv2.V2TaskInitialStateCONCURRENCY)
 				}
 
-				taskConcurrencyKeys = append(taskConcurrencyKeys, *res.String)
-				taskStrategyIds = append(taskStrategyIds, strat.ID)
-				initialStates[i] = string(sqlcv2.V2TaskInitialStateCONCURRENCY)
-			}
+				if failTaskError != nil {
+					// place the task into a failed state
+					initialStates[i] = string(sqlcv2.V2TaskInitialStateFAILED)
 
-			if failTaskError != nil {
-				// place the task into a failed state
-				initialStates[i] = string(sqlcv2.V2TaskInitialStateFAILED)
-
-				// TODO: WRITE THE ERROR SOMEWHERE
-				r.l.Error().Err(failTaskError).Msg("failed to evaluate concurrency expression")
-			} else {
-				concurrencyKeys[i] = taskConcurrencyKeys
-				strategyIds[i] = taskStrategyIds
+					// TODO: WRITE THE ERROR SOMEWHERE
+					r.l.Error().Err(failTaskError).Msg("failed to evaluate concurrency expression")
+				} else {
+					concurrencyKeys[i] = taskConcurrencyKeys
+					strategyIds[i] = taskStrategyIds
+				}
 			}
 		}
 	}

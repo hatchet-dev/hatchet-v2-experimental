@@ -1580,7 +1580,7 @@ WHERE sr."error" IS NOT NULL;
 SELECT
     s.id AS parentStepId,
     s."readableId" AS stepName,
-    ARRAY_AGG(so."B")::uuid[] AS childrenStepIds
+    array_remove(ARRAY_AGG(so."B"), NULL)::uuid[] AS childrenStepIds
 FROM "WorkflowVersion" v
 JOIN "Job" j ON v."id" = j."workflowVersionId"
 JOIN "Step" s ON j."id" = s."jobId"

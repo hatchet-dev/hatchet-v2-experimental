@@ -460,7 +460,7 @@ func (tc *TasksControllerImpl) handleTaskCancelled(ctx context.Context, tenantId
 		shouldTasksNotify[msg.TaskId] = msg.ShouldNotify
 	}
 
-	releasedTasks, err := tc.repov2.Tasks().CancelTasks(ctx, tenantId, opts)
+	releasedTasks, allTasks, err := tc.repov2.Tasks().CancelTasks(ctx, tenantId, opts)
 
 	if err != nil {
 		return err
@@ -485,7 +485,33 @@ func (tc *TasksControllerImpl) handleTaskCancelled(ctx context.Context, tenantId
 		return fmt.Errorf("could not send task cancellations to dispatcher: %w", err)
 	}
 
+	internalEvents := make([]internalEvent, 0)
+
+	for _, task := range allTasks {
+		taskExternalId := sqlchelpers.UUIDToStr(task.ExternalID)
+
+		data := v2.FailedData{
+			StepReadableId: task.StepReadableID,
+			Error:          "task was cancelled",
+		}
+
+		dataBytes, _ := json.Marshal(data)
+
+		internalEvents = append(internalEvents, internalEvent{
+			EventTimestamp: time.Now(),
+			EventKey:       v2.GetTaskCancelledEventKey(taskExternalId),
+			EventData:      dataBytes,
+		})
+	}
+
 	tc.notifyQueuesOnCompletion(ctx, tenantId, releasedTasks)
+
+	// TODO: MOVE THIS TO THE DATA LAYER?
+	err = tc.processInternalEvents(ctx, tenantId, internalEvents)
+
+	if err != nil {
+		return err
+	}
 
 	var outerErr error
 
@@ -899,6 +925,88 @@ func (tc *TasksControllerImpl) signalTasksCreatedAndCancelled(ctx context.Contex
 			TaskId:         taskCp.ID,
 			RetryCount:     taskCp.RetryCount,
 			EventType:      timescalev2.V2EventTypeOlapCANCELLED,
+			EventTimestamp: time.Now(),
+		})
+
+		if err != nil {
+			tc.l.Err(err).Msg("could not create message for olap queue")
+			continue
+		}
+
+		err = tc.pubBuffer.Pub(
+			ctx,
+			msgqueue.OLAP_QUEUE,
+			msg,
+			false,
+		)
+
+		if err != nil {
+			tc.l.Err(err).Msg("could not add message to olap queue")
+			continue
+		}
+	}
+
+	return nil
+}
+
+func (tc *TasksControllerImpl) signalTasksCreatedAndFailed(ctx context.Context, tenantId string, tasks []*sqlcv2.V2Task) error {
+	internalEvents := make([]internalEvent, 0)
+
+	for _, task := range tasks {
+		taskExternalId := sqlchelpers.UUIDToStr(task.ExternalID)
+
+		data := v2.FailedData{
+			StepReadableId: task.StepReadableID,
+			// TODO: GET THE CONCURRENCY KEY ERROR
+			Error: "task failed due to concurrency key error",
+		}
+
+		dataBytes, _ := json.Marshal(data)
+
+		internalEvents = append(internalEvents, internalEvent{
+			EventTimestamp: time.Now(),
+			EventKey:       v2.GetTaskFailedEventKey(taskExternalId),
+			EventData:      dataBytes,
+		})
+	}
+
+	// TODO: MOVE THIS TO THE DATA LAYER?
+	// !! FIXME: RECURSION HERE
+	err := tc.processInternalEvents(ctx, tenantId, internalEvents)
+
+	if err != nil {
+		return err
+	}
+
+	// notify that tasks have been cancelled
+	// TODO: make this transactionally safe?
+	for _, task := range tasks {
+		taskCp := task
+
+		msg, err := tasktypes.CreatedTaskMessage(tenantId, taskCp)
+
+		if err != nil {
+			tc.l.Err(err).Msg("could not create message for olap queue")
+			continue
+		}
+
+		err = tc.pubBuffer.Pub(
+			ctx,
+			msgqueue.OLAP_QUEUE,
+			msg,
+			false,
+		)
+
+		if err != nil {
+			tc.l.Err(err).Msg("could not add message to olap queue")
+			continue
+		}
+
+		msg, err = tasktypes.MonitoringEventMessageFromInternal(tenantId, tasktypes.CreateMonitoringEventPayload{
+			TaskId:         taskCp.ID,
+			RetryCount:     taskCp.RetryCount,
+			EventType:      timescalev2.V2EventTypeOlapFAILED,
+			EventPayload:   "task failed due to concurrency key error",
 			EventTimestamp: time.Now(),
 		})
 
