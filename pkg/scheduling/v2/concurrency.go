@@ -136,7 +136,7 @@ func (c *ConcurrencyManager) loopConcurrency(ctx context.Context) {
 }
 
 func (c *ConcurrencyManager) loopCheckActive(ctx context.Context) {
-	ticker := time.NewTicker(1 * time.Minute)
+	ticker := time.NewTicker(5 * time.Second)
 
 	for {
 		select {

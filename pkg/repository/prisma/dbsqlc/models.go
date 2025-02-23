@@ -2117,14 +2117,15 @@ type V2RetryQueueItem struct {
 }
 
 type V2StepConcurrency struct {
-	ID             int64                 `json:"id"`
-	WorkflowID     pgtype.UUID           `json:"workflow_id"`
-	StepID         pgtype.UUID           `json:"step_id"`
-	IsActive       bool                  `json:"is_active"`
-	Strategy       V2ConcurrencyStrategy `json:"strategy"`
-	Expression     string                `json:"expression"`
-	TenantID       pgtype.UUID           `json:"tenant_id"`
-	MaxConcurrency int32                 `json:"max_concurrency"`
+	ID                int64                 `json:"id"`
+	WorkflowID        pgtype.UUID           `json:"workflow_id"`
+	WorkflowVersionID pgtype.UUID           `json:"workflow_version_id"`
+	StepID            pgtype.UUID           `json:"step_id"`
+	IsActive          bool                  `json:"is_active"`
+	Strategy          V2ConcurrencyStrategy `json:"strategy"`
+	Expression        string                `json:"expression"`
+	TenantID          pgtype.UUID           `json:"tenant_id"`
+	MaxConcurrency    int32                 `json:"max_concurrency"`
 }
 
 type V2Task struct {

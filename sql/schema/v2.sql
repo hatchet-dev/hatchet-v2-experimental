@@ -93,6 +93,7 @@ CREATE TABLE v2_step_concurrency (
     -- strategies on a step in the same order.
     id bigint GENERATED ALWAYS AS IDENTITY,
     workflow_id UUID NOT NULL,
+    workflow_version_id UUID NOT NULL,
     step_id UUID NOT NULL,
     -- If the strategy is NONE and we've removed all concurrency slots, we can set is_active to false
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
@@ -100,7 +101,7 @@ CREATE TABLE v2_step_concurrency (
     expression TEXT NOT NULL,
     tenant_id UUID NOT NULL,
     max_concurrency INTEGER NOT NULL,
-    CONSTRAINT v2_step_concurrency_pkey PRIMARY KEY (workflow_id, step_id, id)
+    CONSTRAINT v2_step_concurrency_pkey PRIMARY KEY (workflow_id, workflow_version_id, step_id, id)
 );
 
 CREATE OR REPLACE FUNCTION create_v2_step_concurrency() 
@@ -112,6 +113,7 @@ BEGIN
         SELECT  
             s."id",
             wf."id" AS "workflowId",
+            wv."id" AS "workflowVersionId",
             wf."tenantId"
         FROM "Step" s
         JOIN "Job" j ON s."jobId" = j."id"
@@ -123,6 +125,7 @@ BEGIN
     )
     INSERT INTO v2_step_concurrency (
       workflow_id, 
+      workflow_version_id,
       step_id, 
       strategy, 
       expression, 
@@ -131,6 +134,7 @@ BEGIN
     )
     SELECT 
       s."workflowId",
+      s."workflowVersionId",
       s."id",
       NEW."limitStrategy"::VARCHAR::v2_concurrency_strategy,
       NEW."concurrencyGroupExpression",

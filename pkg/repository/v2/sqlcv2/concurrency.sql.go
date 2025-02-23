@@ -12,36 +12,30 @@ import (
 )
 
 const checkStrategyActive = `-- name: CheckStrategyActive :one
-WITH workflow AS (
-    SELECT
-        w."id" as "id",
-        wv."id" as "workflowVersionId",
-        w."tenantId" as "tenantId"
-    FROM
-        "Step" s
-    JOIN
-        "Job" j ON j."id" = s."jobId"
-    JOIN
-        "WorkflowVersion" wv ON wv."id" = j."workflowVersionId"
-    JOIN
-        "Workflow" w ON w."id" = wv."workflowId"
-    WHERE
-        s."id" = $1::uuid
-        AND w."tenantId" = $2::uuid
-        AND w."deletedAt" IS NULL
-        AND wv."deletedAt" IS NULL
-), latest_workflow_version AS (
+WITH latest_workflow_version AS (
     SELECT DISTINCT ON("workflowId")
         "workflowId",
-        workflowVersions."id" AS "workflowVersionId"
+        wv."id" AS "workflowVersionId"
     FROM
-        "WorkflowVersion" as workflowVersions
-    JOIN
-        workflow ON workflow."id" = workflowVersions."workflowId"
+        "WorkflowVersion" wv
     WHERE
-        workflow."tenantId" = $2::uuid
-        AND workflowVersions."deletedAt" IS NULL
+        wv."workflowId" = $1::uuid
+        AND wv."deletedAt" IS NULL
     ORDER BY "workflowId", "order" DESC
+    LIMIT 1
+), first_active_strategy AS (
+    -- Get the first active strategy for the workflow version
+    SELECT
+        sc.id
+    FROM
+        v2_step_concurrency sc
+    WHERE
+        sc.tenant_id = $2::uuid AND
+        sc.workflow_id = $1::uuid AND
+        sc.workflow_version_id = $3::uuid AND
+        sc.is_active = TRUE
+    ORDER BY
+        sc.id ASC
     LIMIT 1
 ), active_slot AS (
     SELECT
@@ -50,33 +44,42 @@ WITH workflow AS (
         v2_concurrency_slot
     WHERE
         tenant_id = $2::uuid AND
-        strategy_id = $3::bigint
+        strategy_id = $4::bigint
         -- Note we don't check for is_filled=False, because is_filled=True could imply that the task
         -- gets retried and the slot is still active.
     LIMIT 1
 ), is_active AS (
     SELECT
-        EXISTS(SELECT 1 FROM workflow) AND
+        EXISTS(SELECT 1 FROM latest_workflow_version) AND
         (
-            workflow."workflowVersionId" = latest_workflow_version."workflowVersionId" OR
+            -- We must match the first active strategy, otherwise we could have another concurrency strategy
+            -- that is active and has this concurrency strategy as a child. 
+            (first_active_strategy.id != $4::bigint) OR
+            latest_workflow_version."workflowVersionId" = $3::uuid OR
             EXISTS(SELECT 1 FROM active_slot)
         ) AS "isActive"
     FROM
-        workflow, latest_workflow_version
+        latest_workflow_version, first_active_strategy
 )
 SELECT COALESCE((SELECT "isActive" FROM is_active), FALSE)::bool AS "isActive"
 `
 
 type CheckStrategyActiveParams struct {
-	Stepid     pgtype.UUID `json:"stepid"`
-	Tenantid   pgtype.UUID `json:"tenantid"`
-	Strategyid int64       `json:"strategyid"`
+	Workflowid        pgtype.UUID `json:"workflowid"`
+	Tenantid          pgtype.UUID `json:"tenantid"`
+	Workflowversionid pgtype.UUID `json:"workflowversionid"`
+	Strategyid        int64       `json:"strategyid"`
 }
 
 // A strategy is active if the workflow is not deleted, and it is attached to the latest workflow version or it has
 // at least one concurrency slot that is not filled.
 func (q *Queries) CheckStrategyActive(ctx context.Context, db DBTX, arg CheckStrategyActiveParams) (bool, error) {
-	row := db.QueryRow(ctx, checkStrategyActive, arg.Stepid, arg.Tenantid, arg.Strategyid)
+	row := db.QueryRow(ctx, checkStrategyActive,
+		arg.Workflowid,
+		arg.Tenantid,
+		arg.Workflowversionid,
+		arg.Strategyid,
+	)
 	var isActive bool
 	err := row.Scan(&isActive)
 	return isActive, err
@@ -92,13 +95,34 @@ func (q *Queries) ConcurrencyAdvisoryLock(ctx context.Context, db DBTX, key int6
 }
 
 const listActiveConcurrencyStrategies = `-- name: ListActiveConcurrencyStrategies :many
+WITH earliest_workflow_versions AS (
+    -- We select the earliest workflow versions with an active concurrency queue. The reason
+    -- is that we'd like to drain previous concurrency queues gracefully, otherwise we risk
+    -- running more tasks than we should.
+    SELECT DISTINCT ON("workflowId")
+        "workflowId",
+        wv."id" AS "workflowVersionId"
+    FROM
+        v2_step_concurrency sc
+    JOIN
+        "WorkflowVersion" wv ON wv."id" = sc.workflow_version_id
+    WHERE
+        sc.tenant_id = $1::uuid AND
+        sc.is_active = TRUE
+    ORDER BY
+        "workflowId", wv."order" ASC
+)
 SELECT
-    id, workflow_id, step_id, is_active, strategy, expression, tenant_id, max_concurrency
+    sc.id, sc.workflow_id, sc.workflow_version_id, sc.step_id, sc.is_active, sc.strategy, sc.expression, sc.tenant_id, sc.max_concurrency
 FROM
-    v2_step_concurrency
+    v2_step_concurrency sc
+JOIN
+    "WorkflowVersion" wv ON wv."id" = sc.workflow_version_id
+JOIN
+    earliest_workflow_versions ewv ON ewv."workflowVersionId" = wv."id"
 WHERE
-    tenant_id = $1::uuid AND
-    is_active = TRUE
+    sc.tenant_id = $1::uuid AND
+    sc.is_active = TRUE
 `
 
 func (q *Queries) ListActiveConcurrencyStrategies(ctx context.Context, db DBTX, tenantid pgtype.UUID) ([]*V2StepConcurrency, error) {
@@ -113,6 +137,7 @@ func (q *Queries) ListActiveConcurrencyStrategies(ctx context.Context, db DBTX, 
 		if err := rows.Scan(
 			&i.ID,
 			&i.WorkflowID,
+			&i.WorkflowVersionID,
 			&i.StepID,
 			&i.IsActive,
 			&i.Strategy,
@@ -132,7 +157,7 @@ func (q *Queries) ListActiveConcurrencyStrategies(ctx context.Context, db DBTX, 
 
 const listConcurrencyStrategiesByStepId = `-- name: ListConcurrencyStrategiesByStepId :many
 SELECT
-    id, workflow_id, step_id, is_active, strategy, expression, tenant_id, max_concurrency
+    id, workflow_id, workflow_version_id, step_id, is_active, strategy, expression, tenant_id, max_concurrency
 FROM
     v2_step_concurrency
 WHERE
@@ -159,6 +184,7 @@ func (q *Queries) ListConcurrencyStrategiesByStepId(ctx context.Context, db DBTX
 		if err := rows.Scan(
 			&i.ID,
 			&i.WorkflowID,
+			&i.WorkflowVersionID,
 			&i.StepID,
 			&i.IsActive,
 			&i.Strategy,
@@ -194,7 +220,10 @@ WITH slots AS (
     WHERE
         tenant_id = $1::uuid AND
         strategy_id = $2::bigint AND
-        schedule_timeout_at >= NOW()
+        (
+            schedule_timeout_at >= NOW() OR
+            is_filled = TRUE
+        )
 ), schedule_timeout_slots AS (
     SELECT
         task_id, task_inserted_at, task_retry_count, tenant_id, workflow_id, strategy_id, priority, key, is_filled, next_strategy_ids, next_keys, queue_to_notify, schedule_timeout_at
@@ -392,7 +421,10 @@ WITH slots AS (
     WHERE
         tenant_id = $1::uuid AND
         strategy_id = $2::bigint AND
-        schedule_timeout_at >= NOW()
+        (
+            schedule_timeout_at >= NOW() OR
+            is_filled = TRUE
+        )
 ), schedule_timeout_slots AS (
     SELECT
         task_id, task_inserted_at, task_retry_count, tenant_id, workflow_id, strategy_id, priority, key, is_filled, next_strategy_ids, next_keys, queue_to_notify, schedule_timeout_at
@@ -590,7 +622,10 @@ WITH slots AS (
     WHERE
         tenant_id = $1::uuid AND
         strategy_id = $2::bigint AND
-        schedule_timeout_at >= NOW()
+        (
+            schedule_timeout_at >= NOW() OR
+            is_filled = TRUE
+        )
 ), schedule_timeout_slots AS (
     SELECT
         task_id, task_inserted_at, task_retry_count, tenant_id, workflow_id, strategy_id, priority, key, is_filled, next_strategy_ids, next_keys, queue_to_notify, schedule_timeout_at
@@ -749,17 +784,24 @@ SET
     is_active = FALSE
 WHERE
     workflow_id = $1::uuid AND
-    step_id = $2::uuid AND
-    id = $3::bigint
+    workflow_version_id = $2::uuid AND
+    step_id = $3::uuid AND
+    id = $4::bigint
 `
 
 type SetConcurrencyStrategyInactiveParams struct {
-	Workflowid pgtype.UUID `json:"workflowid"`
-	Stepid     pgtype.UUID `json:"stepid"`
-	Strategyid int64       `json:"strategyid"`
+	Workflowid        pgtype.UUID `json:"workflowid"`
+	Workflowversionid pgtype.UUID `json:"workflowversionid"`
+	Stepid            pgtype.UUID `json:"stepid"`
+	Strategyid        int64       `json:"strategyid"`
 }
 
 func (q *Queries) SetConcurrencyStrategyInactive(ctx context.Context, db DBTX, arg SetConcurrencyStrategyInactiveParams) error {
-	_, err := db.Exec(ctx, setConcurrencyStrategyInactive, arg.Workflowid, arg.Stepid, arg.Strategyid)
+	_, err := db.Exec(ctx, setConcurrencyStrategyInactive,
+		arg.Workflowid,
+		arg.Workflowversionid,
+		arg.Stepid,
+		arg.Strategyid,
+	)
 	return err
 }

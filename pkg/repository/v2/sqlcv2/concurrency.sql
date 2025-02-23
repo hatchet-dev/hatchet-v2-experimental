@@ -1,11 +1,32 @@
 -- name: ListActiveConcurrencyStrategies :many
+WITH earliest_workflow_versions AS (
+    -- We select the earliest workflow versions with an active concurrency queue. The reason
+    -- is that we'd like to drain previous concurrency queues gracefully, otherwise we risk
+    -- running more tasks than we should.
+    SELECT DISTINCT ON("workflowId")
+        "workflowId",
+        wv."id" AS "workflowVersionId"
+    FROM
+        v2_step_concurrency sc
+    JOIN
+        "WorkflowVersion" wv ON wv."id" = sc.workflow_version_id
+    WHERE
+        sc.tenant_id = @tenantId::uuid AND
+        sc.is_active = TRUE
+    ORDER BY
+        "workflowId", wv."order" ASC
+)
 SELECT
-    *
+    sc.*
 FROM
-    v2_step_concurrency
+    v2_step_concurrency sc
+JOIN
+    "WorkflowVersion" wv ON wv."id" = sc.workflow_version_id
+JOIN
+    earliest_workflow_versions ewv ON ewv."workflowVersionId" = wv."id"
 WHERE
-    tenant_id = @tenantId::uuid AND
-    is_active = TRUE;
+    sc.tenant_id = @tenantId::uuid AND
+    sc.is_active = TRUE;
 
 -- name: ListConcurrencyStrategiesByStepId :many
 SELECT
@@ -21,36 +42,30 @@ ORDER BY
 -- name: CheckStrategyActive :one
 -- A strategy is active if the workflow is not deleted, and it is attached to the latest workflow version or it has
 -- at least one concurrency slot that is not filled. 
-WITH workflow AS (
-    SELECT
-        w."id" as "id",
-        wv."id" as "workflowVersionId",
-        w."tenantId" as "tenantId"
-    FROM
-        "Step" s
-    JOIN
-        "Job" j ON j."id" = s."jobId"
-    JOIN
-        "WorkflowVersion" wv ON wv."id" = j."workflowVersionId"
-    JOIN
-        "Workflow" w ON w."id" = wv."workflowId"
-    WHERE
-        s."id" = @stepId::uuid
-        AND w."tenantId" = @tenantId::uuid
-        AND w."deletedAt" IS NULL
-        AND wv."deletedAt" IS NULL
-), latest_workflow_version AS (
+WITH latest_workflow_version AS (
     SELECT DISTINCT ON("workflowId")
         "workflowId",
-        workflowVersions."id" AS "workflowVersionId"
+        wv."id" AS "workflowVersionId"
     FROM
-        "WorkflowVersion" as workflowVersions
-    JOIN
-        workflow ON workflow."id" = workflowVersions."workflowId"
+        "WorkflowVersion" wv
     WHERE
-        workflow."tenantId" = @tenantId::uuid
-        AND workflowVersions."deletedAt" IS NULL
+        wv."workflowId" = @workflowId::uuid
+        AND wv."deletedAt" IS NULL
     ORDER BY "workflowId", "order" DESC
+    LIMIT 1
+), first_active_strategy AS (
+    -- Get the first active strategy for the workflow version
+    SELECT
+        sc.id
+    FROM
+        v2_step_concurrency sc
+    WHERE
+        sc.tenant_id = @tenantId::uuid AND
+        sc.workflow_id = @workflowId::uuid AND
+        sc.workflow_version_id = @workflowVersionId::uuid AND
+        sc.is_active = TRUE
+    ORDER BY
+        sc.id ASC
     LIMIT 1
 ), active_slot AS (
     SELECT
@@ -65,13 +80,16 @@ WITH workflow AS (
     LIMIT 1
 ), is_active AS (
     SELECT
-        EXISTS(SELECT 1 FROM workflow) AND
+        EXISTS(SELECT 1 FROM latest_workflow_version) AND
         (
-            workflow."workflowVersionId" = latest_workflow_version."workflowVersionId" OR
+            -- We must match the first active strategy, otherwise we could have another concurrency strategy
+            -- that is active and has this concurrency strategy as a child. 
+            (first_active_strategy.id != @strategyId::bigint) OR
+            latest_workflow_version."workflowVersionId" = @workflowVersionId::uuid OR
             EXISTS(SELECT 1 FROM active_slot)
         ) AS "isActive"
     FROM
-        workflow, latest_workflow_version
+        latest_workflow_version, first_active_strategy
 )
 SELECT COALESCE((SELECT "isActive" FROM is_active), FALSE)::bool AS "isActive";
 
@@ -82,6 +100,7 @@ SET
     is_active = FALSE
 WHERE
     workflow_id = @workflowId::uuid AND
+    workflow_version_id = @workflowVersionId::uuid AND
     step_id = @stepId::uuid AND
     id = @strategyId::bigint;
 
@@ -105,7 +124,10 @@ WITH slots AS (
     WHERE
         tenant_id = @tenantId::uuid AND
         strategy_id = @strategyId::bigint AND
-        schedule_timeout_at >= NOW()
+        (
+            schedule_timeout_at >= NOW() OR
+            is_filled = TRUE
+        )
 ), schedule_timeout_slots AS (
     SELECT
         *
@@ -216,7 +238,10 @@ WITH slots AS (
     WHERE
         tenant_id = @tenantId::uuid AND
         strategy_id = @strategyId::bigint AND
-        schedule_timeout_at >= NOW()
+        (
+            schedule_timeout_at >= NOW() OR
+            is_filled = TRUE
+        )
 ), schedule_timeout_slots AS (
     SELECT
         *
@@ -355,7 +380,10 @@ WITH slots AS (
     WHERE
         tenant_id = @tenantId::uuid AND
         strategy_id = @strategyId::bigint AND
-        schedule_timeout_at >= NOW()
+        (
+            schedule_timeout_at >= NOW() OR
+            is_filled = TRUE
+        )
 ), schedule_timeout_slots AS (
     SELECT
         *

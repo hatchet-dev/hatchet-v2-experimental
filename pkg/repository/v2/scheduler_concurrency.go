@@ -68,9 +68,10 @@ func (c *ConcurrencyRepositoryImpl) UpdateConcurrencyStrategyIsActive(
 	}
 
 	isActive, err := c.queries.CheckStrategyActive(ctx, tx, sqlcv2.CheckStrategyActiveParams{
-		Stepid:     strategy.StepID,
-		Tenantid:   tenantId,
-		Strategyid: strategy.ID,
+		Tenantid:          tenantId,
+		Workflowid:        strategy.WorkflowID,
+		Workflowversionid: strategy.WorkflowVersionID,
+		Strategyid:        strategy.ID,
 	})
 
 	if err != nil {
@@ -79,9 +80,10 @@ func (c *ConcurrencyRepositoryImpl) UpdateConcurrencyStrategyIsActive(
 
 	if !isActive {
 		err = c.queries.SetConcurrencyStrategyInactive(ctx, tx, sqlcv2.SetConcurrencyStrategyInactiveParams{
-			Workflowid: strategy.WorkflowID,
-			Stepid:     strategy.StepID,
-			Strategyid: strategy.ID,
+			Workflowid:        strategy.WorkflowID,
+			Workflowversionid: strategy.WorkflowVersionID,
+			Stepid:            strategy.StepID,
+			Strategyid:        strategy.ID,
 		})
 
 		if err != nil {
