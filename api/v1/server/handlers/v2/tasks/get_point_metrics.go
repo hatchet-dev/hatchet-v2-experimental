@@ -9,7 +9,7 @@ import (
 	"github.com/hatchet-dev/hatchet/api/v1/server/oas/apierrors"
 	"github.com/hatchet-dev/hatchet/api/v1/server/oas/gen"
 	"github.com/hatchet-dev/hatchet/pkg/repository/prisma/db"
-	"github.com/hatchet-dev/hatchet/pkg/repository/v2/timescalev2"
+	"github.com/hatchet-dev/hatchet/pkg/repository/v2/olapv2"
 )
 
 func (t *TasksService) V2TaskGetPointMetrics(ctx echo.Context, request gen.V2TaskGetPointMetricsRequestObject) (gen.V2TaskGetPointMetricsResponseObject, error) {
@@ -73,7 +73,7 @@ type WorkflowRunEventsMetrics struct {
 	Results *[]gen.V2TaskPointMetric `json:"results,omitempty"`
 }
 
-func convertToGenMetrics(metrics []*timescalev2.GetTaskPointMetricsRow) []gen.V2TaskPointMetric {
+func convertToGenMetrics(metrics []*olapv2.GetTaskPointMetricsRow) []gen.V2TaskPointMetric {
 	converted := make([]gen.V2TaskPointMetric, len(metrics))
 
 	for i, metric := range metrics {

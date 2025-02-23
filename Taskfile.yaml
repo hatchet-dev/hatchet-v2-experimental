@@ -154,7 +154,8 @@ tasks:
     cmds:
       - go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.24.0 generate --file pkg/repository/prisma/dbsqlc/sqlc.yaml
       - go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.24.0 generate --file pkg/repository/v2/sqlcv2/sqlc.yaml
-      - go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.24.0 generate --file pkg/repository/v2/timescalev2/sqlc.yaml
+      - go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.24.0 generate --file pkg/repository/v2/olapv2/sqlc.yaml
+      - go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.24.0 generate --file pkg/repository/v2/experimental/sqlc.yaml
   lint:
     cmds:
       - task: lint-go

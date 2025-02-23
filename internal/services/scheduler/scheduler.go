@@ -22,7 +22,7 @@ import (
 	"github.com/hatchet-dev/hatchet/pkg/repository"
 	"github.com/hatchet-dev/hatchet/pkg/repository/prisma/sqlchelpers"
 	repov2 "github.com/hatchet-dev/hatchet/pkg/repository/v2"
-	"github.com/hatchet-dev/hatchet/pkg/repository/v2/timescalev2"
+	"github.com/hatchet-dev/hatchet/pkg/repository/v2/olapv2"
 	v2 "github.com/hatchet-dev/hatchet/pkg/scheduling/v2"
 )
 
@@ -414,7 +414,7 @@ func (s *Scheduler) scheduleStepRuns(ctx context.Context, tenantId string, res *
 					TaskId:         taskId,
 					RetryCount:     bulkAssigned.QueueItem.RetryCount,
 					WorkerId:       &workerId,
-					EventType:      timescalev2.V2EventTypeOlapASSIGNED,
+					EventType:      olapv2.V2EventTypeOlapASSIGNED,
 					EventTimestamp: time.Now(),
 				},
 			)
@@ -466,7 +466,7 @@ func (s *Scheduler) scheduleStepRuns(ctx context.Context, tenantId string, res *
 				tenantId,
 				schedulingTimedOut.TaskID,
 				schedulingTimedOut.RetryCount,
-				timescalev2.V2EventTypeOlapSCHEDULINGTIMEDOUT,
+				olapv2.V2EventTypeOlapSCHEDULINGTIMEDOUT,
 				false,
 			)
 
@@ -496,7 +496,7 @@ func (s *Scheduler) scheduleStepRuns(ctx context.Context, tenantId string, res *
 				tasktypes.CreateMonitoringEventPayload{
 					TaskId:         taskId,
 					RetryCount:     unassigned.RetryCount,
-					EventType:      timescalev2.V2EventTypeOlapREQUEUEDNOWORKER,
+					EventType:      olapv2.V2EventTypeOlapREQUEUEDNOWORKER,
 					EventTimestamp: time.Now(),
 				},
 			)
@@ -600,11 +600,11 @@ func (s *Scheduler) notifyAfterConcurrency(ctx context.Context, tenantId string,
 
 	// handle cancellations
 	for _, cancelled := range res.Cancelled {
-		eventType := timescalev2.V2EventTypeOlapCANCELLED
+		eventType := olapv2.V2EventTypeOlapCANCELLED
 		shouldNotify := true
 
 		if cancelled.CancelledReason == "SCHEDULING_TIMED_OUT" {
-			eventType = timescalev2.V2EventTypeOlapSCHEDULINGTIMEDOUT
+			eventType = olapv2.V2EventTypeOlapSCHEDULINGTIMEDOUT
 			shouldNotify = false
 		}
 

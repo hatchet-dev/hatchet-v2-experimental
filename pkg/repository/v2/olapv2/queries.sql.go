@@ -3,7 +3,7 @@
 //   sqlc v1.24.0
 // source: queries.sql
 
-package timescalev2
+package olapv2
 
 import (
 	"context"
@@ -132,17 +132,18 @@ type CreateTasksOLAPParams struct {
 
 const getTaskPointMetrics = `-- name: GetTaskPointMetrics :many
 SELECT
-    time_bucket(COALESCE($1::interval, '1 minute'), bucket)::timestamptz as bucket_2,
-    SUM(completed_count)::int as completed_count,
-    SUM(failed_count)::int as failed_count
+    DATE_BIN(
+        COALESCE($1::INTERVAL, '1 minute'),
+        task_inserted_at,
+        TIMESTAMPTZ '1970-01-01 00:00:00+00'
+    ) :: TIMESTAMPTZ AS bucket_2,
+    COUNT(*) FILTER (WHERE readable_status = 'COMPLETED') AS completed_count,
+    COUNT(*) FILTER (WHERE readable_status = 'FAILED') AS failed_count
 FROM
-    v2_cagg_task_events_minute
+    v2_task_events_olap
 WHERE
-    tenant_id = $2::uuid AND
-    -- timestamptz makes this fast, apparently:
-    -- https://www.timescale.com/forum/t/very-slow-query-planning-time-in-postgresql/255/8
-    bucket >= time_bucket('1 minute', $3::timestamptz) AND
-    bucket <= time_bucket('1 minute', $4::timestamptz)
+    tenant_id = $2::UUID
+    AND task_inserted_at BETWEEN $3::TIMESTAMPTZ AND $4::TIMESTAMPTZ
 GROUP BY bucket_2
 ORDER BY bucket_2
 `
@@ -156,8 +157,8 @@ type GetTaskPointMetricsParams struct {
 
 type GetTaskPointMetricsRow struct {
 	Bucket2        pgtype.Timestamptz `json:"bucket_2"`
-	CompletedCount int32              `json:"completed_count"`
-	FailedCount    int32              `json:"failed_count"`
+	CompletedCount int64              `json:"completed_count"`
+	FailedCount    int64              `json:"failed_count"`
 }
 
 func (q *Queries) GetTaskPointMetrics(ctx context.Context, db DBTX, arg GetTaskPointMetricsParams) ([]*GetTaskPointMetricsRow, error) {
@@ -187,18 +188,27 @@ func (q *Queries) GetTaskPointMetrics(ctx context.Context, db DBTX, arg GetTaskP
 
 const getTenantStatusMetrics = `-- name: GetTenantStatusMetrics :one
 SELECT
-  COALESCE(SUM(queued_count), 0)::bigint AS total_queued,
-  COALESCE(SUM(running_count), 0)::bigint AS total_running,
-  COALESCE(SUM(completed_count), 0)::bigint AS total_completed,
-  COALESCE(SUM(cancelled_count), 0)::bigint AS total_cancelled,
-  COALESCE(SUM(failed_count), 0)::bigint AS total_failed
-FROM v2_cagg_status_metrics
+    DATE_BIN(
+        '1 minute',
+        inserted_at,
+        TIMESTAMPTZ '1970-01-01 00:00:00+00'
+    ) :: TIMESTAMPTZ AS bucket,
+    tenant_id,
+    workflow_id,
+    COUNT(*) FILTER (WHERE readable_status = 'QUEUED') AS total_queued,
+    COUNT(*) FILTER (WHERE readable_status = 'RUNNING') AS total_running,
+    COUNT(*) FILTER (WHERE readable_status = 'COMPLETED') AS total_completed,
+    COUNT(*) FILTER (WHERE readable_status = 'CANCELLED') AS total_cancelled,
+    COUNT(*) FILTER (WHERE readable_status = 'FAILED') AS total_failed
+FROM v2_statuses_olap
 WHERE
-    tenant_id = $1::uuid
-    AND bucket >= time_bucket('5 minutes', $2::timestamptz)
+    tenant_id = $1::UUID
+    AND inserted_at >= $2::TIMESTAMPTZ
     AND (
-        $3::uuid[] IS NULL OR workflow_id = ANY($3::uuid[])
+        $3::UUID[] IS NULL OR workflow_id = ANY($3::UUID[])
     )
+GROUP BY tenant_id, workflow_id, bucket
+ORDER BY bucket DESC
 `
 
 type GetTenantStatusMetricsParams struct {
@@ -208,17 +218,23 @@ type GetTenantStatusMetricsParams struct {
 }
 
 type GetTenantStatusMetricsRow struct {
-	TotalQueued    int64 `json:"total_queued"`
-	TotalRunning   int64 `json:"total_running"`
-	TotalCompleted int64 `json:"total_completed"`
-	TotalCancelled int64 `json:"total_cancelled"`
-	TotalFailed    int64 `json:"total_failed"`
+	Bucket         pgtype.Timestamptz `json:"bucket"`
+	TenantID       pgtype.UUID        `json:"tenant_id"`
+	WorkflowID     pgtype.UUID        `json:"workflow_id"`
+	TotalQueued    int64              `json:"total_queued"`
+	TotalRunning   int64              `json:"total_running"`
+	TotalCompleted int64              `json:"total_completed"`
+	TotalCancelled int64              `json:"total_cancelled"`
+	TotalFailed    int64              `json:"total_failed"`
 }
 
 func (q *Queries) GetTenantStatusMetrics(ctx context.Context, db DBTX, arg GetTenantStatusMetricsParams) (*GetTenantStatusMetricsRow, error) {
 	row := db.QueryRow(ctx, getTenantStatusMetrics, arg.Tenantid, arg.Createdafter, arg.WorkflowIds)
 	var i GetTenantStatusMetricsRow
 	err := row.Scan(
+		&i.Bucket,
+		&i.TenantID,
+		&i.WorkflowID,
 		&i.TotalQueued,
 		&i.TotalRunning,
 		&i.TotalCompleted,

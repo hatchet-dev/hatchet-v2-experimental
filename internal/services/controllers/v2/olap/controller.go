@@ -22,8 +22,8 @@ import (
 	"github.com/hatchet-dev/hatchet/pkg/repository"
 	"github.com/hatchet-dev/hatchet/pkg/repository/prisma/sqlchelpers"
 	v2 "github.com/hatchet-dev/hatchet/pkg/repository/v2"
+	"github.com/hatchet-dev/hatchet/pkg/repository/v2/olapv2"
 	"github.com/hatchet-dev/hatchet/pkg/repository/v2/sqlcv2"
-	"github.com/hatchet-dev/hatchet/pkg/repository/v2/timescalev2"
 )
 
 type OLAPController interface {
@@ -300,8 +300,8 @@ func (tc *OLAPControllerImpl) handleCreateMonitoringEvent(ctx context.Context, t
 	retryCounts := make([]int32, 0)
 	workerIds := make([]string, 0)
 	workflowIds := make([]pgtype.UUID, 0)
-	eventTypes := make([]timescalev2.V2EventTypeOlap, 0)
-	readableStatuses := make([]timescalev2.V2ReadableStatusOlap, 0)
+	eventTypes := make([]olapv2.V2EventTypeOlap, 0)
+	readableStatuses := make([]olapv2.V2ReadableStatusOlap, 0)
 	eventPayloads := make([]string, 0)
 	eventMessages := make([]string, 0)
 	timestamps := make([]pgtype.Timestamptz, 0)
@@ -330,50 +330,50 @@ func (tc *OLAPControllerImpl) handleCreateMonitoringEvent(ctx context.Context, t
 		}
 
 		switch msg.EventType {
-		case timescalev2.V2EventTypeOlapRETRYING:
-			readableStatuses = append(readableStatuses, timescalev2.V2ReadableStatusOlapQUEUED)
-		case timescalev2.V2EventTypeOlapREASSIGNED:
-			readableStatuses = append(readableStatuses, timescalev2.V2ReadableStatusOlapQUEUED)
-		case timescalev2.V2EventTypeOlapRETRIEDBYUSER:
-			readableStatuses = append(readableStatuses, timescalev2.V2ReadableStatusOlapQUEUED)
-		case timescalev2.V2EventTypeOlapCREATED:
-			readableStatuses = append(readableStatuses, timescalev2.V2ReadableStatusOlapQUEUED)
-		case timescalev2.V2EventTypeOlapQUEUED:
-			readableStatuses = append(readableStatuses, timescalev2.V2ReadableStatusOlapQUEUED)
-		case timescalev2.V2EventTypeOlapREQUEUEDNOWORKER:
-			readableStatuses = append(readableStatuses, timescalev2.V2ReadableStatusOlapQUEUED)
-		case timescalev2.V2EventTypeOlapREQUEUEDRATELIMIT:
-			readableStatuses = append(readableStatuses, timescalev2.V2ReadableStatusOlapQUEUED)
-		case timescalev2.V2EventTypeOlapASSIGNED:
-			readableStatuses = append(readableStatuses, timescalev2.V2ReadableStatusOlapRUNNING)
-		case timescalev2.V2EventTypeOlapACKNOWLEDGED:
-			readableStatuses = append(readableStatuses, timescalev2.V2ReadableStatusOlapRUNNING)
-		case timescalev2.V2EventTypeOlapSENTTOWORKER:
-			readableStatuses = append(readableStatuses, timescalev2.V2ReadableStatusOlapRUNNING)
-		case timescalev2.V2EventTypeOlapSLOTRELEASED:
-			readableStatuses = append(readableStatuses, timescalev2.V2ReadableStatusOlapRUNNING)
-		case timescalev2.V2EventTypeOlapSTARTED:
-			readableStatuses = append(readableStatuses, timescalev2.V2ReadableStatusOlapRUNNING)
-		case timescalev2.V2EventTypeOlapTIMEOUTREFRESHED:
-			readableStatuses = append(readableStatuses, timescalev2.V2ReadableStatusOlapRUNNING)
-		case timescalev2.V2EventTypeOlapSCHEDULINGTIMEDOUT:
-			readableStatuses = append(readableStatuses, timescalev2.V2ReadableStatusOlapFAILED)
-		case timescalev2.V2EventTypeOlapFINISHED:
-			readableStatuses = append(readableStatuses, timescalev2.V2ReadableStatusOlapCOMPLETED)
-		case timescalev2.V2EventTypeOlapFAILED:
-			readableStatuses = append(readableStatuses, timescalev2.V2ReadableStatusOlapFAILED)
-		case timescalev2.V2EventTypeOlapCANCELLED:
-			readableStatuses = append(readableStatuses, timescalev2.V2ReadableStatusOlapCANCELLED)
-		case timescalev2.V2EventTypeOlapTIMEDOUT:
-			readableStatuses = append(readableStatuses, timescalev2.V2ReadableStatusOlapFAILED)
-		case timescalev2.V2EventTypeOlapRATELIMITERROR:
-			readableStatuses = append(readableStatuses, timescalev2.V2ReadableStatusOlapFAILED)
-		case timescalev2.V2EventTypeOlapSKIPPED:
-			readableStatuses = append(readableStatuses, timescalev2.V2ReadableStatusOlapCOMPLETED)
+		case olapv2.V2EventTypeOlapRETRYING:
+			readableStatuses = append(readableStatuses, olapv2.V2ReadableStatusOlapQUEUED)
+		case olapv2.V2EventTypeOlapREASSIGNED:
+			readableStatuses = append(readableStatuses, olapv2.V2ReadableStatusOlapQUEUED)
+		case olapv2.V2EventTypeOlapRETRIEDBYUSER:
+			readableStatuses = append(readableStatuses, olapv2.V2ReadableStatusOlapQUEUED)
+		case olapv2.V2EventTypeOlapCREATED:
+			readableStatuses = append(readableStatuses, olapv2.V2ReadableStatusOlapQUEUED)
+		case olapv2.V2EventTypeOlapQUEUED:
+			readableStatuses = append(readableStatuses, olapv2.V2ReadableStatusOlapQUEUED)
+		case olapv2.V2EventTypeOlapREQUEUEDNOWORKER:
+			readableStatuses = append(readableStatuses, olapv2.V2ReadableStatusOlapQUEUED)
+		case olapv2.V2EventTypeOlapREQUEUEDRATELIMIT:
+			readableStatuses = append(readableStatuses, olapv2.V2ReadableStatusOlapQUEUED)
+		case olapv2.V2EventTypeOlapASSIGNED:
+			readableStatuses = append(readableStatuses, olapv2.V2ReadableStatusOlapRUNNING)
+		case olapv2.V2EventTypeOlapACKNOWLEDGED:
+			readableStatuses = append(readableStatuses, olapv2.V2ReadableStatusOlapRUNNING)
+		case olapv2.V2EventTypeOlapSENTTOWORKER:
+			readableStatuses = append(readableStatuses, olapv2.V2ReadableStatusOlapRUNNING)
+		case olapv2.V2EventTypeOlapSLOTRELEASED:
+			readableStatuses = append(readableStatuses, olapv2.V2ReadableStatusOlapRUNNING)
+		case olapv2.V2EventTypeOlapSTARTED:
+			readableStatuses = append(readableStatuses, olapv2.V2ReadableStatusOlapRUNNING)
+		case olapv2.V2EventTypeOlapTIMEOUTREFRESHED:
+			readableStatuses = append(readableStatuses, olapv2.V2ReadableStatusOlapRUNNING)
+		case olapv2.V2EventTypeOlapSCHEDULINGTIMEDOUT:
+			readableStatuses = append(readableStatuses, olapv2.V2ReadableStatusOlapFAILED)
+		case olapv2.V2EventTypeOlapFINISHED:
+			readableStatuses = append(readableStatuses, olapv2.V2ReadableStatusOlapCOMPLETED)
+		case olapv2.V2EventTypeOlapFAILED:
+			readableStatuses = append(readableStatuses, olapv2.V2ReadableStatusOlapFAILED)
+		case olapv2.V2EventTypeOlapCANCELLED:
+			readableStatuses = append(readableStatuses, olapv2.V2ReadableStatusOlapCANCELLED)
+		case olapv2.V2EventTypeOlapTIMEDOUT:
+			readableStatuses = append(readableStatuses, olapv2.V2ReadableStatusOlapFAILED)
+		case olapv2.V2EventTypeOlapRATELIMITERROR:
+			readableStatuses = append(readableStatuses, olapv2.V2ReadableStatusOlapFAILED)
+		case olapv2.V2EventTypeOlapSKIPPED:
+			readableStatuses = append(readableStatuses, olapv2.V2ReadableStatusOlapCOMPLETED)
 		}
 	}
 
-	opts := make([]timescalev2.CreateTaskEventsOLAPParams, 0)
+	opts := make([]olapv2.CreateTaskEventsOLAPParams, 0)
 
 	for i, taskId := range taskIds {
 		var workerId pgtype.UUID
@@ -382,7 +382,7 @@ func (tc *OLAPControllerImpl) handleCreateMonitoringEvent(ctx context.Context, t
 			workerId = sqlchelpers.UUIDFromStr(workerIds[i])
 		}
 
-		event := timescalev2.CreateTaskEventsOLAPParams{
+		event := olapv2.CreateTaskEventsOLAPParams{
 			TenantID:       sqlchelpers.UUIDFromStr(tenantId),
 			TaskID:         taskId,
 			TaskInsertedAt: taskInsertedAts[i],
@@ -395,11 +395,11 @@ func (tc *OLAPControllerImpl) handleCreateMonitoringEvent(ctx context.Context, t
 		}
 
 		switch eventTypes[i] {
-		case timescalev2.V2EventTypeOlapFINISHED:
+		case olapv2.V2EventTypeOlapFINISHED:
 			event.Output = []byte(eventPayloads[i])
-		case timescalev2.V2EventTypeOlapFAILED:
+		case olapv2.V2EventTypeOlapFAILED:
 			event.ErrorMessage = sqlchelpers.TextFromStr(eventPayloads[i])
-		case timescalev2.V2EventTypeOlapCANCELLED:
+		case olapv2.V2EventTypeOlapCANCELLED:
 			event.AdditionalEventMessage = sqlchelpers.TextFromStr(eventMessages[i])
 		default:
 			if eventMessages[i] != "" {
