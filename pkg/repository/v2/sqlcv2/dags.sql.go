@@ -19,7 +19,8 @@ type CreateDAGDataParams struct {
 }
 
 const createDAGPartition = `-- name: CreateDAGPartition :exec
-SELECT create_v2_dag_partition(
+SELECT create_v2_range_partition(
+    'v2_dag',
     $1::date
 )
 `
@@ -168,7 +169,8 @@ const listDAGPartitionsBeforeDate = `-- name: ListDAGPartitionsBeforeDate :many
 SELECT
     p::text AS partition_name
 FROM
-    get_v2_dag_partitions_before(
+    get_v2_partitions_before_date(
+        'v2_dag',
         $1::date
     ) AS p
 `

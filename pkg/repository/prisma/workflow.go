@@ -955,6 +955,17 @@ func (r *workflowEngineRepository) createWorkflowVersionTxs(ctx context.Context,
 		return "", err
 	}
 
+	// create the workflow jobs
+	for _, jobOpts := range opts.Jobs {
+		jobCp := jobOpts
+
+		_, err := r.createJobTx(ctx, tx, tenantId, sqlcWorkflowVersion.ID, opts, &jobCp)
+
+		if err != nil {
+			return "", err
+		}
+	}
+
 	// create concurrency group
 	if opts.Concurrency != nil {
 		params := dbsqlc.CreateWorkflowConcurrencyParams{
@@ -1008,17 +1019,6 @@ func (r *workflowEngineRepository) createWorkflowVersionTxs(ctx context.Context,
 
 		if err != nil {
 			return "", fmt.Errorf("could not create concurrency group: %w", err)
-		}
-	}
-
-	// create the workflow jobs
-	for _, jobOpts := range opts.Jobs {
-		jobCp := jobOpts
-
-		_, err := r.createJobTx(ctx, tx, tenantId, sqlcWorkflowVersion.ID, opts, &jobCp)
-
-		if err != nil {
-			return "", err
 		}
 	}
 

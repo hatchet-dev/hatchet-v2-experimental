@@ -2,6 +2,7 @@ package v2
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/hatchet-dev/hatchet/internal/cel"
 	"github.com/hatchet-dev/hatchet/pkg/repository/prisma/sqlchelpers"
 	"github.com/hatchet-dev/hatchet/pkg/repository/v2/sqlcv2"
 )
@@ -36,6 +38,15 @@ type CreateTaskOpts struct {
 
 	// (required) the initial state for the task
 	InitialState sqlcv2.V2TaskInitialState
+
+	// (optional) a list of concurrency keys for the task
+	ConcurrencyKeys []string
+
+	// (optional) the step retry backoff factor
+	RetryBackoffFactor *float64 `validate:"omitnil,min=1,max=1000"`
+
+	// (optional) the step retry backoff max seconds (can't be greater than 86400)
+	RetryBackoffMaxSeconds *int `validate:"omitnil,min=1,max=86400"`
 }
 
 type TaskIdRetryCount struct {
@@ -66,7 +77,7 @@ type TaskRepository interface {
 
 	FailTasks(ctx context.Context, tenantId string, tasks []FailTaskOpts) (retriedTasks []TaskIdRetryCount, queues []*sqlcv2.ReleaseTasksRow, err error)
 
-	CancelTasks(ctx context.Context, tenantId string, tasks []TaskIdRetryCount) ([]*sqlcv2.ReleaseTasksRow, error)
+	CancelTasks(ctx context.Context, tenantId string, tasks []TaskIdRetryCount) ([]*sqlcv2.ReleaseTasksRow, []*sqlcv2.V2Task, error)
 
 	ListTasks(ctx context.Context, tenantId string, tasks []int64) ([]*sqlcv2.V2Task, error)
 
@@ -174,6 +185,53 @@ func (r *TaskRepositoryImpl) UpdateTablePartitions(ctx context.Context) error {
 		_, err := r.pool.Exec(
 			ctx,
 			fmt.Sprintf("ALTER TABLE v2_dag DETACH PARTITION %s CONCURRENTLY", partition),
+		)
+
+		if err != nil {
+			return err
+		}
+
+		_, err = r.pool.Exec(
+			ctx,
+			fmt.Sprintf("DROP TABLE %s", partition),
+		)
+
+		if err != nil {
+			return err
+		}
+	}
+
+	err = r.queries.CreateConcurrencyPartition(ctx, r.pool, pgtype.Date{
+		Time:  today,
+		Valid: true,
+	})
+
+	if err != nil {
+		return err
+	}
+
+	err = r.queries.CreateConcurrencyPartition(ctx, r.pool, pgtype.Date{
+		Time:  tomorrow,
+		Valid: true,
+	})
+
+	if err != nil {
+		return err
+	}
+
+	concurrencyPartitions, err := r.queries.ListConcurrencyPartitionsBeforeDate(ctx, r.pool, pgtype.Date{
+		Time:  sevenDaysAgo,
+		Valid: true,
+	})
+
+	if err != nil {
+		return err
+	}
+
+	for _, partition := range concurrencyPartitions {
+		_, err := r.pool.Exec(
+			ctx,
+			fmt.Sprintf("ALTER TABLE v2_concurrency_slot DETACH PARTITION %s CONCURRENTLY", partition),
 		)
 
 		if err != nil {
@@ -347,7 +405,7 @@ func (r *TaskRepositoryImpl) FailTasks(ctx context.Context, tenantId string, fai
 	return retriedTasks, releasedTasks, nil
 }
 
-func (r *TaskRepositoryImpl) CancelTasks(ctx context.Context, tenantId string, tasks []TaskIdRetryCount) ([]*sqlcv2.ReleaseTasksRow, error) {
+func (r *TaskRepositoryImpl) CancelTasks(ctx context.Context, tenantId string, tasks []TaskIdRetryCount) ([]*sqlcv2.ReleaseTasksRow, []*sqlcv2.V2Task, error) {
 	// TODO: ADD BACK VALIDATION
 	// if err := r.v.Validate(tasks); err != nil {
 	// 	fmt.Println("FAILED VALIDATION HERE!!!")
@@ -358,13 +416,41 @@ func (r *TaskRepositoryImpl) CancelTasks(ctx context.Context, tenantId string, t
 	tx, commit, rollback, err := sqlchelpers.PrepareTx(ctx, r.pool, r.l, 5000)
 
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	defer rollback()
 
 	// release queue items
-	releasedTasks, err := r.releaseTasks(ctx, tx, tenantId, tasks)
+	releasedTasks, err := r.cancelTasks(ctx, tx, tenantId, tasks)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	taskIds := make([]int64, len(tasks))
+
+	for i, task := range tasks {
+		taskIds[i] = task.Id
+	}
+
+	resTasks, err := r.listTasks(ctx, tx, tenantId, taskIds)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// commit the transaction
+	if err := commit(ctx); err != nil {
+		return nil, nil, err
+	}
+
+	return releasedTasks, resTasks, nil
+}
+
+func (r *sharedRepository) cancelTasks(ctx context.Context, dbtx sqlcv2.DBTX, tenantId string, tasks []TaskIdRetryCount) ([]*sqlcv2.ReleaseTasksRow, error) {
+	// release queue items
+	releasedTasks, err := r.releaseTasks(ctx, dbtx, tenantId, tasks)
 
 	if err != nil {
 		return nil, err
@@ -373,7 +459,7 @@ func (r *TaskRepositoryImpl) CancelTasks(ctx context.Context, tenantId string, t
 	// write task events
 	err = r.createTaskEvents(
 		ctx,
-		tx,
+		dbtx,
 		tenantId,
 		tasks,
 		make([][]byte, len(tasks)),
@@ -385,16 +471,15 @@ func (r *TaskRepositoryImpl) CancelTasks(ctx context.Context, tenantId string, t
 		return nil, err
 	}
 
-	// commit the transaction
-	if err := commit(ctx); err != nil {
-		return nil, err
-	}
-
 	return releasedTasks, nil
 }
 
 func (r *TaskRepositoryImpl) ListTasks(ctx context.Context, tenantId string, tasks []int64) ([]*sqlcv2.V2Task, error) {
-	return r.queries.ListTasks(ctx, r.pool, sqlcv2.ListTasksParams{
+	return r.listTasks(ctx, r.pool, tenantId, tasks)
+}
+
+func (r *sharedRepository) listTasks(ctx context.Context, dbtx sqlcv2.DBTX, tenantId string, tasks []int64) ([]*sqlcv2.V2Task, error) {
+	return r.queries.ListTasks(ctx, dbtx, sqlcv2.ListTasksParams{
 		TenantID: sqlchelpers.UUIDFromStr(tenantId),
 		Ids:      tasks,
 	})
@@ -541,7 +626,7 @@ func (r *TaskRepositoryImpl) GetQueueCounts(ctx context.Context, tenantId string
 	return res, nil
 }
 
-func (r *TaskRepositoryImpl) releaseTasks(ctx context.Context, tx sqlcv2.DBTX, tenantId string, tasks []TaskIdRetryCount) ([]*sqlcv2.ReleaseTasksRow, error) {
+func (r *sharedRepository) releaseTasks(ctx context.Context, tx sqlcv2.DBTX, tenantId string, tasks []TaskIdRetryCount) ([]*sqlcv2.ReleaseTasksRow, error) {
 	taskIds := make([]int64, len(tasks))
 	retryCounts := make([]int32, len(tasks))
 
@@ -556,7 +641,7 @@ func (r *TaskRepositoryImpl) releaseTasks(ctx context.Context, tx sqlcv2.DBTX, t
 	})
 }
 
-func (r *sharedRepository) upsertQueues(ctx context.Context, tx sqlcv2.DBTX, tenantId string, queues []string) error {
+func (r *sharedRepository) upsertQueues(ctx context.Context, tx sqlcv2.DBTX, tenantId string, queues []string) (func(), error) {
 	queuesToInsert := make(map[string]struct{}, 0)
 
 	for _, queue := range queues {
@@ -585,16 +670,18 @@ func (r *sharedRepository) upsertQueues(ctx context.Context, tx sqlcv2.DBTX, ten
 	})
 
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// set all the queues to true in the cache
-	for _, queue := range uniqueQueues {
-		key := getQueueCacheKey(tenantId, queue)
-		r.queueCache.Set(key, true)
+	save := func() {
+		for _, queue := range uniqueQueues {
+			key := getQueueCacheKey(tenantId, queue)
+			r.queueCache.Set(key, true)
+		}
 	}
 
-	return nil
+	return save, nil
 }
 
 func getQueueCacheKey(tenantId string, queue string) string {
@@ -645,6 +732,12 @@ func (r *sharedRepository) insertTasks(
 	tasks []CreateTaskOpts,
 	stepIdsToConfig map[string]*sqlcv2.ListStepsByIdsRow,
 ) ([]*sqlcv2.V2Task, error) {
+	concurrencyStrats, err := r.getConcurrencyExpressions(ctx, tx, tenantId, stepIdsToConfig)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get step expressions: %w", err)
+	}
+
 	tenantIds := make([]pgtype.UUID, len(tasks))
 	queues := make([]string, len(tasks))
 	actionIds := make([]string, len(tasks))
@@ -662,8 +755,11 @@ func (r *sharedRepository) insertTasks(
 	retryCounts := make([]int32, len(tasks))
 	additionalMetadatas := make([][]byte, len(tasks))
 	initialStates := make([]string, len(tasks))
+	initialStateReasons := make([]pgtype.Text, len(tasks))
 	dagIds := make([]pgtype.Int8, len(tasks))
 	dagInsertedAts := make([]pgtype.Timestamptz, len(tasks))
+	strategyIds := make([][]int64, len(tasks))
+	concurrencyKeys := make([][]string, len(tasks))
 	unix := time.Now().UnixMilli()
 
 	for i, task := range tasks {
@@ -703,42 +799,202 @@ func (r *sharedRepository) insertTasks(
 
 			dagInsertedAts[i] = task.DagInsertedAt
 		}
+
+		// only check for concurrency if the task is in a queued state, otherwise we don't need to
+		// evaluate the expression (and it will likely fail if we do)
+		if task.InitialState == sqlcv2.V2TaskInitialStateQUEUED {
+			// if we have a step expression, evaluate the expression
+			if strats, ok := concurrencyStrats[task.StepId]; ok {
+				taskConcurrencyKeys := make([]string, 0)
+				taskStrategyIds := make([]int64, 0)
+				var failTaskError error
+
+				for _, strat := range strats {
+					var additionalMeta map[string]interface{}
+
+					if len(additionalMetadatas[i]) > 0 {
+						if err := json.Unmarshal(additionalMetadatas[i], &additionalMeta); err != nil {
+							failTaskError = fmt.Errorf("failed to process additional metadata: not a json object")
+							break
+						}
+					}
+
+					res, err := r.celParser.ParseAndEvalStepRun(strat.Expression, cel.NewInput(
+						cel.WithInput(task.Input.Input),
+						cel.WithAdditionalMetadata(additionalMeta),
+						cel.WithWorkflowRunID(task.ExternalId),
+						cel.WithParents(task.Input.TriggerData),
+					))
+
+					if err != nil {
+						failTaskError = fmt.Errorf("failed to parse step expression (%s): %w", strat.Expression, err)
+						break
+					}
+
+					if res.String == nil {
+						prefix := "expected string output for concurrency key"
+
+						if res.Int != nil {
+							failTaskError = fmt.Errorf("failed to parse step expression (%s): %s, got int", strat.Expression, prefix)
+							break
+						}
+
+						failTaskError = fmt.Errorf("failed to parse step expression (%s): %s, got unknown type", strat.Expression, prefix)
+						break
+					}
+
+					taskConcurrencyKeys = append(taskConcurrencyKeys, *res.String)
+					taskStrategyIds = append(taskStrategyIds, strat.ID)
+				}
+
+				if failTaskError != nil {
+					// place the task into a failed state
+					initialStates[i] = string(sqlcv2.V2TaskInitialStateFAILED)
+
+					initialStateReasons[i] = pgtype.Text{
+						String: failTaskError.Error(),
+						Valid:  true,
+					}
+				} else {
+					concurrencyKeys[i] = taskConcurrencyKeys
+					strategyIds[i] = taskStrategyIds
+				}
+			}
+		}
 	}
 
-	err := r.upsertQueues(ctx, tx, tenantId, queues)
+	saveQueueCache, err := r.upsertQueues(ctx, tx, tenantId, queues)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to upsert queues: %w", err)
 	}
 
 	res, err := r.queries.CreateTasks(ctx, tx, sqlcv2.CreateTasksParams{
-		Tenantids:           tenantIds,
-		Queues:              queues,
-		Actionids:           actionIds,
-		Stepids:             stepIds,
-		Stepreadableids:     stepReadableIds,
-		Workflowids:         workflowIds,
-		Scheduletimeouts:    scheduleTimeouts,
-		Steptimeouts:        stepTimeouts,
-		Priorities:          priorities,
-		Stickies:            stickies,
-		Desiredworkerids:    desiredWorkerIds,
-		Externalids:         externalIds,
-		Displaynames:        displayNames,
-		Inputs:              inputs,
-		Retrycounts:         retryCounts,
-		Additionalmetadatas: additionalMetadatas,
-		InitialStates:       initialStates,
-		Dagids:              dagIds,
-		Daginsertedats:      dagInsertedAts,
+		Tenantids:              tenantIds,
+		Queues:                 queues,
+		Actionids:              actionIds,
+		Stepids:                stepIds,
+		Stepreadableids:        stepReadableIds,
+		Workflowids:            workflowIds,
+		Scheduletimeouts:       scheduleTimeouts,
+		Steptimeouts:           stepTimeouts,
+		Priorities:             priorities,
+		Stickies:               stickies,
+		Desiredworkerids:       desiredWorkerIds,
+		Externalids:            externalIds,
+		Displaynames:           displayNames,
+		Inputs:                 inputs,
+		Retrycounts:            retryCounts,
+		Additionalmetadatas:    additionalMetadatas,
+		InitialStates:          initialStates,
+		InitialStateReasons:    initialStateReasons,
+		Dagids:                 dagIds,
+		Daginsertedats:         dagInsertedAts,
+		ConcurrencyStrategyIds: strategyIds,
+		ConcurrencyKeys:        concurrencyKeys,
 	})
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create tasks: %w", err)
 	}
 
+	// TODO: this should be moved to after the transaction commits
+	saveQueueCache()
+
 	return res, nil
 }
+
+func (r *sharedRepository) getConcurrencyExpressions(
+	ctx context.Context,
+	tx sqlcv2.DBTX,
+	tenantId string,
+	stepIdsToConfig map[string]*sqlcv2.ListStepsByIdsRow,
+) (map[string][]*sqlcv2.V2StepConcurrency, error) {
+	stepIdsWithExpressions := make(map[string]struct{})
+
+	for _, step := range stepIdsToConfig {
+		if step.ConcurrencyCount > 0 {
+			stepIdsWithExpressions[sqlchelpers.UUIDToStr(step.ID)] = struct{}{}
+		}
+	}
+
+	if len(stepIdsWithExpressions) == 0 {
+		return nil, nil
+	}
+
+	stepIds := make([]pgtype.UUID, 0, len(stepIdsWithExpressions))
+
+	for stepId := range stepIdsWithExpressions {
+		stepIds = append(stepIds, sqlchelpers.UUIDFromStr(stepId))
+	}
+
+	strats, err := r.queries.ListConcurrencyStrategiesByStepId(ctx, tx, sqlcv2.ListConcurrencyStrategiesByStepIdParams{
+		Tenantid: sqlchelpers.UUIDFromStr(tenantId),
+		Stepids:  stepIds,
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	stepIdToStrats := make(map[string][]*sqlcv2.V2StepConcurrency)
+
+	for _, strat := range strats {
+		stepId := sqlchelpers.UUIDToStr(strat.StepID)
+
+		if _, ok := stepIdToStrats[stepId]; !ok {
+			stepIdToStrats[stepId] = make([]*sqlcv2.V2StepConcurrency, 0)
+		}
+
+		stepIdToStrats[stepId] = append(stepIdToStrats[stepId], strat)
+	}
+
+	return stepIdToStrats, nil
+}
+
+// func (r *sharedRepository) getStepExpressions(
+// 	ctx context.Context,
+// 	tx sqlcv2.DBTX,
+// 	stepIdsToConfig map[string]*sqlcv2.ListStepsByIdsRow,
+// ) (map[string][]*sqlcv2.StepExpression, error) {
+// 	stepIdsWithExpressions := make(map[string]struct{})
+
+// 	for _, step := range stepIdsToConfig {
+// 		if step.ExpressionCount > 0 {
+// 			stepIdsWithExpressions[sqlchelpers.UUIDToStr(step.ID)] = struct{}{}
+// 		}
+// 	}
+
+// 	if len(stepIdsWithExpressions) == 0 {
+// 		return nil, nil
+// 	}
+
+// 	stepIds := make([]pgtype.UUID, 0, len(stepIdsWithExpressions))
+
+// 	for stepId := range stepIdsWithExpressions {
+// 		stepIds = append(stepIds, sqlchelpers.UUIDFromStr(stepId))
+// 	}
+
+// 	expressions, err := r.queries.ListStepExpressions(ctx, tx, stepIds)
+
+// 	if err != nil {
+// 		return nil, err
+// 	}
+
+// 	stepIdToExpressions := make(map[string][]*sqlcv2.StepExpression)
+
+// 	for _, expression := range expressions {
+// 		stepId := sqlchelpers.UUIDToStr(expression.StepId)
+
+// 		if _, ok := stepIdToExpressions[stepId]; !ok {
+// 			stepIdToExpressions[stepId] = make([]*sqlcv2.StepExpression, 0)
+// 		}
+
+// 		stepIdToExpressions[stepId] = append(stepIdToExpressions[stepId], expression)
+// 	}
+
+// 	return stepIdToExpressions, nil
+// }
 
 func (r *sharedRepository) createTaskEvents(
 	ctx context.Context,

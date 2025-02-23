@@ -62,7 +62,8 @@ const listWorkflowsForEvents = `-- name: ListWorkflowsForEvents :many
 WITH latest_versions AS (
     SELECT DISTINCT ON("workflowId")
         "workflowId",
-        workflowVersions."id" AS "workflowVersionId"
+        workflowVersions."id" AS "workflowVersionId",
+        workflow."name" AS "workflowName"
     FROM
         "WorkflowVersion" as workflowVersions
     JOIN
@@ -75,6 +76,7 @@ WITH latest_versions AS (
 SELECT
     latest_versions."workflowVersionId",
     latest_versions."workflowId",
+    latest_versions."workflowName",
     eventRef."eventKey" as "eventKey"
 FROM
     latest_versions
@@ -94,6 +96,7 @@ type ListWorkflowsForEventsParams struct {
 type ListWorkflowsForEventsRow struct {
 	WorkflowVersionId pgtype.UUID `json:"workflowVersionId"`
 	WorkflowId        pgtype.UUID `json:"workflowId"`
+	WorkflowName      string      `json:"workflowName"`
 	EventKey          string      `json:"eventKey"`
 }
 
@@ -108,7 +111,12 @@ func (q *Queries) ListWorkflowsForEvents(ctx context.Context, db DBTX, arg ListW
 	var items []*ListWorkflowsForEventsRow
 	for rows.Next() {
 		var i ListWorkflowsForEventsRow
-		if err := rows.Scan(&i.WorkflowVersionId, &i.WorkflowId, &i.EventKey); err != nil {
+		if err := rows.Scan(
+			&i.WorkflowVersionId,
+			&i.WorkflowId,
+			&i.WorkflowName,
+			&i.EventKey,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, &i)

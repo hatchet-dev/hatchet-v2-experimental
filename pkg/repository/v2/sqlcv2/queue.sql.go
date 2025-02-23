@@ -11,15 +11,80 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const bulkQueueItems = `-- name: BulkQueueItems :exec
+const bulkQueueItems = `-- name: BulkQueueItems :many
+WITH locked_qis AS (
+    SELECT
+        id
+    FROM
+        v2_queue_item
+    WHERE
+        id = ANY($1::bigint[])
+    ORDER BY
+        id ASC
+    FOR UPDATE
+)
 DELETE FROM
     v2_queue_item
 WHERE
     id = ANY($1::bigint[])
+RETURNING
+    id
 `
 
-func (q *Queries) BulkQueueItems(ctx context.Context, db DBTX, ids []int64) error {
-	_, err := db.Exec(ctx, bulkQueueItems, ids)
+func (q *Queries) BulkQueueItems(ctx context.Context, db DBTX, ids []int64) ([]int64, error) {
+	rows, err := db.Query(ctx, bulkQueueItems, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const deleteTasksFromQueue = `-- name: DeleteTasksFromQueue :exec
+WITH input AS (
+    SELECT
+        task_id, retry_count
+    FROM
+        (
+            SELECT
+                unnest($1::bigint[]) AS task_id,
+                unnest($2::integer[]) AS retry_count
+        ) AS subquery
+), locked_qis AS (
+    SELECT
+        id
+    FROM
+        v2_queue_item
+    WHERE
+        (task_id, retry_count) IN (SELECT task_id, retry_count FROM input)
+    ORDER BY
+        id ASC
+    FOR UPDATE
+)
+DELETE FROM
+    v2_queue_item
+WHERE
+    id = ANY(SELECT id FROM locked_qis)
+`
+
+type DeleteTasksFromQueueParams struct {
+	Taskids     []int64 `json:"taskids"`
+	Retrycounts []int32 `json:"retrycounts"`
+}
+
+func (q *Queries) DeleteTasksFromQueue(ctx context.Context, db DBTX, arg DeleteTasksFromQueueParams) error {
+	_, err := db.Exec(ctx, deleteTasksFromQueue, arg.Taskids, arg.Retrycounts)
 	return err
 }
 
@@ -83,8 +148,7 @@ WITH priority_1 AS (
     FROM
         v2_queue_item
     WHERE
-        is_queued = true
-        AND tenant_id = $1::uuid
+        tenant_id = $1::uuid
         AND queue = $2::text
         AND priority = 1
     ORDER BY
@@ -97,8 +161,7 @@ priority_2 AS (
     FROM
         v2_queue_item
     WHERE
-        is_queued = true
-        AND tenant_id = $1::uuid
+        tenant_id = $1::uuid
         AND queue = $2::text
         AND priority = 2
     ORDER BY
@@ -111,8 +174,7 @@ priority_3 AS (
     FROM
         v2_queue_item
     WHERE
-        is_queued = true
-        AND tenant_id = $1::uuid
+        tenant_id = $1::uuid
         AND queue = $2::text
         AND priority = 3
     ORDER BY
@@ -125,8 +187,7 @@ priority_4 AS (
     FROM
         v2_queue_item
     WHERE
-        is_queued = true
-        AND tenant_id = $1::uuid
+        tenant_id = $1::uuid
         AND queue = $2::text
         AND priority = 4
     ORDER BY
@@ -165,8 +226,7 @@ SELECT
 FROM
     v2_queue_item qi
 WHERE
-    qi.is_queued = true
-    AND qi.tenant_id = $1::uuid
+    qi.tenant_id = $1::uuid
 GROUP BY
     qi.queue
 `
@@ -309,12 +369,11 @@ func (q *Queries) ListAvailableSlotsForWorkers(ctx context.Context, db DBTX, arg
 
 const listQueueItemsForQueue = `-- name: ListQueueItemsForQueue :many
 SELECT
-    id, tenant_id, queue, task_id, action_id, step_id, workflow_id, schedule_timeout_at, step_timeout, priority, sticky, desired_worker_id, is_queued, retry_count
+    id, tenant_id, queue, task_id, action_id, step_id, workflow_id, schedule_timeout_at, step_timeout, priority, sticky, desired_worker_id, retry_count
 FROM
     v2_queue_item qi
 WHERE
-    qi.is_queued = true
-    AND qi.tenant_id = $1::uuid
+    qi.tenant_id = $1::uuid
     AND qi.queue = $2::text
     AND (
         $3::bigint IS NULL OR
@@ -363,7 +422,6 @@ func (q *Queries) ListQueueItemsForQueue(ctx context.Context, db DBTX, arg ListQ
 			&i.Priority,
 			&i.Sticky,
 			&i.DesiredWorkerID,
-			&i.IsQueued,
 			&i.RetryCount,
 		); err != nil {
 			return nil, err

@@ -1,5 +1,6 @@
 -- name: CreateTaskPartition :exec
-SELECT create_v2_task_partition(
+SELECT create_v2_range_partition(
+    'v2_task',
     @date::date
 );
 
@@ -7,7 +8,23 @@ SELECT create_v2_task_partition(
 SELECT
     p::text AS partition_name
 FROM
-    get_v2_task_partitions_before(
+    get_v2_partitions_before_date(
+        'v2_task',
+        @date::date
+    ) AS p;
+
+-- name: CreateConcurrencyPartition :exec
+SELECT create_v2_range_partition(
+    'v2_concurrency_slot',
+    @date::date
+);
+
+-- name: ListConcurrencyPartitionsBeforeDate :many
+SELECT
+    p::text AS partition_name
+FROM
+    get_v2_partitions_before_date(
+        'v2_concurrency_slot',
         @date::date
     ) AS p;
 
@@ -46,7 +63,8 @@ WITH input AS (
 ), runtimes_to_delete AS (
     SELECT
         task_id,
-        retry_count
+        retry_count,
+        worker_id
     FROM
         v2_task_runtime
     WHERE
@@ -65,7 +83,10 @@ SELECT
     t.id,
     t.inserted_at,
     t.external_id,
-    t.step_readable_id
+    t.step_readable_id,
+    r.worker_id,
+    t.retry_count,
+    t.concurrency_strategy_ids
 FROM
     v2_task t
 JOIN
@@ -143,7 +164,8 @@ RETURNING
 WITH expired_runtimes AS (
     SELECT
         task_id,
-        retry_count
+        retry_count,
+        worker_id
     FROM
         v2_task_runtime
     WHERE
@@ -158,7 +180,8 @@ WITH expired_runtimes AS (
     SELECT
         v2_task.id,
         v2_task.retry_count,
-        v2_task.step_id
+        v2_task.step_id, 
+        expired_runtimes.worker_id
     FROM
         v2_task
     JOIN

@@ -1,5 +1,6 @@
 -- name: CreateDAGPartition :exec
-SELECT create_v2_dag_partition(
+SELECT create_v2_range_partition(
+    'v2_dag',
     @date::date
 );
 
@@ -7,7 +8,8 @@ SELECT create_v2_dag_partition(
 SELECT
     p::text AS partition_name
 FROM
-    get_v2_dag_partitions_before(
+    get_v2_partitions_before_date(
+        'v2_dag',
         @date::date
     ) AS p;
 

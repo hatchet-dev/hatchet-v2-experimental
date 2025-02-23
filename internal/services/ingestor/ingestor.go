@@ -233,11 +233,11 @@ func eventToTask(tenantId, eventId, key string, data, additionalMeta []byte) (*m
 		EventAdditionalMetadata: additionalMeta,
 	}
 
-	return msgqueue.NewSingletonTenantMessage(
+	return msgqueue.NewTenantMessage(
 		tenantId,
 		"user-event",
-		payloadTyped,
 		false,
 		true,
+		payloadTyped,
 	)
 }

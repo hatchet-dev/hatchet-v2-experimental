@@ -11,6 +11,7 @@ import (
 
 	"github.com/hatchet-dev/hatchet/pkg/repository/prisma/sqlchelpers"
 	v2 "github.com/hatchet-dev/hatchet/pkg/repository/v2"
+	"github.com/hatchet-dev/hatchet/pkg/repository/v2/sqlcv2"
 )
 
 // tenantManager manages the scheduler and queuers for a tenant and multiplexes
@@ -25,31 +26,40 @@ type tenantManager struct {
 	queuers   []*Queuer
 	queuersMu sync.RWMutex
 
+	concurrencyStrategies []*ConcurrencyManager
+	concurrencyMu         sync.RWMutex
+
 	leaseManager *LeaseManager
 
-	workersCh <-chan []*v2.ListActiveWorkersResult
-	queuesCh  <-chan []string
+	workersCh     <-chan []*v2.ListActiveWorkersResult
+	queuesCh      <-chan []string
+	concurrencyCh <-chan []*sqlcv2.V2StepConcurrency
+
+	concurrencyResultsCh chan *ConcurrencyResults
+
 	resultsCh chan *QueueResults
 
 	cleanup func()
 }
 
-func newTenantManager(cf *sharedConfig, tenantId string, resultsCh chan *QueueResults, exts *Extensions) *tenantManager {
+func newTenantManager(cf *sharedConfig, tenantId string, resultsCh chan *QueueResults, concurrencyResultsCh chan *ConcurrencyResults, exts *Extensions) *tenantManager {
 	tenantIdUUID := sqlchelpers.UUIDFromStr(tenantId)
 
 	rl := newRateLimiter(cf, tenantIdUUID)
 	s := newScheduler(cf, tenantIdUUID, rl, exts)
-	leaseManager, workersCh, queuesCh := newLeaseManager(cf, tenantIdUUID)
+	leaseManager, workersCh, queuesCh, concurrencyCh := newLeaseManager(cf, tenantIdUUID)
 
 	t := &tenantManager{
-		scheduler:    s,
-		leaseManager: leaseManager,
-		cf:           cf,
-		tenantId:     tenantIdUUID,
-		workersCh:    workersCh,
-		queuesCh:     queuesCh,
-		resultsCh:    resultsCh,
-		rl:           rl,
+		scheduler:            s,
+		leaseManager:         leaseManager,
+		cf:                   cf,
+		tenantId:             tenantIdUUID,
+		workersCh:            workersCh,
+		queuesCh:             queuesCh,
+		concurrencyCh:        concurrencyCh,
+		resultsCh:            resultsCh,
+		rl:                   rl,
+		concurrencyResultsCh: concurrencyResultsCh,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -57,6 +67,7 @@ func newTenantManager(cf *sharedConfig, tenantId string, resultsCh chan *QueueRe
 
 	go t.listenForWorkerLeases(ctx)
 	go t.listenForQueueLeases(ctx)
+	go t.listenForConcurrencyLeases(ctx)
 
 	leaseManager.start(ctx)
 	s.start(ctx)
@@ -107,6 +118,17 @@ func (t *tenantManager) listenForQueueLeases(ctx context.Context) {
 	}
 }
 
+func (t *tenantManager) listenForConcurrencyLeases(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case strategies := <-t.concurrencyCh:
+			t.setConcurrencyStrategies(strategies)
+		}
+	}
+}
+
 func (t *tenantManager) setQueuers(queueNames []string) {
 	t.queuersMu.Lock()
 	defer t.queuersMu.Unlock()
@@ -136,6 +158,37 @@ func (t *tenantManager) setQueuers(queueNames []string) {
 	}
 
 	t.queuers = newQueueArr
+}
+
+func (t *tenantManager) setConcurrencyStrategies(strategies []*sqlcv2.V2StepConcurrency) {
+	t.concurrencyMu.Lock()
+	defer t.concurrencyMu.Unlock()
+
+	strategiesSet := make(map[int64]*sqlcv2.V2StepConcurrency, len(strategies))
+
+	for _, strat := range strategies {
+		strategiesSet[strat.ID] = strat
+	}
+
+	newArr := make([]*ConcurrencyManager, 0, len(strategies))
+
+	for _, c := range t.concurrencyStrategies {
+		if _, ok := strategiesSet[c.strategy.ID]; ok {
+			newArr = append(newArr, c)
+
+			// delete from set
+			delete(strategiesSet, c.strategy.ID)
+		} else {
+			// if not in new set, cleanup
+			go c.cleanup()
+		}
+	}
+
+	for _, strategy := range strategiesSet {
+		newArr = append(newArr, newConcurrencyManager(t.cf, t.tenantId, strategy, t.concurrencyResultsCh))
+	}
+
+	t.concurrencyStrategies = newArr
 }
 
 func (t *tenantManager) refreshAll(ctx context.Context) {
@@ -168,14 +221,36 @@ func (t *tenantManager) replenish(ctx context.Context) {
 	}
 }
 
-func (t *tenantManager) queue(ctx context.Context, queueName string) {
+func (t *tenantManager) notifyConcurrency(ctx context.Context, strategyIds []int64) {
+	strategyIdsMap := make(map[int64]struct{}, len(strategyIds))
+
+	for _, id := range strategyIds {
+		strategyIdsMap[id] = struct{}{}
+	}
+
+	t.concurrencyMu.RLock()
+
+	for _, c := range t.concurrencyStrategies {
+		if _, ok := strategyIdsMap[c.strategy.ID]; ok {
+			c.notify(ctx)
+		}
+	}
+
+	t.concurrencyMu.RUnlock()
+}
+
+func (t *tenantManager) queue(ctx context.Context, queueNames []string) {
+	queueNamesMap := make(map[string]struct{}, len(queueNames))
+
+	for _, name := range queueNames {
+		queueNamesMap[name] = struct{}{}
+	}
+
 	t.queuersMu.RLock()
 
 	for _, q := range t.queuers {
-		if q.queueName == queueName {
-			t.queuersMu.RUnlock()
+		if _, ok := queueNamesMap[q.queueName]; ok {
 			q.queue(ctx)
-			return
 		}
 	}
 

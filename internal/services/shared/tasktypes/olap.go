@@ -16,14 +16,14 @@ type CreatedTaskPayload struct {
 }
 
 func CreatedTaskMessage(tenantId string, task *sqlcv2.V2Task) (*msgqueue.Message, error) {
-	return msgqueue.NewSingletonTenantMessage(
+	return msgqueue.NewTenantMessage(
 		tenantId,
 		"created-task",
+		false,
+		true,
 		CreatedTaskPayload{
 			V2Task: task,
 		},
-		false,
-		true,
 	)
 }
 
@@ -32,14 +32,14 @@ type CreatedDAGPayload struct {
 }
 
 func CreatedDAGMessage(tenantId string, dag *v2.DAGWithData) (*msgqueue.Message, error) {
-	return msgqueue.NewSingletonTenantMessage(
+	return msgqueue.NewTenantMessage(
 		tenantId,
 		"created-dag",
+		false,
+		true,
 		CreatedDAGPayload{
 			DAGWithData: dag,
 		},
-		false,
-		true,
 	)
 }
 
@@ -77,21 +77,21 @@ func MonitoringEventMessageFromActionEvent(tenantId string, taskId int64, retryC
 		return nil, fmt.Errorf("unknown event type: %s", request.EventType.String())
 	}
 
-	return msgqueue.NewSingletonTenantMessage(
+	return msgqueue.NewTenantMessage(
 		tenantId,
 		"create-monitoring-event",
+		false,
+		false,
 		payload,
-		false,
-		false,
 	)
 }
 
 func MonitoringEventMessageFromInternal(tenantId string, payload CreateMonitoringEventPayload) (*msgqueue.Message, error) {
-	return msgqueue.NewSingletonTenantMessage(
+	return msgqueue.NewTenantMessage(
 		tenantId,
 		"create-monitoring-event",
+		false,
+		false,
 		payload,
-		false,
-		false,
 	)
 }

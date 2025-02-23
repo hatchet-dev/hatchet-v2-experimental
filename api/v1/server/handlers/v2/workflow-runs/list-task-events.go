@@ -11,9 +11,9 @@ import (
 
 func (t *V2WorkflowRunsService) V2WorkflowRunTaskEventsList(ctx echo.Context, request gen.V2WorkflowRunTaskEventsListRequestObject) (gen.V2WorkflowRunTaskEventsListResponseObject, error) {
 	tenant := ctx.Get("tenant").(*db.TenantModel)
-	rawWorkflowRun := ctx.Get("v2-workflow-run").(map[string]interface{})
+	rawWorkflowRun := ctx.Get("v2-workflow-run").(*repository.V2WorkflowRunPopulator)
 
-	workflowRun := rawWorkflowRun["workflowRun"].(*repository.WorkflowRunData)
+	workflowRun := rawWorkflowRun.WorkflowRun
 
 	taskRunEvents, err := t.config.EngineRepository.OLAP().ListTaskRunEventsByWorkflowRunId(
 		ctx.Request().Context(),

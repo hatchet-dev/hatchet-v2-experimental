@@ -252,6 +252,25 @@ func (s *Scheduler) Start() (func() error, error) {
 		}
 	}()
 
+	concurrencyResults := s.pool.GetConcurrencyResultsCh()
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case res := <-concurrencyResults:
+				s.l.Debug().Msgf("partition: received concurrency results")
+
+				if res == nil {
+					continue
+				}
+
+				go s.notifyAfterConcurrency(ctx, sqlchelpers.UUIDToStr(res.TenantId), res)
+			}
+		}
+	}()
+
 	cleanup := func() error {
 		cancel()
 
@@ -293,20 +312,19 @@ func (s *Scheduler) handleCheckQueue(ctx context.Context, msg *msgqueue.Message)
 	ctx, span := telemetry.NewSpanWithCarrier(ctx, "handle-check-queue", msg.OtelCarrier)
 	defer span.End()
 
-	payloads := msgqueue.JSONConvert[tasktypes.CheckTenantQueuePayload](msg.Payloads)
+	payloads := msgqueue.JSONConvert[tasktypes.CheckTenantQueuesPayload](msg.Payloads)
 
 	for _, payload := range payloads {
-		switch {
-		case payload.IsStepQueued && payload.QueueName != "":
-			s.pool.Queue(ctx, msg.TenantID, payload.QueueName)
-		case payload.IsSlotReleased:
-			if payload.QueueName != "" {
-				s.pool.Queue(ctx, msg.TenantID, payload.QueueName)
-			}
+		if len(payload.StrategyIds) > 0 {
+			s.pool.NotifyConcurrency(ctx, msg.TenantID, payload.StrategyIds)
+		}
 
+		if len(payload.QueueNames) > 0 {
+			s.pool.NotifyQueues(ctx, msg.TenantID, payload.QueueNames)
+		}
+
+		if payload.SlotsReleased {
 			s.pool.Replenish(ctx, msg.TenantID)
-		default:
-			s.pool.RefreshAll(ctx, msg.TenantID)
 		}
 	}
 
@@ -449,6 +467,7 @@ func (s *Scheduler) scheduleStepRuns(ctx context.Context, tenantId string, res *
 				schedulingTimedOut.TaskID,
 				schedulingTimedOut.RetryCount,
 				olapv2.V2EventTypeOlapSCHEDULINGTIMEDOUT,
+				false,
 			)
 
 			if err != nil {
@@ -550,14 +569,79 @@ func (s *Scheduler) internalRetry(ctx context.Context, tenantId string, assigned
 // 	}
 // }
 
+func (s *Scheduler) notifyAfterConcurrency(ctx context.Context, tenantId string, res *v2.ConcurrencyResults) {
+	uniqueQueueNames := make(map[string]struct{}, 0)
+
+	for _, task := range res.Queued {
+		uniqueQueueNames[task.Queue] = struct{}{}
+	}
+
+	uniqueNextStrategies := make(map[int64]struct{}, len(res.NextConcurrencyStrategies))
+
+	for _, id := range res.NextConcurrencyStrategies {
+		uniqueNextStrategies[id] = struct{}{}
+	}
+
+	strategies := make([]int64, 0, len(uniqueNextStrategies))
+
+	for stratId := range uniqueNextStrategies {
+		strategies = append(strategies, stratId)
+	}
+
+	s.pool.NotifyConcurrency(ctx, tenantId, strategies)
+
+	queues := make([]string, 0, len(uniqueQueueNames))
+
+	for queueName := range uniqueQueueNames {
+		queues = append(queues, queueName)
+	}
+
+	s.pool.NotifyQueues(ctx, tenantId, queues)
+
+	// handle cancellations
+	for _, cancelled := range res.Cancelled {
+		eventType := olapv2.V2EventTypeOlapCANCELLED
+		shouldNotify := true
+
+		if cancelled.CancelledReason == "SCHEDULING_TIMED_OUT" {
+			eventType = olapv2.V2EventTypeOlapSCHEDULINGTIMEDOUT
+			shouldNotify = false
+		}
+
+		msg, err := tasktypes.CancelledTaskMessage(
+			tenantId,
+			cancelled.TaskIdRetryCount.Id,
+			cancelled.TaskIdRetryCount.RetryCount,
+			eventType,
+			shouldNotify,
+		)
+
+		if err != nil {
+			s.l.Error().Err(err).Msg("could not create cancelled task")
+			continue
+		}
+
+		err = s.mq.SendMessage(
+			ctx,
+			msgqueue.TASK_PROCESSING_QUEUE,
+			msg,
+		)
+
+		if err != nil {
+			s.l.Error().Err(err).Msg("could not send cancelled task")
+			continue
+		}
+	}
+}
+
 func taskBulkAssignedTask(tenantId, dispatcherId string, workerIdsToTaskIds map[string][]int64) (*msgqueue.Message, error) {
-	return msgqueue.NewSingletonTenantMessage(
+	return msgqueue.NewTenantMessage(
 		tenantId,
 		"task-assigned-bulk",
+		false,
+		true,
 		tasktypes.TaskAssignedBulkTaskPayload{
 			WorkerIdToTaskIds: workerIdsToTaskIds,
 		},
-		false,
-		true,
 	)
 }

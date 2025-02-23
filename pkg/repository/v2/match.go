@@ -48,14 +48,8 @@ type CreateMatchOpts struct {
 }
 
 type InternalEventMatchResults struct {
-	// The list of tasks which were created in a queued state
-	CreatedQueuedTasks []*sqlcv2.V2Task
-
-	// A list of tasks which are created in a directly cancelled state
-	CreatedCancelledTasks []*sqlcv2.V2Task
-
-	// A list of tasks which are created in a skipped state
-	CreatedSkippedTasks []*sqlcv2.V2Task
+	// The list of tasks which were created from the matches
+	CreatedTasks []*sqlcv2.V2Task
 }
 
 type GroupMatchCondition struct {
@@ -288,13 +282,7 @@ func (m *MatchRepositoryImpl) ProcessInternalEventMatches(ctx context.Context, t
 		}
 
 		for _, task := range tasks {
-			if task.InitialState == sqlcv2.V2TaskInitialStateQUEUED {
-				res.CreatedQueuedTasks = append(res.CreatedQueuedTasks, task)
-			} else if task.InitialState == sqlcv2.V2TaskInitialStateCANCELLED {
-				res.CreatedCancelledTasks = append(res.CreatedCancelledTasks, task)
-			} else if task.InitialState == sqlcv2.V2TaskInitialStateSKIPPED {
-				res.CreatedSkippedTasks = append(res.CreatedSkippedTasks, task)
-			}
+			res.CreatedTasks = append(res.CreatedTasks, task)
 		}
 	}
 

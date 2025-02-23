@@ -82,8 +82,7 @@ SELECT
 FROM
     v2_queue_item qi
 WHERE
-    qi.is_queued = true
-    AND qi.tenant_id = @tenantId::uuid
+    qi.tenant_id = @tenantId::uuid
     AND qi.queue = @queue::text
     AND (
         sqlc.narg('gtId')::bigint IS NULL OR
@@ -104,8 +103,7 @@ WITH priority_1 AS (
     FROM
         v2_queue_item
     WHERE
-        is_queued = true
-        AND tenant_id = @tenantId::uuid
+        tenant_id = @tenantId::uuid
         AND queue = @queue::text
         AND priority = 1
     ORDER BY
@@ -118,8 +116,7 @@ priority_2 AS (
     FROM
         v2_queue_item
     WHERE
-        is_queued = true
-        AND tenant_id = @tenantId::uuid
+        tenant_id = @tenantId::uuid
         AND queue = @queue::text
         AND priority = 2
     ORDER BY
@@ -132,8 +129,7 @@ priority_3 AS (
     FROM
         v2_queue_item
     WHERE
-        is_queued = true
-        AND tenant_id = @tenantId::uuid
+        tenant_id = @tenantId::uuid
         AND queue = @queue::text
         AND priority = 3
     ORDER BY
@@ -146,8 +142,7 @@ priority_4 AS (
     FROM
         v2_queue_item
     WHERE
-        is_queued = true
-        AND tenant_id = @tenantId::uuid
+        tenant_id = @tenantId::uuid
         AND queue = @queue::text
         AND priority = 4
     ORDER BY
@@ -166,11 +161,24 @@ FROM (
     SELECT id FROM priority_4
 ) AS combined_priorities;
 
--- name: BulkQueueItems :exec
+-- name: BulkQueueItems :many
+WITH locked_qis AS (
+    SELECT
+        id
+    FROM
+        v2_queue_item
+    WHERE
+        id = ANY(@ids::bigint[])
+    ORDER BY
+        id ASC
+    FOR UPDATE
+)
 DELETE FROM
     v2_queue_item
 WHERE
-    id = ANY(@ids::bigint[]);
+    id = ANY(@ids::bigint[])
+RETURNING
+    id;
 
 -- name: UpdateTasksToAssigned :many
 WITH input AS (
@@ -243,7 +251,32 @@ SELECT
 FROM
     v2_queue_item qi
 WHERE
-    qi.is_queued = true
-    AND qi.tenant_id = @tenantId::uuid
+    qi.tenant_id = @tenantId::uuid
 GROUP BY
     qi.queue;
+
+-- name: DeleteTasksFromQueue :exec
+WITH input AS (
+    SELECT
+        *
+    FROM
+        (
+            SELECT
+                unnest(@taskIds::bigint[]) AS task_id,
+                unnest(@retryCounts::integer[]) AS retry_count
+        ) AS subquery
+), locked_qis AS (
+    SELECT
+        id
+    FROM
+        v2_queue_item
+    WHERE
+        (task_id, retry_count) IN (SELECT task_id, retry_count FROM input)
+    ORDER BY
+        id ASC
+    FOR UPDATE
+)
+DELETE FROM
+    v2_queue_item
+WHERE
+    id = ANY(SELECT id FROM locked_qis);

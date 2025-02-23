@@ -1,11 +1,9 @@
 package tasktypes
 
 import (
-	"encoding/json"
 	"time"
 
 	"github.com/hatchet-dev/hatchet/internal/msgqueue"
-	v2 "github.com/hatchet-dev/hatchet/pkg/repository/v2"
 )
 
 type UserEventTaskPayload struct {
@@ -21,46 +19,12 @@ type InternalEventTaskPayload struct {
 	EventData      []byte    `json:"event_data" validate:"required"`
 }
 
-func NewInternalEventMessage(tenantId string, timestamp time.Time, key string, data []byte) (*msgqueue.Message, error) {
-	return msgqueue.NewSingletonTenantMessage(
+func NewInternalEventMessage(tenantId string, timestamp time.Time, events ...InternalEventTaskPayload) (*msgqueue.Message, error) {
+	return msgqueue.NewTenantMessage(
 		tenantId,
 		"internal-event",
-		InternalEventTaskPayload{
-			EventTimestamp: timestamp,
-			EventKey:       key,
-			EventData:      data,
-		},
 		false,
 		true,
+		events...,
 	)
-}
-
-func NewInternalCompletedEventMessage(tenantId string, timestamp time.Time, key, stepReadableId string, output []byte) (*msgqueue.Message, error) {
-	failureData := v2.CompletedData{
-		StepReadableId: stepReadableId,
-		Output:         output,
-	}
-
-	data, err := json.Marshal(failureData)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return NewInternalEventMessage(tenantId, timestamp, key, data)
-}
-
-func NewInternalFailureEventMessage(tenantId string, timestamp time.Time, key, stepReadableId string, errorMsg string) (*msgqueue.Message, error) {
-	failureData := v2.FailedData{
-		StepReadableId: stepReadableId,
-		Error:          errorMsg,
-	}
-
-	data, err := json.Marshal(failureData)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return NewInternalEventMessage(tenantId, timestamp, key, data)
 }

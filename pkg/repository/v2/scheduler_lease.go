@@ -159,3 +159,10 @@ func (d *leaseRepository) ListActiveWorkers(ctx context.Context, tenantId pgtype
 
 	return res, nil
 }
+
+func (d *leaseRepository) ListConcurrencyStrategies(ctx context.Context, tenantId pgtype.UUID) ([]*sqlcv2.V2StepConcurrency, error) {
+	ctx, span := telemetry.NewSpan(ctx, "list-queues")
+	defer span.End()
+
+	return d.queries.ListActiveConcurrencyStrategies(ctx, d.pool, tenantId)
+}

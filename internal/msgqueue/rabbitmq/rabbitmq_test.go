@@ -49,7 +49,7 @@ func TestMessageQueueIntegration(t *testing.T) {
 		}
 	}()
 
-	task, err := msgqueue.NewSingletonTenantMessage("test-tenant", id, map[string]interface{}{"key": "value"}, false, true)
+	task, err := msgqueue.NewTenantMessage("test-tenant", id, false, true, map[string]interface{}{"key": "value"})
 
 	if err != nil {
 		t.Fatalf("error creating task: %v", err)
@@ -154,9 +154,9 @@ func TestBufferedSubMessageQueueIntegration(t *testing.T) {
 		t.Fatalf("error starting buffer: %v", err)
 	}
 
-	task, err := msgqueue.NewSingletonTenantMessage("test-tenant", id, &testMessagePayload{
+	task, err := msgqueue.NewTenantMessage("test-tenant", id, false, true, &testMessagePayload{
 		Key: "value",
-	}, false, true)
+	})
 
 	if err != nil {
 		t.Fatalf("error creating task: %v", err)
@@ -218,9 +218,9 @@ func TestBufferedPubMessageQueueIntegration(t *testing.T) {
 
 	pub := msgqueue.NewMQPubBuffer(tq)
 
-	task, err := msgqueue.NewSingletonTenantMessage("test-tenant", id, &testMessagePayload{
+	task, err := msgqueue.NewTenantMessage("test-tenant", id, false, true, &testMessagePayload{
 		Key: "value",
-	}, false, true)
+	})
 
 	if err != nil {
 		t.Fatalf("error creating task: %v", err)
@@ -272,9 +272,9 @@ func TestDeadLetteringSuccess(t *testing.T) {
 		}
 	}()
 
-	task, err := msgqueue.NewSingletonTenantMessage("test-tenant", id, &testMessagePayload{
+	task, err := msgqueue.NewTenantMessage("test-tenant", id, false, true, &testMessagePayload{
 		Key: "value",
-	}, false, true)
+	})
 
 	if err != nil {
 		t.Fatalf("error creating task: %v", err)
@@ -340,9 +340,9 @@ func TestDeadLetteringExceedRetriesFailure(t *testing.T) {
 		}
 	}()
 
-	task, err := msgqueue.NewSingletonTenantMessage("test-tenant", id, &testMessagePayload{
+	task, err := msgqueue.NewTenantMessage("test-tenant", id, false, true, &testMessagePayload{
 		Key: "value",
-	}, false, true)
+	})
 
 	if err != nil {
 		t.Fatalf("error creating task: %v", err)

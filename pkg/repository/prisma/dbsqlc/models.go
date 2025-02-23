@@ -234,8 +234,9 @@ func (ns NullJobRunStatus) Value() (driver.Value, error) {
 type LeaseKind string
 
 const (
-	LeaseKindWORKER LeaseKind = "WORKER"
-	LeaseKindQUEUE  LeaseKind = "QUEUE"
+	LeaseKindWORKER              LeaseKind = "WORKER"
+	LeaseKindQUEUE               LeaseKind = "QUEUE"
+	LeaseKindCONCURRENCYSTRATEGY LeaseKind = "CONCURRENCY_STRATEGY"
 )
 
 func (e *LeaseKind) Scan(src interface{}) error {
@@ -767,6 +768,50 @@ func (ns NullTenantResourceLimitAlertType) Value() (driver.Value, error) {
 	return string(ns.TenantResourceLimitAlertType), nil
 }
 
+type V2ConcurrencyStrategy string
+
+const (
+	V2ConcurrencyStrategyNONE             V2ConcurrencyStrategy = "NONE"
+	V2ConcurrencyStrategyGROUPROUNDROBIN  V2ConcurrencyStrategy = "GROUP_ROUND_ROBIN"
+	V2ConcurrencyStrategyCANCELINPROGRESS V2ConcurrencyStrategy = "CANCEL_IN_PROGRESS"
+	V2ConcurrencyStrategyCANCELNEWEST     V2ConcurrencyStrategy = "CANCEL_NEWEST"
+)
+
+func (e *V2ConcurrencyStrategy) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = V2ConcurrencyStrategy(s)
+	case string:
+		*e = V2ConcurrencyStrategy(s)
+	default:
+		return fmt.Errorf("unsupported scan type for V2ConcurrencyStrategy: %T", src)
+	}
+	return nil
+}
+
+type NullV2ConcurrencyStrategy struct {
+	V2ConcurrencyStrategy V2ConcurrencyStrategy `json:"v2_concurrency_strategy"`
+	Valid                 bool                  `json:"valid"` // Valid is true if V2ConcurrencyStrategy is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullV2ConcurrencyStrategy) Scan(value interface{}) error {
+	if value == nil {
+		ns.V2ConcurrencyStrategy, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.V2ConcurrencyStrategy.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullV2ConcurrencyStrategy) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.V2ConcurrencyStrategy), nil
+}
+
 type V2EventType string
 
 const (
@@ -988,6 +1033,7 @@ const (
 	V2TaskInitialStateQUEUED    V2TaskInitialState = "QUEUED"
 	V2TaskInitialStateCANCELLED V2TaskInitialState = "CANCELLED"
 	V2TaskInitialStateSKIPPED   V2TaskInitialState = "SKIPPED"
+	V2TaskInitialStateFAILED    V2TaskInitialState = "FAILED"
 )
 
 func (e *V2TaskInitialState) Scan(src interface{}) error {
@@ -1973,6 +2019,22 @@ type UserSession struct {
 	ExpiresAt pgtype.Timestamp `json:"expiresAt"`
 }
 
+type V2ConcurrencySlot struct {
+	TaskID            int64              `json:"task_id"`
+	TaskInsertedAt    pgtype.Timestamptz `json:"task_inserted_at"`
+	TaskRetryCount    int32              `json:"task_retry_count"`
+	TenantID          pgtype.UUID        `json:"tenant_id"`
+	WorkflowID        pgtype.UUID        `json:"workflow_id"`
+	StrategyID        int64              `json:"strategy_id"`
+	Priority          int32              `json:"priority"`
+	Key               string             `json:"key"`
+	IsFilled          bool               `json:"is_filled"`
+	NextStrategyIds   []int64            `json:"next_strategy_ids"`
+	NextKeys          []string           `json:"next_keys"`
+	QueueToNotify     string             `json:"queue_to_notify"`
+	ScheduleTimeoutAt pgtype.Timestamp   `json:"schedule_timeout_at"`
+}
+
 type V2Dag struct {
 	ID                int64              `json:"id"`
 	InsertedAt        pgtype.Timestamptz `json:"inserted_at"`
@@ -2043,37 +2105,61 @@ type V2QueueItem struct {
 	Priority          int32            `json:"priority"`
 	Sticky            V2StickyStrategy `json:"sticky"`
 	DesiredWorkerID   pgtype.UUID      `json:"desired_worker_id"`
-	IsQueued          bool             `json:"is_queued"`
 	RetryCount        int32            `json:"retry_count"`
 }
 
+type V2RetryQueueItem struct {
+	TaskID         int64              `json:"task_id"`
+	TaskInsertedAt pgtype.Timestamptz `json:"task_inserted_at"`
+	TaskRetryCount int32              `json:"task_retry_count"`
+	RetryAfter     pgtype.Timestamptz `json:"retry_after"`
+	TenantID       pgtype.UUID        `json:"tenant_id"`
+}
+
+type V2StepConcurrency struct {
+	ID                int64                 `json:"id"`
+	WorkflowID        pgtype.UUID           `json:"workflow_id"`
+	WorkflowVersionID pgtype.UUID           `json:"workflow_version_id"`
+	StepID            pgtype.UUID           `json:"step_id"`
+	IsActive          bool                  `json:"is_active"`
+	Strategy          V2ConcurrencyStrategy `json:"strategy"`
+	Expression        string                `json:"expression"`
+	TenantID          pgtype.UUID           `json:"tenant_id"`
+	MaxConcurrency    int32                 `json:"max_concurrency"`
+}
+
 type V2Task struct {
-	ID                 int64              `json:"id"`
-	InsertedAt         pgtype.Timestamptz `json:"inserted_at"`
-	TenantID           pgtype.UUID        `json:"tenant_id"`
-	Queue              string             `json:"queue"`
-	ActionID           string             `json:"action_id"`
-	StepID             pgtype.UUID        `json:"step_id"`
-	StepReadableID     string             `json:"step_readable_id"`
-	WorkflowID         pgtype.UUID        `json:"workflow_id"`
-	ScheduleTimeout    string             `json:"schedule_timeout"`
-	StepTimeout        pgtype.Text        `json:"step_timeout"`
-	Priority           pgtype.Int4        `json:"priority"`
-	Sticky             V2StickyStrategy   `json:"sticky"`
-	DesiredWorkerID    pgtype.UUID        `json:"desired_worker_id"`
-	ExternalID         pgtype.UUID        `json:"external_id"`
-	DisplayName        string             `json:"display_name"`
-	Input              []byte             `json:"input"`
-	RetryCount         int32              `json:"retry_count"`
-	InternalRetryCount int32              `json:"internal_retry_count"`
-	AppRetryCount      int32              `json:"app_retry_count"`
-	AdditionalMetadata []byte             `json:"additional_metadata"`
-	DagID              pgtype.Int8        `json:"dag_id"`
-	DagInsertedAt      pgtype.Timestamptz `json:"dag_inserted_at"`
-	ParentExternalID   pgtype.UUID        `json:"parent_external_id"`
-	ChildIndex         pgtype.Int4        `json:"child_index"`
-	ChildKey           pgtype.Text        `json:"child_key"`
-	InitialState       V2TaskInitialState `json:"initial_state"`
+	ID                     int64              `json:"id"`
+	InsertedAt             pgtype.Timestamptz `json:"inserted_at"`
+	TenantID               pgtype.UUID        `json:"tenant_id"`
+	Queue                  string             `json:"queue"`
+	ActionID               string             `json:"action_id"`
+	StepID                 pgtype.UUID        `json:"step_id"`
+	StepReadableID         string             `json:"step_readable_id"`
+	WorkflowID             pgtype.UUID        `json:"workflow_id"`
+	ScheduleTimeout        string             `json:"schedule_timeout"`
+	StepTimeout            pgtype.Text        `json:"step_timeout"`
+	Priority               pgtype.Int4        `json:"priority"`
+	Sticky                 V2StickyStrategy   `json:"sticky"`
+	DesiredWorkerID        pgtype.UUID        `json:"desired_worker_id"`
+	ExternalID             pgtype.UUID        `json:"external_id"`
+	DisplayName            string             `json:"display_name"`
+	Input                  []byte             `json:"input"`
+	RetryCount             int32              `json:"retry_count"`
+	InternalRetryCount     int32              `json:"internal_retry_count"`
+	AppRetryCount          int32              `json:"app_retry_count"`
+	AdditionalMetadata     []byte             `json:"additional_metadata"`
+	DagID                  pgtype.Int8        `json:"dag_id"`
+	DagInsertedAt          pgtype.Timestamptz `json:"dag_inserted_at"`
+	ParentExternalID       pgtype.UUID        `json:"parent_external_id"`
+	ChildIndex             pgtype.Int4        `json:"child_index"`
+	ChildKey               pgtype.Text        `json:"child_key"`
+	InitialState           V2TaskInitialState `json:"initial_state"`
+	InitialStateReason     pgtype.Text        `json:"initial_state_reason"`
+	ConcurrencyStrategyIds []int64            `json:"concurrency_strategy_ids"`
+	ConcurrencyKeys        []string           `json:"concurrency_keys"`
+	RetryBackoffFactor     pgtype.Float8      `json:"retry_backoff_factor"`
+	RetryMaxBackoff        pgtype.Int4        `json:"retry_max_backoff"`
 }
 
 type V2TaskEvent struct {

@@ -28,6 +28,11 @@ func (m *mockLeaseRepo) ListActiveWorkers(ctx context.Context, tenantId pgtype.U
 	return args.Get(0).([]*v2.ListActiveWorkersResult), args.Error(1)
 }
 
+func (m *mockLeaseRepo) ListConcurrencyStrategies(ctx context.Context, tenantId pgtype.UUID) ([]*sqlcv2.V2StepConcurrency, error) {
+	args := m.Called(ctx, tenantId)
+	return args.Get(0).([]*sqlcv2.V2StepConcurrency), args.Error(1)
+}
+
 func (m *mockLeaseRepo) AcquireOrExtendLeases(ctx context.Context, tenantId pgtype.UUID, kind sqlcv2.LeaseKind, resourceIds []string, existingLeases []*sqlcv2.Lease) ([]*sqlcv2.Lease, error) {
 	args := m.Called(ctx, kind, resourceIds, existingLeases)
 	return args.Get(0).([]*sqlcv2.Lease), args.Error(1)
