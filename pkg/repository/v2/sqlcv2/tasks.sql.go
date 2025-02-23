@@ -344,7 +344,7 @@ func (q *Queries) ListTaskPartitionsBeforeDate(ctx context.Context, db DBTX, dat
 
 const listTasks = `-- name: ListTasks :many
 SELECT
-    id, inserted_at, tenant_id, queue, action_id, step_id, step_readable_id, workflow_id, schedule_timeout, step_timeout, priority, sticky, desired_worker_id, external_id, display_name, input, retry_count, internal_retry_count, app_retry_count, additional_metadata, dag_id, dag_inserted_at, parent_external_id, child_index, child_key, initial_state, concurrency_strategy_ids, concurrency_keys, retry_backoff_factor, retry_max_backoff
+    id, inserted_at, tenant_id, queue, action_id, step_id, step_readable_id, workflow_id, schedule_timeout, step_timeout, priority, sticky, desired_worker_id, external_id, display_name, input, retry_count, internal_retry_count, app_retry_count, additional_metadata, dag_id, dag_inserted_at, parent_external_id, child_index, child_key, initial_state, initial_state_reason, concurrency_strategy_ids, concurrency_keys, retry_backoff_factor, retry_max_backoff
 FROM
     v2_task
 WHERE
@@ -393,6 +393,7 @@ func (q *Queries) ListTasks(ctx context.Context, db DBTX, arg ListTasksParams) (
 			&i.ChildIndex,
 			&i.ChildKey,
 			&i.InitialState,
+			&i.InitialStateReason,
 			&i.ConcurrencyStrategyIds,
 			&i.ConcurrencyKeys,
 			&i.RetryBackoffFactor,

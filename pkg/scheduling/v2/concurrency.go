@@ -67,6 +67,7 @@ func newConcurrencyManager(conf *sharedConfig, tenantId pgtype.UUID, strategy *s
 	}
 
 	go c.loopConcurrency(ctx)
+	go c.loopCheckActive(ctx)
 
 	return c
 }
@@ -128,6 +129,42 @@ func (c *ConcurrencyManager) loopConcurrency(ctx context.Context) {
 		c.resultsCh <- &ConcurrencyResults{
 			RunConcurrencyResult: results,
 			TenantId:             c.tenantId,
+		}
+
+		span.End()
+	}
+}
+
+func (c *ConcurrencyManager) loopCheckActive(ctx context.Context) {
+	ticker := time.NewTicker(1 * time.Minute)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+
+		ctx, span := telemetry.NewSpan(ctx, "concurrency-check-active")
+
+		telemetry.WithAttributes(span, telemetry.AttributeKV{
+			Key:   "strategy_id",
+			Value: c.strategy.ID,
+		})
+
+		start := time.Now()
+
+		err := c.repo.UpdateConcurrencyStrategyIsActive(ctx, c.tenantId, c.strategy)
+
+		if err != nil {
+			span.End()
+			c.l.Error().Err(err).Msg("error updating concurrency strategy is_active")
+			continue
+		}
+
+		if time.Since(start) > 100*time.Millisecond {
+			c.l.Warn().
+				Msgf("checking is_active on concurrency strategy %d took longer than 100ms (%s)", c.strategy.ID, time.Since(start))
 		}
 
 		span.End()

@@ -1030,11 +1030,10 @@ func (ns NullV2TaskEventType) Value() (driver.Value, error) {
 type V2TaskInitialState string
 
 const (
-	V2TaskInitialStateCONCURRENCY V2TaskInitialState = "CONCURRENCY"
-	V2TaskInitialStateQUEUED      V2TaskInitialState = "QUEUED"
-	V2TaskInitialStateCANCELLED   V2TaskInitialState = "CANCELLED"
-	V2TaskInitialStateSKIPPED     V2TaskInitialState = "SKIPPED"
-	V2TaskInitialStateFAILED      V2TaskInitialState = "FAILED"
+	V2TaskInitialStateQUEUED    V2TaskInitialState = "QUEUED"
+	V2TaskInitialStateCANCELLED V2TaskInitialState = "CANCELLED"
+	V2TaskInitialStateSKIPPED   V2TaskInitialState = "SKIPPED"
+	V2TaskInitialStateFAILED    V2TaskInitialState = "FAILED"
 )
 
 func (e *V2TaskInitialState) Scan(src interface{}) error {
@@ -2027,6 +2026,7 @@ type V2ConcurrencySlot struct {
 	TenantID          pgtype.UUID        `json:"tenant_id"`
 	WorkflowID        pgtype.UUID        `json:"workflow_id"`
 	StrategyID        int64              `json:"strategy_id"`
+	Priority          int32              `json:"priority"`
 	Key               string             `json:"key"`
 	IsFilled          bool               `json:"is_filled"`
 	NextStrategyIds   []int64            `json:"next_strategy_ids"`
@@ -2154,6 +2154,7 @@ type V2Task struct {
 	ChildIndex             pgtype.Int4        `json:"child_index"`
 	ChildKey               pgtype.Text        `json:"child_key"`
 	InitialState           V2TaskInitialState `json:"initial_state"`
+	InitialStateReason     pgtype.Text        `json:"initial_state_reason"`
 	ConcurrencyStrategyIds []int64            `json:"concurrency_strategy_ids"`
 	ConcurrencyKeys        []string           `json:"concurrency_keys"`
 	RetryBackoffFactor     pgtype.Float8      `json:"retry_backoff_factor"`

@@ -9,7 +9,7 @@ import (
 const createTasks = `-- name: CreateTasks :many
 WITH input AS (
     SELECT
-        tenant_id, queue, action_id, step_id, step_readable_id, workflow_id, schedule_timeout, step_timeout, priority, sticky, desired_worker_id, external_id, display_name, input, retry_count, additional_metadata, initial_state, dag_id, dag_inserted_at, concurrency_strategy_ids, concurrency_keys
+        tenant_id, queue, action_id, step_id, step_readable_id, workflow_id, schedule_timeout, step_timeout, priority, sticky, desired_worker_id, external_id, display_name, input, retry_count, additional_metadata, initial_state, dag_id, dag_inserted_at, concurrency_strategy_ids, concurrency_keys, initial_state_reason
     FROM
         (
             SELECT
@@ -34,7 +34,8 @@ WITH input AS (
                 unnest($18::bigint[]) AS dag_id,
                 unnest($19::timestamptz[]) AS dag_inserted_at,
 				unnest_nd_1d($20::bigint[][]) AS concurrency_strategy_ids,
-				unnest_nd_1d($21::text[][]) AS concurrency_keys
+				unnest_nd_1d($21::text[][]) AS concurrency_keys,
+				unnest($22::text[]) AS initial_state_reason
         ) AS subquery
 )
 INSERT INTO v2_task (
@@ -58,7 +59,8 @@ INSERT INTO v2_task (
     dag_id,
     dag_inserted_at,
 	concurrency_strategy_ids,
-	concurrency_keys
+	concurrency_keys,
+	initial_state_reason
 )
 SELECT
     i.tenant_id,
@@ -81,11 +83,12 @@ SELECT
     i.dag_id,
     i.dag_inserted_at,
 	i.concurrency_strategy_ids,
-	i.concurrency_keys
+	i.concurrency_keys,
+	i.initial_state_reason
 FROM
     input i
 RETURNING
-    id, inserted_at, tenant_id, queue, action_id, step_id, step_readable_id, workflow_id, schedule_timeout, step_timeout, priority, sticky, desired_worker_id, external_id, display_name, input, retry_count, internal_retry_count, app_retry_count, additional_metadata, initial_state, dag_id, dag_inserted_at, concurrency_strategy_ids, concurrency_keys
+    id, inserted_at, tenant_id, queue, action_id, step_id, step_readable_id, workflow_id, schedule_timeout, step_timeout, priority, sticky, desired_worker_id, external_id, display_name, input, retry_count, internal_retry_count, app_retry_count, additional_metadata, initial_state, dag_id, dag_inserted_at, concurrency_strategy_ids, concurrency_keys, initial_state_reason
 `
 
 type CreateTasksParams struct {
@@ -106,6 +109,7 @@ type CreateTasksParams struct {
 	Retrycounts            []int32              `json:"retrycounts"`
 	Additionalmetadatas    [][]byte             `json:"additionalmetadatas"`
 	InitialStates          []string             `json:"initialstates"`
+	InitialStateReasons    []pgtype.Text        `json:"initialStateReasons"`
 	Dagids                 []pgtype.Int8        `json:"dagids"`
 	Daginsertedats         []pgtype.Timestamptz `json:"daginsertedats"`
 	ConcurrencyStrategyIds [][]int64            `json:"concurrencyStrategyIds"`
@@ -135,6 +139,7 @@ func (q *Queries) CreateTasks(ctx context.Context, db DBTX, arg CreateTasksParam
 		arg.Daginsertedats,
 		arg.ConcurrencyStrategyIds,
 		arg.ConcurrencyKeys,
+		arg.InitialStateReasons,
 	)
 	if err != nil {
 		return nil, err
@@ -169,6 +174,7 @@ func (q *Queries) CreateTasks(ctx context.Context, db DBTX, arg CreateTasksParam
 			&i.DagInsertedAt,
 			&i.ConcurrencyStrategyIds,
 			&i.ConcurrencyKeys,
+			&i.InitialStateReason,
 		); err != nil {
 			return nil, err
 		}

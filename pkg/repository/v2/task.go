@@ -755,6 +755,7 @@ func (r *sharedRepository) insertTasks(
 	retryCounts := make([]int32, len(tasks))
 	additionalMetadatas := make([][]byte, len(tasks))
 	initialStates := make([]string, len(tasks))
+	initialStateReasons := make([]pgtype.Text, len(tasks))
 	dagIds := make([]pgtype.Int8, len(tasks))
 	dagInsertedAts := make([]pgtype.Timestamptz, len(tasks))
 	strategyIds := make([][]int64, len(tasks))
@@ -800,7 +801,7 @@ func (r *sharedRepository) insertTasks(
 		}
 
 		// only check for concurrency if the task is in a queued state, otherwise we don't need to
-		// evaluate the expression
+		// evaluate the expression (and it will likely fail if we do)
 		if task.InitialState == sqlcv2.V2TaskInitialStateQUEUED {
 			// if we have a step expression, evaluate the expression
 			if strats, ok := concurrencyStrats[task.StepId]; ok {
@@ -826,7 +827,7 @@ func (r *sharedRepository) insertTasks(
 					))
 
 					if err != nil {
-						failTaskError = fmt.Errorf("failed to parse step expression: %w", err)
+						failTaskError = fmt.Errorf("failed to parse step expression (%s): %w", strat.Expression, err)
 						break
 					}
 
@@ -834,25 +835,26 @@ func (r *sharedRepository) insertTasks(
 						prefix := "expected string output for concurrency key"
 
 						if res.Int != nil {
-							failTaskError = fmt.Errorf("%s, got int", prefix)
+							failTaskError = fmt.Errorf("failed to parse step expression (%s): %s, got int", strat.Expression, prefix)
 							break
 						}
 
-						failTaskError = fmt.Errorf("%s, got unknown type", prefix)
+						failTaskError = fmt.Errorf("failed to parse step expression (%s): %s, got unknown type", strat.Expression, prefix)
 						break
 					}
 
 					taskConcurrencyKeys = append(taskConcurrencyKeys, *res.String)
 					taskStrategyIds = append(taskStrategyIds, strat.ID)
-					initialStates[i] = string(sqlcv2.V2TaskInitialStateCONCURRENCY)
 				}
 
 				if failTaskError != nil {
 					// place the task into a failed state
 					initialStates[i] = string(sqlcv2.V2TaskInitialStateFAILED)
 
-					// TODO: WRITE THE ERROR SOMEWHERE
-					r.l.Error().Err(failTaskError).Msg("failed to evaluate concurrency expression")
+					initialStateReasons[i] = pgtype.Text{
+						String: failTaskError.Error(),
+						Valid:  true,
+					}
 				} else {
 					concurrencyKeys[i] = taskConcurrencyKeys
 					strategyIds[i] = taskStrategyIds
@@ -885,6 +887,7 @@ func (r *sharedRepository) insertTasks(
 		Retrycounts:            retryCounts,
 		Additionalmetadatas:    additionalMetadatas,
 		InitialStates:          initialStates,
+		InitialStateReasons:    initialStateReasons,
 		Dagids:                 dagIds,
 		Daginsertedats:         dagInsertedAts,
 		ConcurrencyStrategyIds: strategyIds,

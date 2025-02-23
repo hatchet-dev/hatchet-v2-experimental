@@ -401,6 +401,10 @@ func (tc *OLAPControllerImpl) handleCreateMonitoringEvent(ctx context.Context, t
 			event.ErrorMessage = sqlchelpers.TextFromStr(eventPayloads[i])
 		case timescalev2.V2EventTypeOlapCANCELLED:
 			event.AdditionalEventMessage = sqlchelpers.TextFromStr(eventMessages[i])
+		default:
+			if eventMessages[i] != "" {
+				event.AdditionalEventMessage = sqlchelpers.TextFromStr(eventMessages[i])
+			}
 		}
 
 		opts = append(opts, event)

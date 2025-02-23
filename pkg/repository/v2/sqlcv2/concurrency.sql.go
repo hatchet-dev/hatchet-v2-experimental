@@ -11,6 +11,77 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const checkStrategyActive = `-- name: CheckStrategyActive :one
+WITH workflow AS (
+    SELECT
+        w."id" as "id",
+        wv."id" as "workflowVersionId",
+        w."tenantId" as "tenantId"
+    FROM
+        "Step" s
+    JOIN
+        "Job" j ON j."id" = s."jobId"
+    JOIN
+        "WorkflowVersion" wv ON wv."id" = j."workflowVersionId"
+    JOIN
+        "Workflow" w ON w."id" = wv."workflowId"
+    WHERE
+        s."id" = $1::uuid
+        AND w."tenantId" = $2::uuid
+        AND w."deletedAt" IS NULL
+        AND wv."deletedAt" IS NULL
+), latest_workflow_version AS (
+    SELECT DISTINCT ON("workflowId")
+        "workflowId",
+        workflowVersions."id" AS "workflowVersionId"
+    FROM
+        "WorkflowVersion" as workflowVersions
+    JOIN
+        workflow ON workflow."id" = workflowVersions."workflowId"
+    WHERE
+        workflow."tenantId" = $2::uuid
+        AND workflowVersions."deletedAt" IS NULL
+    ORDER BY "workflowId", "order" DESC
+    LIMIT 1
+), active_slot AS (
+    SELECT
+        task_id, task_inserted_at, task_retry_count, tenant_id, workflow_id, strategy_id, priority, key, is_filled, next_strategy_ids, next_keys, queue_to_notify, schedule_timeout_at
+    FROM
+        v2_concurrency_slot
+    WHERE
+        tenant_id = $2::uuid AND
+        strategy_id = $3::bigint
+        -- Note we don't check for is_filled=False, because is_filled=True could imply that the task
+        -- gets retried and the slot is still active.
+    LIMIT 1
+), is_active AS (
+    SELECT
+        EXISTS(SELECT 1 FROM workflow) AND
+        (
+            workflow."workflowVersionId" = latest_workflow_version."workflowVersionId" OR
+            EXISTS(SELECT 1 FROM active_slot)
+        ) AS "isActive"
+    FROM
+        workflow, latest_workflow_version
+)
+SELECT COALESCE((SELECT "isActive" FROM is_active), FALSE)::bool AS "isActive"
+`
+
+type CheckStrategyActiveParams struct {
+	Stepid     pgtype.UUID `json:"stepid"`
+	Tenantid   pgtype.UUID `json:"tenantid"`
+	Strategyid int64       `json:"strategyid"`
+}
+
+// A strategy is active if the workflow is not deleted, and it is attached to the latest workflow version or it has
+// at least one concurrency slot that is not filled.
+func (q *Queries) CheckStrategyActive(ctx context.Context, db DBTX, arg CheckStrategyActiveParams) (bool, error) {
+	row := db.QueryRow(ctx, checkStrategyActive, arg.Stepid, arg.Tenantid, arg.Strategyid)
+	var isActive bool
+	err := row.Scan(&isActive)
+	return isActive, err
+}
+
 const concurrencyAdvisoryLock = `-- name: ConcurrencyAdvisoryLock :exec
 SELECT pg_advisory_xact_lock($1::bigint)
 `
@@ -22,13 +93,12 @@ func (q *Queries) ConcurrencyAdvisoryLock(ctx context.Context, db DBTX, key int6
 
 const listActiveConcurrencyStrategies = `-- name: ListActiveConcurrencyStrategies :many
 SELECT
-    DISTINCT ON(tenant_id, step_id, expression) id, workflow_id, step_id, is_active, strategy, expression, tenant_id, max_concurrency
+    id, workflow_id, step_id, is_active, strategy, expression, tenant_id, max_concurrency
 FROM
     v2_step_concurrency
 WHERE
     tenant_id = $1::uuid AND
     is_active = TRUE
-ORDER BY tenant_id, step_id, expression, id DESC
 `
 
 func (q *Queries) ListActiveConcurrencyStrategies(ctx context.Context, db DBTX, tenantid pgtype.UUID) ([]*V2StepConcurrency, error) {
@@ -123,7 +193,18 @@ WITH slots AS (
         v2_concurrency_slot
     WHERE
         tenant_id = $1::uuid AND
-        strategy_id = $2::bigint
+        strategy_id = $2::bigint AND
+        schedule_timeout_at >= NOW()
+), schedule_timeout_slots AS (
+    SELECT
+        task_id, task_inserted_at, task_retry_count, tenant_id, workflow_id, strategy_id, priority, key, is_filled, next_strategy_ids, next_keys, queue_to_notify, schedule_timeout_at
+    FROM
+        v2_concurrency_slot
+    WHERE
+        tenant_id = $1::uuid AND
+        strategy_id = $2::bigint AND
+        schedule_timeout_at < NOW() AND
+        is_filled = FALSE
 ), eligible_running_slots AS (
     SELECT
         task_id,
@@ -141,7 +222,7 @@ WITH slots AS (
         rn <= $3::int
 ), slots_to_cancel AS (
     SELECT
-        task_id, task_inserted_at, task_retry_count, tenant_id, workflow_id, strategy_id, key, is_filled, next_strategy_ids, next_keys, queue_to_notify, schedule_timeout_at
+        task_id, task_inserted_at, task_retry_count, tenant_id, workflow_id, strategy_id, priority, key, is_filled, next_strategy_ids, next_keys, queue_to_notify, schedule_timeout_at
     FROM
         v2_concurrency_slot
     WHERE
@@ -156,11 +237,11 @@ WITH slots AS (
                 eligible_running_slots ers
         )
     ORDER BY
-        task_id ASC, task_inserted_at ASC
+        task_id, task_inserted_at
     FOR UPDATE
 ), slots_to_run AS (
     SELECT
-        task_id, task_inserted_at, task_retry_count, tenant_id, workflow_id, strategy_id, key, is_filled, next_strategy_ids, next_keys, queue_to_notify, schedule_timeout_at
+        task_id, task_inserted_at, task_retry_count, tenant_id, workflow_id, strategy_id, priority, key, is_filled, next_strategy_ids, next_keys, queue_to_notify, schedule_timeout_at
     FROM
         v2_concurrency_slot
     WHERE 
@@ -177,7 +258,7 @@ WITH slots AS (
                 rn, seqnum
         )
     ORDER BY
-        task_id ASC, task_inserted_at ASC
+        task_id, task_inserted_at
     FOR UPDATE
 ), updated_slots AS (
     UPDATE
@@ -193,7 +274,7 @@ WITH slots AS (
         v2_concurrency_slot.key = slots_to_run.key AND
         v2_concurrency_slot.is_filled = FALSE
     RETURNING
-        v2_concurrency_slot.task_id, v2_concurrency_slot.task_inserted_at, v2_concurrency_slot.task_retry_count, v2_concurrency_slot.tenant_id, v2_concurrency_slot.workflow_id, v2_concurrency_slot.strategy_id, v2_concurrency_slot.key, v2_concurrency_slot.is_filled, v2_concurrency_slot.next_strategy_ids, v2_concurrency_slot.next_keys, v2_concurrency_slot.queue_to_notify, v2_concurrency_slot.schedule_timeout_at
+        v2_concurrency_slot.task_id, v2_concurrency_slot.task_inserted_at, v2_concurrency_slot.task_retry_count, v2_concurrency_slot.tenant_id, v2_concurrency_slot.workflow_id, v2_concurrency_slot.strategy_id, v2_concurrency_slot.priority, v2_concurrency_slot.key, v2_concurrency_slot.is_filled, v2_concurrency_slot.next_strategy_ids, v2_concurrency_slot.next_keys, v2_concurrency_slot.queue_to_notify, v2_concurrency_slot.schedule_timeout_at
 ), deleted_slots AS (
     DELETE FROM
         v2_concurrency_slot
@@ -208,13 +289,29 @@ WITH slots AS (
         )
 )
 SELECT
-    task_id, task_inserted_at, task_retry_count, tenant_id, workflow_id, strategy_id, key, is_filled, next_strategy_ids, next_keys, queue_to_notify, schedule_timeout_at,
+    task_id, task_inserted_at, task_retry_count, tenant_id, workflow_id, strategy_id, priority, key, is_filled, next_strategy_ids, next_keys, queue_to_notify, schedule_timeout_at,
+    'SCHEDULING_TIMED_OUT' AS "operation"
+FROM
+    schedule_timeout_slots
+UNION ALL
+SELECT
+    task_id, task_inserted_at, task_retry_count, tenant_id, workflow_id, strategy_id, priority, key, is_filled, next_strategy_ids, next_keys, queue_to_notify, schedule_timeout_at,
     'CANCELLED' AS "operation"
 FROM    
     slots_to_cancel
+WHERE
+    -- not in the schedule_timeout_slots
+    (task_inserted_at, task_id, task_retry_count) NOT IN (
+        SELECT
+            c.task_inserted_at,
+            c.task_id,
+            c.task_retry_count
+        FROM
+            schedule_timeout_slots c
+    )
 UNION ALL
 SELECT
-    task_id, task_inserted_at, task_retry_count, tenant_id, workflow_id, strategy_id, key, is_filled, next_strategy_ids, next_keys, queue_to_notify, schedule_timeout_at,
+    task_id, task_inserted_at, task_retry_count, tenant_id, workflow_id, strategy_id, priority, key, is_filled, next_strategy_ids, next_keys, queue_to_notify, schedule_timeout_at,
     'RUNNING' AS "operation"
 FROM
     updated_slots
@@ -233,6 +330,7 @@ type RunCancelInProgressRow struct {
 	TenantID          pgtype.UUID        `json:"tenant_id"`
 	WorkflowID        pgtype.UUID        `json:"workflow_id"`
 	StrategyID        int64              `json:"strategy_id"`
+	Priority          int32              `json:"priority"`
 	Key               string             `json:"key"`
 	IsFilled          bool               `json:"is_filled"`
 	NextStrategyIds   []int64            `json:"next_strategy_ids"`
@@ -258,6 +356,7 @@ func (q *Queries) RunCancelInProgress(ctx context.Context, db DBTX, arg RunCance
 			&i.TenantID,
 			&i.WorkflowID,
 			&i.StrategyID,
+			&i.Priority,
 			&i.Key,
 			&i.IsFilled,
 			&i.NextStrategyIds,
@@ -292,7 +391,18 @@ WITH slots AS (
         v2_concurrency_slot
     WHERE
         tenant_id = $1::uuid AND
-        strategy_id = $2::bigint
+        strategy_id = $2::bigint AND
+        schedule_timeout_at >= NOW()
+), schedule_timeout_slots AS (
+    SELECT
+        task_id, task_inserted_at, task_retry_count, tenant_id, workflow_id, strategy_id, priority, key, is_filled, next_strategy_ids, next_keys, queue_to_notify, schedule_timeout_at
+    FROM
+        v2_concurrency_slot
+    WHERE
+        tenant_id = $1::uuid AND
+        strategy_id = $2::bigint AND
+        schedule_timeout_at < NOW() AND
+        is_filled = FALSE
 ), eligible_running_slots AS (
     SELECT
         task_id,
@@ -310,7 +420,7 @@ WITH slots AS (
         rn <= $3::int
 ), slots_to_cancel AS (
     SELECT
-        task_id, task_inserted_at, task_retry_count, tenant_id, workflow_id, strategy_id, key, is_filled, next_strategy_ids, next_keys, queue_to_notify, schedule_timeout_at
+        task_id, task_inserted_at, task_retry_count, tenant_id, workflow_id, strategy_id, priority, key, is_filled, next_strategy_ids, next_keys, queue_to_notify, schedule_timeout_at
     FROM
         v2_concurrency_slot
     WHERE
@@ -329,7 +439,7 @@ WITH slots AS (
     FOR UPDATE
 ), slots_to_run AS (
     SELECT
-        task_id, task_inserted_at, task_retry_count, tenant_id, workflow_id, strategy_id, key, is_filled, next_strategy_ids, next_keys, queue_to_notify, schedule_timeout_at
+        task_id, task_inserted_at, task_retry_count, tenant_id, workflow_id, strategy_id, priority, key, is_filled, next_strategy_ids, next_keys, queue_to_notify, schedule_timeout_at
     FROM
         v2_concurrency_slot
     WHERE 
@@ -362,7 +472,7 @@ WITH slots AS (
         v2_concurrency_slot.key = slots_to_run.key AND
         v2_concurrency_slot.is_filled = FALSE
     RETURNING
-        v2_concurrency_slot.task_id, v2_concurrency_slot.task_inserted_at, v2_concurrency_slot.task_retry_count, v2_concurrency_slot.tenant_id, v2_concurrency_slot.workflow_id, v2_concurrency_slot.strategy_id, v2_concurrency_slot.key, v2_concurrency_slot.is_filled, v2_concurrency_slot.next_strategy_ids, v2_concurrency_slot.next_keys, v2_concurrency_slot.queue_to_notify, v2_concurrency_slot.schedule_timeout_at
+        v2_concurrency_slot.task_id, v2_concurrency_slot.task_inserted_at, v2_concurrency_slot.task_retry_count, v2_concurrency_slot.tenant_id, v2_concurrency_slot.workflow_id, v2_concurrency_slot.strategy_id, v2_concurrency_slot.priority, v2_concurrency_slot.key, v2_concurrency_slot.is_filled, v2_concurrency_slot.next_strategy_ids, v2_concurrency_slot.next_keys, v2_concurrency_slot.queue_to_notify, v2_concurrency_slot.schedule_timeout_at
 ), deleted_slots AS (
     DELETE FROM
         v2_concurrency_slot
@@ -377,13 +487,29 @@ WITH slots AS (
         )
 )
 SELECT
-    task_id, task_inserted_at, task_retry_count, tenant_id, workflow_id, strategy_id, key, is_filled, next_strategy_ids, next_keys, queue_to_notify, schedule_timeout_at,
+    task_id, task_inserted_at, task_retry_count, tenant_id, workflow_id, strategy_id, priority, key, is_filled, next_strategy_ids, next_keys, queue_to_notify, schedule_timeout_at,
+    'SCHEDULING_TIMED_OUT' AS "operation"
+FROM
+    schedule_timeout_slots
+UNION ALL
+SELECT
+    task_id, task_inserted_at, task_retry_count, tenant_id, workflow_id, strategy_id, priority, key, is_filled, next_strategy_ids, next_keys, queue_to_notify, schedule_timeout_at,
     'CANCELLED' AS "operation"
 FROM    
     slots_to_cancel
+WHERE
+    -- not in the schedule_timeout_slots
+    (task_inserted_at, task_id, task_retry_count) NOT IN (
+        SELECT
+            c.task_inserted_at,
+            c.task_id,
+            c.task_retry_count
+        FROM
+            schedule_timeout_slots c
+    )
 UNION ALL
 SELECT
-    task_id, task_inserted_at, task_retry_count, tenant_id, workflow_id, strategy_id, key, is_filled, next_strategy_ids, next_keys, queue_to_notify, schedule_timeout_at,
+    task_id, task_inserted_at, task_retry_count, tenant_id, workflow_id, strategy_id, priority, key, is_filled, next_strategy_ids, next_keys, queue_to_notify, schedule_timeout_at,
     'RUNNING' AS "operation"
 FROM
     updated_slots
@@ -402,6 +528,7 @@ type RunCancelNewestRow struct {
 	TenantID          pgtype.UUID        `json:"tenant_id"`
 	WorkflowID        pgtype.UUID        `json:"workflow_id"`
 	StrategyID        int64              `json:"strategy_id"`
+	Priority          int32              `json:"priority"`
 	Key               string             `json:"key"`
 	IsFilled          bool               `json:"is_filled"`
 	NextStrategyIds   []int64            `json:"next_strategy_ids"`
@@ -427,6 +554,7 @@ func (q *Queries) RunCancelNewest(ctx context.Context, db DBTX, arg RunCancelNew
 			&i.TenantID,
 			&i.WorkflowID,
 			&i.StrategyID,
+			&i.Priority,
 			&i.Key,
 			&i.IsFilled,
 			&i.NextStrategyIds,
@@ -452,19 +580,37 @@ WITH slots AS (
         task_inserted_at,
         task_retry_count,
         key,
+        strategy_id,
+        tenant_id,
         is_filled,
-        row_number() OVER (PARTITION BY key ORDER BY task_id ASC, task_inserted_at ASC) AS rn,
-        row_number() OVER (ORDER BY task_id ASC, task_inserted_at ASC) AS seqnum
+        row_number() OVER (PARTITION BY key ORDER BY priority DESC, task_id ASC, task_inserted_at ASC) AS rn,
+        row_number() OVER (ORDER BY priority DESC, task_id ASC, task_inserted_at ASC) AS seqnum
     FROM    
         v2_concurrency_slot
     WHERE
         tenant_id = $1::uuid AND
-        strategy_id = $2::bigint
+        strategy_id = $2::bigint AND
+        schedule_timeout_at >= NOW()
+), schedule_timeout_slots AS (
+    SELECT
+        task_id, task_inserted_at, task_retry_count, tenant_id, workflow_id, strategy_id, priority, key, is_filled, next_strategy_ids, next_keys, queue_to_notify, schedule_timeout_at
+    FROM
+        v2_concurrency_slot
+    WHERE
+        tenant_id = $1::uuid AND
+        strategy_id = $2::bigint AND
+        schedule_timeout_at < NOW() AND
+        is_filled = FALSE
+    ORDER BY
+        task_id, task_inserted_at
+    FOR UPDATE
 ), eligible_slots_per_group AS (
     SELECT
         task_id,
         task_inserted_at,
         task_retry_count,
+        tenant_id,
+        strategy_id,
         key,
         is_filled,
         rn,
@@ -475,15 +621,17 @@ WITH slots AS (
         rn <= $3::int
 ), eligible_slots AS (
     SELECT
-        task_id, task_inserted_at, task_retry_count, tenant_id, workflow_id, strategy_id, key, is_filled, next_strategy_ids, next_keys, queue_to_notify, schedule_timeout_at
+        task_id, task_inserted_at, task_retry_count, tenant_id, workflow_id, strategy_id, priority, key, is_filled, next_strategy_ids, next_keys, queue_to_notify, schedule_timeout_at
     FROM
         v2_concurrency_slot
     WHERE 
-        (task_inserted_at, task_id, task_retry_count) IN (
+        (task_inserted_at, task_id, task_retry_count, tenant_id, strategy_id) IN (
             SELECT
                 es.task_inserted_at,
                 es.task_id,
-                es.task_retry_count
+                es.task_retry_count,
+                es.tenant_id,
+                es.strategy_id
             FROM
                 eligible_slots_per_group es
             ORDER BY
@@ -492,22 +640,48 @@ WITH slots AS (
         )
         AND is_filled = FALSE
     ORDER BY
-        task_inserted_at, task_id
+        task_id, task_inserted_at
     FOR UPDATE
+), updated_slots AS (
+    UPDATE
+        v2_concurrency_slot
+    SET
+        is_filled = TRUE
+    FROM
+        eligible_slots
+    WHERE
+        v2_concurrency_slot.task_id = eligible_slots.task_id AND
+        v2_concurrency_slot.task_inserted_at = eligible_slots.task_inserted_at AND
+        v2_concurrency_slot.task_retry_count = eligible_slots.task_retry_count AND
+        v2_concurrency_slot.tenant_id = eligible_slots.tenant_id AND
+        v2_concurrency_slot.strategy_id = eligible_slots.strategy_id AND
+        v2_concurrency_slot.key = eligible_slots.key
+    RETURNING
+        v2_concurrency_slot.task_id, v2_concurrency_slot.task_inserted_at, v2_concurrency_slot.task_retry_count, v2_concurrency_slot.tenant_id, v2_concurrency_slot.workflow_id, v2_concurrency_slot.strategy_id, v2_concurrency_slot.priority, v2_concurrency_slot.key, v2_concurrency_slot.is_filled, v2_concurrency_slot.next_strategy_ids, v2_concurrency_slot.next_keys, v2_concurrency_slot.queue_to_notify, v2_concurrency_slot.schedule_timeout_at
+), deleted_slots AS (
+    DELETE FROM
+        v2_concurrency_slot
+    WHERE
+        (task_inserted_at, task_id, task_retry_count) IN (
+            SELECT
+                c.task_inserted_at,
+                c.task_id,
+                c.task_retry_count
+            FROM
+                schedule_timeout_slots c
+        )
 )
-UPDATE
-    v2_concurrency_slot
-SET
-    is_filled = TRUE
+SELECT
+    task_id, task_inserted_at, task_retry_count, tenant_id, workflow_id, strategy_id, priority, key, is_filled, next_strategy_ids, next_keys, queue_to_notify, schedule_timeout_at,
+    'SCHEDULING_TIMED_OUT' AS "operation"
 FROM
-    eligible_slots
-WHERE
-    v2_concurrency_slot.task_id = eligible_slots.task_id AND
-    v2_concurrency_slot.task_inserted_at = eligible_slots.task_inserted_at AND
-    v2_concurrency_slot.task_retry_count = eligible_slots.task_retry_count AND
-    v2_concurrency_slot.key = eligible_slots.key
-RETURNING 
-    eligible_slots.task_id, eligible_slots.task_inserted_at, eligible_slots.task_retry_count, eligible_slots.tenant_id, eligible_slots.workflow_id, eligible_slots.strategy_id, eligible_slots.key, eligible_slots.is_filled, eligible_slots.next_strategy_ids, eligible_slots.next_keys, eligible_slots.queue_to_notify, eligible_slots.schedule_timeout_at, v2_concurrency_slot.task_id, v2_concurrency_slot.task_inserted_at, v2_concurrency_slot.task_retry_count, v2_concurrency_slot.tenant_id, v2_concurrency_slot.workflow_id, v2_concurrency_slot.strategy_id, v2_concurrency_slot.key, v2_concurrency_slot.is_filled, v2_concurrency_slot.next_strategy_ids, v2_concurrency_slot.next_keys, v2_concurrency_slot.queue_to_notify, v2_concurrency_slot.schedule_timeout_at
+    schedule_timeout_slots
+UNION ALL
+SELECT
+    task_id, task_inserted_at, task_retry_count, tenant_id, workflow_id, strategy_id, priority, key, is_filled, next_strategy_ids, next_keys, queue_to_notify, schedule_timeout_at,
+    'RUNNING' AS "operation"
+FROM
+    updated_slots
 `
 
 type RunGroupRoundRobinParams struct {
@@ -517,30 +691,20 @@ type RunGroupRoundRobinParams struct {
 }
 
 type RunGroupRoundRobinRow struct {
-	TaskID              int64              `json:"task_id"`
-	TaskInsertedAt      pgtype.Timestamptz `json:"task_inserted_at"`
-	TaskRetryCount      int32              `json:"task_retry_count"`
-	TenantID            pgtype.UUID        `json:"tenant_id"`
-	WorkflowID          pgtype.UUID        `json:"workflow_id"`
-	StrategyID          int64              `json:"strategy_id"`
-	Key                 string             `json:"key"`
-	IsFilled            bool               `json:"is_filled"`
-	NextStrategyIds     []int64            `json:"next_strategy_ids"`
-	NextKeys            []string           `json:"next_keys"`
-	QueueToNotify       string             `json:"queue_to_notify"`
-	ScheduleTimeoutAt   pgtype.Timestamp   `json:"schedule_timeout_at"`
-	TaskID_2            int64              `json:"task_id_2"`
-	TaskInsertedAt_2    pgtype.Timestamptz `json:"task_inserted_at_2"`
-	TaskRetryCount_2    int32              `json:"task_retry_count_2"`
-	TenantID_2          pgtype.UUID        `json:"tenant_id_2"`
-	WorkflowID_2        pgtype.UUID        `json:"workflow_id_2"`
-	StrategyID_2        int64              `json:"strategy_id_2"`
-	Key_2               string             `json:"key_2"`
-	IsFilled_2          bool               `json:"is_filled_2"`
-	NextStrategyIds_2   []int64            `json:"next_strategy_ids_2"`
-	NextKeys_2          []string           `json:"next_keys_2"`
-	QueueToNotify_2     string             `json:"queue_to_notify_2"`
-	ScheduleTimeoutAt_2 pgtype.Timestamp   `json:"schedule_timeout_at_2"`
+	TaskID            int64              `json:"task_id"`
+	TaskInsertedAt    pgtype.Timestamptz `json:"task_inserted_at"`
+	TaskRetryCount    int32              `json:"task_retry_count"`
+	TenantID          pgtype.UUID        `json:"tenant_id"`
+	WorkflowID        pgtype.UUID        `json:"workflow_id"`
+	StrategyID        int64              `json:"strategy_id"`
+	Priority          int32              `json:"priority"`
+	Key               string             `json:"key"`
+	IsFilled          bool               `json:"is_filled"`
+	NextStrategyIds   []int64            `json:"next_strategy_ids"`
+	NextKeys          []string           `json:"next_keys"`
+	QueueToNotify     string             `json:"queue_to_notify"`
+	ScheduleTimeoutAt pgtype.Timestamp   `json:"schedule_timeout_at"`
+	Operation         string             `json:"operation"`
 }
 
 func (q *Queries) RunGroupRoundRobin(ctx context.Context, db DBTX, arg RunGroupRoundRobinParams) ([]*RunGroupRoundRobinRow, error) {
@@ -559,24 +723,14 @@ func (q *Queries) RunGroupRoundRobin(ctx context.Context, db DBTX, arg RunGroupR
 			&i.TenantID,
 			&i.WorkflowID,
 			&i.StrategyID,
+			&i.Priority,
 			&i.Key,
 			&i.IsFilled,
 			&i.NextStrategyIds,
 			&i.NextKeys,
 			&i.QueueToNotify,
 			&i.ScheduleTimeoutAt,
-			&i.TaskID_2,
-			&i.TaskInsertedAt_2,
-			&i.TaskRetryCount_2,
-			&i.TenantID_2,
-			&i.WorkflowID_2,
-			&i.StrategyID_2,
-			&i.Key_2,
-			&i.IsFilled_2,
-			&i.NextStrategyIds_2,
-			&i.NextKeys_2,
-			&i.QueueToNotify_2,
-			&i.ScheduleTimeoutAt_2,
+			&i.Operation,
 		); err != nil {
 			return nil, err
 		}
@@ -586,4 +740,26 @@ func (q *Queries) RunGroupRoundRobin(ctx context.Context, db DBTX, arg RunGroupR
 		return nil, err
 	}
 	return items, nil
+}
+
+const setConcurrencyStrategyInactive = `-- name: SetConcurrencyStrategyInactive :exec
+UPDATE
+    v2_step_concurrency
+SET
+    is_active = FALSE
+WHERE
+    workflow_id = $1::uuid AND
+    step_id = $2::uuid AND
+    id = $3::bigint
+`
+
+type SetConcurrencyStrategyInactiveParams struct {
+	Workflowid pgtype.UUID `json:"workflowid"`
+	Stepid     pgtype.UUID `json:"stepid"`
+	Strategyid int64       `json:"strategyid"`
+}
+
+func (q *Queries) SetConcurrencyStrategyInactive(ctx context.Context, db DBTX, arg SetConcurrencyStrategyInactiveParams) error {
+	_, err := db.Exec(ctx, setConcurrencyStrategyInactive, arg.Workflowid, arg.Stepid, arg.Strategyid)
+	return err
 }

@@ -82,7 +82,7 @@ CREATE TABLE v2_queue (
 
 CREATE TYPE v2_sticky_strategy AS ENUM ('NONE', 'SOFT', 'HARD');
 
-CREATE TYPE v2_task_initial_state AS ENUM ('CONCURRENCY', 'QUEUED', 'CANCELLED', 'SKIPPED', 'FAILED');
+CREATE TYPE v2_task_initial_state AS ENUM ('QUEUED', 'CANCELLED', 'SKIPPED', 'FAILED');
 
 -- We need a NONE strategy to allow for tasks which were previously using a concurrency strategy to
 -- enqueue if the strategy is removed.
@@ -176,6 +176,7 @@ CREATE TABLE v2_task (
     child_index INTEGER,
     child_key TEXT,
     initial_state v2_task_initial_state NOT NULL DEFAULT 'QUEUED',
+    initial_state_reason TEXT,
     concurrency_strategy_ids BIGINT[],
     concurrency_keys TEXT[],
     retry_backoff_factor DOUBLE PRECISION,
@@ -363,16 +364,17 @@ CREATE TABLE v2_concurrency_slot (
     tenant_id UUID NOT NULL,
     workflow_id UUID NOT NULL,
     strategy_id BIGINT NOT NULL,
+    priority INTEGER NOT NULL DEFAULT 1,
     key TEXT NOT NULL,
     is_filled BOOLEAN NOT NULL DEFAULT FALSE,
     next_strategy_ids BIGINT[],
     next_keys TEXT[],
     queue_to_notify TEXT NOT NULL,
     schedule_timeout_at TIMESTAMP(3) NOT NULL,
-    CONSTRAINT v2_concurrency_slot_pkey PRIMARY KEY (task_inserted_at, task_id, task_retry_count, key)
+    CONSTRAINT v2_concurrency_slot_pkey PRIMARY KEY (task_id, task_inserted_at, task_retry_count, strategy_id)
 ) PARTITION BY RANGE(task_inserted_at);
 
-CREATE INDEX v2_concurrency_slot_query_idx ON v2_concurrency_slot (tenant_id, strategy_id ASC, key ASC, task_inserted_at ASC);
+CREATE INDEX v2_concurrency_slot_query_idx ON v2_concurrency_slot (tenant_id, strategy_id ASC, key ASC, priority DESC);
 
 CREATE OR REPLACE FUNCTION delete_concurrency_slots_on_v2_task_runtime_delete()
 RETURNS trigger AS $$
@@ -430,6 +432,7 @@ BEGIN
             inserted_at,
             retry_count,
             tenant_id,
+            priority, 
             concurrency_strategy_ids[1] AS strategy_id,
             CASE
                 WHEN array_length(concurrency_strategy_ids, 1) > 1 THEN concurrency_strategy_ids[2:array_length(concurrency_strategy_ids, 1)]
@@ -444,7 +447,7 @@ BEGIN
             queue,
             CURRENT_TIMESTAMP + convert_duration_to_interval(schedule_timeout) AS schedule_timeout_at
         FROM new_table
-        WHERE initial_state = 'CONCURRENCY'
+        WHERE initial_state = 'QUEUED' AND concurrency_strategy_ids[1] IS NOT NULL
     )
     INSERT INTO v2_concurrency_slot (
         task_id,
@@ -454,6 +457,7 @@ BEGIN
         workflow_id,
         strategy_id,
         next_strategy_ids,
+        priority,
         key,
         next_keys,
         queue_to_notify,
@@ -467,6 +471,7 @@ BEGIN
         workflow_id,
         strategy_id,
         next_strategy_ids,
+        COALESCE(priority, 1),
         key,
         next_keys,
         queue,
@@ -501,7 +506,7 @@ BEGIN
         desired_worker_id,
         retry_count
     FROM new_table
-    WHERE initial_state = 'QUEUED';
+    WHERE initial_state = 'QUEUED' AND concurrency_strategy_ids[1] IS NULL;
 
     INSERT INTO v2_dag_to_task (
         dag_id,
@@ -538,6 +543,7 @@ BEGIN
             nt.inserted_at,
             nt.retry_count,
             nt.tenant_id,
+            nt.priority,
             nt.concurrency_strategy_ids[1] AS strategy_id,
             CASE
                 WHEN array_length(nt.concurrency_strategy_ids, 1) > 1 THEN nt.concurrency_strategy_ids[2:array_length(nt.concurrency_strategy_ids, 1)]
@@ -553,8 +559,9 @@ BEGIN
             CURRENT_TIMESTAMP + convert_duration_to_interval(nt.schedule_timeout) AS schedule_timeout_at
         FROM new_table nt
         JOIN old_table ot ON ot.id = nt.id
-        WHERE nt.initial_state = 'CONCURRENCY'
-          AND ot.retry_count IS DISTINCT FROM nt.retry_count
+        WHERE nt.initial_state = 'QUEUED'
+            AND nt.concurrency_strategy_ids[1] IS NOT NULL
+            AND ot.retry_count IS DISTINCT FROM nt.retry_count
     )
     INSERT INTO v2_concurrency_slot (
         task_id,
@@ -564,6 +571,7 @@ BEGIN
         workflow_id,
         strategy_id,
         next_strategy_ids,
+        priority,
         key,
         next_keys,
         queue_to_notify,
@@ -577,6 +585,7 @@ BEGIN
         workflow_id,
         strategy_id,
         next_strategy_ids,
+        COALESCE(priority, 1),
         key,
         next_keys,
         queue,
@@ -613,7 +622,8 @@ BEGIN
     FROM new_table nt
     JOIN old_table ot ON ot.id = nt.id
     WHERE nt.initial_state = 'QUEUED'
-      AND ot.retry_count IS DISTINCT FROM nt.retry_count;
+        AND nt.concurrency_strategy_ids[1] IS NULL
+        AND ot.retry_count IS DISTINCT FROM nt.retry_count;
 
     RETURN NULL;
 END;
@@ -637,6 +647,8 @@ BEGIN
             t.inserted_at,
             t.retry_count,
             t.tenant_id,
+            t.priority,
+            t.queue,
             nt.next_strategy_ids[1] AS strategy_id,
             CASE
                 WHEN array_length(nt.next_strategy_ids, 1) > 1 THEN nt.next_strategy_ids[2:array_length(nt.next_strategy_ids, 1)]
@@ -665,9 +677,11 @@ BEGIN
         workflow_id,
         strategy_id,
         next_strategy_ids,
+        priority,
         key,
         next_keys,
-        schedule_timeout_at
+        schedule_timeout_at,
+        queue_to_notify
     )
     SELECT
         id,
@@ -677,9 +691,11 @@ BEGIN
         workflow_id,
         strategy_id,
         next_strategy_ids,
+        COALESCE(priority, 1),
         key,
         next_keys,
-        schedule_timeout_at
+        schedule_timeout_at,
+        queue
     FROM new_slot_rows;
 
     -- If the concurrency slot does not have next_keys, insert an item into v2_queue_item

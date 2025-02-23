@@ -3,6 +3,7 @@ package v2
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -55,6 +56,9 @@ type createDAGOpts struct {
 
 	// (required) the workflow version id for this DAG
 	WorkflowVersionId string
+
+	// (required) the name of the workflow
+	WorkflowName string
 
 	// (optional) the additional metadata for the DAG
 	AdditionalMetadata []byte
@@ -116,6 +120,7 @@ func (r *TriggerRepositoryImpl) TriggerFromEvents(ctx context.Context, tenantId 
 			triggerOpts = append(triggerOpts, triggerTuple{
 				workflowVersionId:  sqlchelpers.UUIDToStr(workflow.WorkflowVersionId),
 				workflowId:         sqlchelpers.UUIDToStr(workflow.WorkflowId),
+				workflowName:       workflow.WorkflowName,
 				externalId:         uuid.NewString(),
 				input:              opt.Data,
 				additionalMetadata: opt.AdditionalMetadata,
@@ -166,6 +171,7 @@ func (r *TriggerRepositoryImpl) TriggerFromWorkflowNames(ctx context.Context, te
 			triggerOpts = append(triggerOpts, triggerTuple{
 				workflowVersionId:  sqlchelpers.UUIDToStr(workflowVersion.WorkflowVersionId),
 				workflowId:         sqlchelpers.UUIDToStr(workflowVersion.WorkflowId),
+				workflowName:       workflowVersion.WorkflowName,
 				externalId:         opt.ExternalId,
 				input:              opt.Data,
 				additionalMetadata: opt.AdditionalMetadata,
@@ -183,6 +189,8 @@ type triggerTuple struct {
 	workflowVersionId string
 
 	workflowId string
+
+	workflowName string
 
 	externalId string
 
@@ -400,6 +408,7 @@ func (r *TriggerRepositoryImpl) triggerWorkflows(ctx context.Context, tenantId s
 				TaskIds:            dagToTaskIds[tuple.externalId],
 				WorkflowId:         tuple.workflowId,
 				WorkflowVersionId:  tuple.workflowVersionId,
+				WorkflowName:       tuple.workflowName,
 				AdditionalMetadata: tuple.additionalMetadata,
 			})
 		}
@@ -483,10 +492,12 @@ func (r *TriggerRepositoryImpl) createDAGs(ctx context.Context, tx sqlcv2.DBTX, 
 	workflowVersionIds := make([]pgtype.UUID, 0, len(opts))
 	dagIdToOpt := make(map[string]createDAGOpts, 0)
 
+	unix := time.Now().UnixMilli()
+
 	for _, opt := range opts {
 		tenantIds = append(tenantIds, sqlchelpers.UUIDFromStr(tenantId))
 		externalIds = append(externalIds, sqlchelpers.UUIDFromStr(opt.ExternalId))
-		displayNames = append(displayNames, opt.ExternalId)
+		displayNames = append(displayNames, fmt.Sprintf("%s-%d", opt.WorkflowName, unix))
 		workflowIds = append(workflowIds, sqlchelpers.UUIDFromStr(opt.WorkflowId))
 		workflowVersionIds = append(workflowVersionIds, sqlchelpers.UUIDFromStr(opt.WorkflowVersionId))
 		dagIdToOpt[opt.ExternalId] = opt

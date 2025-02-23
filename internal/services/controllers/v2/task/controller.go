@@ -286,12 +286,12 @@ func (tc *TasksControllerImpl) handleBufferedMsgs(tenantId, msgId string, payloa
 		return tc.handleTaskCompleted(context.Background(), tenantId, payloads)
 	case "task-failed":
 		return tc.handleTaskFailed(context.Background(), tenantId, payloads)
-	case "replay-task":
-		// return ec.handleStepRunReplay(ctx, task)
 	case "task-cancelled":
 		return tc.handleTaskCancelled(context.Background(), tenantId, payloads)
 	case "user-event":
-		return tc.handleProcessEventTrigger(context.Background(), tenantId, payloads)
+		return tc.handleProcessUserEvents(context.Background(), tenantId, payloads)
+	case "internal-event":
+		return tc.handleProcessInternalEvents(context.Background(), tenantId, payloads)
 	case "task-trigger":
 		return tc.handleProcessTaskTrigger(context.Background(), tenantId, payloads)
 	}
@@ -320,7 +320,7 @@ func (tc *TasksControllerImpl) handleTaskCompleted(ctx context.Context, tenantId
 		return err
 	}
 
-	internalEvents := make([]internalEvent, 0)
+	internalEvents := make([]tasktypes.InternalEventTaskPayload, 0)
 
 	for _, task := range releasedTasks {
 		taskExternalId := sqlchelpers.UUIDToStr(task.ExternalID)
@@ -332,7 +332,7 @@ func (tc *TasksControllerImpl) handleTaskCompleted(ctx context.Context, tenantId
 
 		dataBytes, _ := json.Marshal(data)
 
-		internalEvents = append(internalEvents, internalEvent{
+		internalEvents = append(internalEvents, tasktypes.InternalEventTaskPayload{
 			EventTimestamp: time.Now(),
 			EventKey:       v2.GetTaskCompletedEventKey(taskExternalId),
 			EventData:      dataBytes,
@@ -341,7 +341,7 @@ func (tc *TasksControllerImpl) handleTaskCompleted(ctx context.Context, tenantId
 
 	tc.notifyQueuesOnCompletion(ctx, tenantId, releasedTasks)
 
-	return tc.processInternalEvents(ctx, tenantId, internalEvents)
+	return tc.sendInternalEvents(ctx, tenantId, internalEvents)
 }
 
 func (tc *TasksControllerImpl) handleTaskFailed(ctx context.Context, tenantId string, payloads [][]byte) error {
@@ -376,7 +376,7 @@ func (tc *TasksControllerImpl) handleTaskFailed(ctx context.Context, tenantId st
 		retriedTaskIds[task.Id] = struct{}{}
 	}
 
-	internalEvents := make([]internalEvent, 0)
+	internalEvents := make([]tasktypes.InternalEventTaskPayload, 0)
 
 	for _, task := range failedTasks {
 		// if the task is retried, don't send a message to the trigger queue
@@ -393,7 +393,7 @@ func (tc *TasksControllerImpl) handleTaskFailed(ctx context.Context, tenantId st
 
 		dataBytes, _ := json.Marshal(data)
 
-		internalEvents = append(internalEvents, internalEvent{
+		internalEvents = append(internalEvents, tasktypes.InternalEventTaskPayload{
 			EventTimestamp: time.Now(),
 			EventKey:       v2.GetTaskFailedEventKey(taskExternalId),
 			EventData:      dataBytes,
@@ -403,7 +403,7 @@ func (tc *TasksControllerImpl) handleTaskFailed(ctx context.Context, tenantId st
 	tc.notifyQueuesOnCompletion(ctx, tenantId, failedTasks)
 
 	// TODO: MOVE THIS TO THE DATA LAYER?
-	err = tc.processInternalEvents(ctx, tenantId, internalEvents)
+	err = tc.sendInternalEvents(ctx, tenantId, internalEvents)
 
 	if err != nil {
 		return err
@@ -485,7 +485,7 @@ func (tc *TasksControllerImpl) handleTaskCancelled(ctx context.Context, tenantId
 		return fmt.Errorf("could not send task cancellations to dispatcher: %w", err)
 	}
 
-	internalEvents := make([]internalEvent, 0)
+	internalEvents := make([]tasktypes.InternalEventTaskPayload, 0)
 
 	for _, task := range allTasks {
 		taskExternalId := sqlchelpers.UUIDToStr(task.ExternalID)
@@ -497,7 +497,7 @@ func (tc *TasksControllerImpl) handleTaskCancelled(ctx context.Context, tenantId
 
 		dataBytes, _ := json.Marshal(data)
 
-		internalEvents = append(internalEvents, internalEvent{
+		internalEvents = append(internalEvents, tasktypes.InternalEventTaskPayload{
 			EventTimestamp: time.Now(),
 			EventKey:       v2.GetTaskCancelledEventKey(taskExternalId),
 			EventData:      dataBytes,
@@ -507,7 +507,7 @@ func (tc *TasksControllerImpl) handleTaskCancelled(ctx context.Context, tenantId
 	tc.notifyQueuesOnCompletion(ctx, tenantId, releasedTasks)
 
 	// TODO: MOVE THIS TO THE DATA LAYER?
-	err = tc.processInternalEvents(ctx, tenantId, internalEvents)
+	err = tc.sendInternalEvents(ctx, tenantId, internalEvents)
 
 	if err != nil {
 		return err
@@ -634,8 +634,8 @@ func (tc *TasksControllerImpl) notifyQueuesOnCompletion(ctx context.Context, ten
 	}
 }
 
-// handleProcessEventTrigger is responsible for inserting tasks into the database based on event triggers.
-func (tc *TasksControllerImpl) handleProcessEventTrigger(ctx context.Context, tenantId string, payloads [][]byte) error {
+// handleProcessUserEvents is responsible for inserting tasks into the database based on event triggers.
+func (tc *TasksControllerImpl) handleProcessUserEvents(ctx context.Context, tenantId string, payloads [][]byte) error {
 	msgs := msgqueue.JSONConvert[tasktypes.UserEventTaskPayload](payloads)
 
 	eg := &errgroup.Group{}
@@ -671,13 +671,30 @@ func (tc *TasksControllerImpl) handleProcessUserEventTrigger(ctx context.Context
 		return fmt.Errorf("could not trigger tasks from events: %w", err)
 	}
 
-	return tc.signalTasksCreated(ctx, tenantId, tasks, dags)
+	eg := &errgroup.Group{}
+
+	eg.Go(func() error {
+		return tc.signalTasksCreated(ctx, tenantId, tasks)
+	})
+
+	eg.Go(func() error {
+		return tc.signalDAGsCreated(ctx, tenantId, dags)
+	})
+
+	return eg.Wait()
 }
 
-// handleProcessUserEventMatches is responsible for triggering tasks based on user event matches.
+// handleProcessUserEventMatches is responsible for signaling or creating tasks based on user event matches.
 func (tc *TasksControllerImpl) handleProcessUserEventMatches(ctx context.Context, tenantId string, payloads []*tasktypes.UserEventTaskPayload) error {
 	// tc.l.Error().Msg("not implemented")
 	return nil
+}
+
+// handleProcessEventTrigger is responsible for inserting tasks into the database based on event triggers.
+func (tc *TasksControllerImpl) handleProcessInternalEvents(ctx context.Context, tenantId string, payloads [][]byte) error {
+	msgs := msgqueue.JSONConvert[tasktypes.InternalEventTaskPayload](payloads)
+
+	return tc.processInternalEvents(ctx, tenantId, msgs)
 }
 
 // handleProcessEventTrigger is responsible for inserting tasks into the database based on event triggers.
@@ -704,17 +721,39 @@ func (tc *TasksControllerImpl) handleProcessTaskTrigger(ctx context.Context, ten
 		return fmt.Errorf("could not trigger workflows from names: %w", err)
 	}
 
-	return tc.signalTasksCreated(ctx, tenantId, tasks, dags)
+	eg := &errgroup.Group{}
+
+	eg.Go(func() error {
+		return tc.signalTasksCreated(ctx, tenantId, tasks)
+	})
+
+	eg.Go(func() error {
+		return tc.signalDAGsCreated(ctx, tenantId, dags)
+	})
+
+	return eg.Wait()
 }
 
-type internalEvent struct {
-	EventTimestamp time.Time `json:"event_timestamp" validate:"required"`
-	EventKey       string    `json:"event_key" validate:"required"`
-	EventData      []byte    `json:"event_data" validate:"required"`
+func (tc *TasksControllerImpl) sendInternalEvents(ctx context.Context, tenantId string, events []tasktypes.InternalEventTaskPayload) error {
+	if len(events) == 0 {
+		return nil
+	}
+
+	msg, err := tasktypes.NewInternalEventMessage(tenantId, time.Now(), events...)
+
+	if err != nil {
+		return fmt.Errorf("could not create internal event message: %w", err)
+	}
+
+	return tc.mq.SendMessage(
+		ctx,
+		msgqueue.TASK_PROCESSING_QUEUE,
+		msg,
+	)
 }
 
 // handleProcessUserEventMatches is responsible for triggering tasks based on user event matches.
-func (tc *TasksControllerImpl) processInternalEvents(ctx context.Context, tenantId string, events []internalEvent) error {
+func (tc *TasksControllerImpl) processInternalEvents(ctx context.Context, tenantId string, events []*tasktypes.InternalEventTaskPayload) error {
 	candidateMatches := make([]v2.CandidateEventMatch, 0)
 
 	for _, event := range events {
@@ -732,34 +771,138 @@ func (tc *TasksControllerImpl) processInternalEvents(ctx context.Context, tenant
 		return fmt.Errorf("could not process internal event matches: %w", err)
 	}
 
-	if len(matchResult.CreatedQueuedTasks) > 0 {
-		err = tc.signalTasksCreated(ctx, tenantId, matchResult.CreatedQueuedTasks, nil)
+	if len(matchResult.CreatedTasks) > 0 {
+		err = tc.signalTasksCreated(ctx, tenantId, matchResult.CreatedTasks)
 
 		if err != nil {
 			return fmt.Errorf("could not signal created tasks: %w", err)
 		}
 	}
 
-	if len(matchResult.CreatedCancelledTasks) > 0 {
-		err = tc.signalTasksCreatedAndCancelled(ctx, tenantId, matchResult.CreatedCancelledTasks)
+	return nil
+}
+
+func (tc *TasksControllerImpl) signalDAGsCreated(ctx context.Context, tenantId string, dags []*v2.DAGWithData) error {
+	// notify that tasks have been created
+	// TODO: make this transactionally safe?
+	for _, dag := range dags {
+		dagCp := dag
+		msg, err := tasktypes.CreatedDAGMessage(tenantId, dagCp)
 
 		if err != nil {
-			return fmt.Errorf("could not signal cancelled tasks: %w", err)
+			tc.l.Err(err).Msg("could not create message for olap queue")
+			continue
 		}
-	}
 
-	if len(matchResult.CreatedSkippedTasks) > 0 {
-		err = tc.signalTasksCreatedAndSkipped(ctx, tenantId, matchResult.CreatedSkippedTasks)
+		err = tc.pubBuffer.Pub(
+			ctx,
+			msgqueue.OLAP_QUEUE,
+			msg,
+			false,
+		)
 
 		if err != nil {
-			return fmt.Errorf("could not signal skipped tasks: %w", err)
+			tc.l.Err(err).Msg("could not add message to olap queue")
+			continue
 		}
 	}
 
 	return nil
 }
 
-func (tc *TasksControllerImpl) signalTasksCreated(ctx context.Context, tenantId string, tasks []*sqlcv2.V2Task, dags []*v2.DAGWithData) error {
+func (tc *TasksControllerImpl) signalTasksCreated(ctx context.Context, tenantId string, tasks []*sqlcv2.V2Task) error {
+	// group tasks by initial states
+	queuedTasks := make([]*sqlcv2.V2Task, 0)
+	failedTasks := make([]*sqlcv2.V2Task, 0)
+	cancelledTasks := make([]*sqlcv2.V2Task, 0)
+	skippedTasks := make([]*sqlcv2.V2Task, 0)
+
+	for _, task := range tasks {
+		switch task.InitialState {
+		case sqlcv2.V2TaskInitialStateQUEUED:
+			queuedTasks = append(queuedTasks, task)
+		case sqlcv2.V2TaskInitialStateFAILED:
+			failedTasks = append(failedTasks, task)
+		case sqlcv2.V2TaskInitialStateCANCELLED:
+			cancelledTasks = append(cancelledTasks, task)
+		case sqlcv2.V2TaskInitialStateSKIPPED:
+			skippedTasks = append(skippedTasks, task)
+		}
+
+		msg, err := tasktypes.CreatedTaskMessage(tenantId, task)
+
+		if err != nil {
+			tc.l.Err(err).Msg("could not create message for olap queue")
+			continue
+		}
+
+		err = tc.pubBuffer.Pub(
+			ctx,
+			msgqueue.OLAP_QUEUE,
+			msg,
+			false,
+		)
+
+		if err != nil {
+			tc.l.Err(err).Msg("could not add message to olap queue")
+			continue
+		}
+	}
+
+	eg := &errgroup.Group{}
+
+	if len(queuedTasks) > 0 {
+		eg.Go(func() error {
+			err := tc.signalTasksCreatedAndQueued(ctx, tenantId, queuedTasks)
+
+			if err != nil {
+				return fmt.Errorf("could not signal created tasks: %w", err)
+			}
+
+			return nil
+		})
+	}
+
+	if len(failedTasks) > 0 {
+		eg.Go(func() error {
+			err := tc.signalTasksCreatedAndFailed(ctx, tenantId, failedTasks)
+
+			if err != nil {
+				return fmt.Errorf("could not signal created tasks: %w", err)
+			}
+
+			return nil
+		})
+	}
+
+	if len(cancelledTasks) > 0 {
+		eg.Go(func() error {
+			err := tc.signalTasksCreatedAndCancelled(ctx, tenantId, cancelledTasks)
+
+			if err != nil {
+				return fmt.Errorf("could not signal created tasks: %w", err)
+			}
+
+			return nil
+		})
+	}
+
+	if len(skippedTasks) > 0 {
+		eg.Go(func() error {
+			err := tc.signalTasksCreatedAndSkipped(ctx, tenantId, skippedTasks)
+
+			if err != nil {
+				return fmt.Errorf("could not signal created tasks: %w", err)
+			}
+
+			return nil
+		})
+	}
+
+	return eg.Wait()
+}
+
+func (tc *TasksControllerImpl) signalTasksCreatedAndQueued(ctx context.Context, tenantId string, tasks []*sqlcv2.V2Task) error {
 	// get all unique queues and notify them
 	queues := make(map[string]struct{})
 
@@ -794,24 +937,14 @@ func (tc *TasksControllerImpl) signalTasksCreated(ctx context.Context, tenantId 
 	// notify that tasks have been created
 	// TODO: make this transactionally safe?
 	for _, task := range tasks {
-		taskCp := task
-		msg, err := tasktypes.CreatedTaskMessage(tenantId, taskCp)
+		msg := ""
 
-		if err != nil {
-			tc.l.Err(err).Msg("could not create message for olap queue")
-			continue
-		}
+		if len(task.ConcurrencyKeys) > 0 {
+			msg = "concurrency keys evaluated as:"
 
-		err = tc.pubBuffer.Pub(
-			ctx,
-			msgqueue.OLAP_QUEUE,
-			msg,
-			false,
-		)
-
-		if err != nil {
-			tc.l.Err(err).Msg("could not add message to olap queue")
-			continue
+			for _, key := range task.ConcurrencyKeys {
+				msg += fmt.Sprintf(" %s", key)
+			}
 		}
 
 		olapMsg, err := tasktypes.MonitoringEventMessageFromInternal(
@@ -821,6 +954,7 @@ func (tc *TasksControllerImpl) signalTasksCreated(ctx context.Context, tenantId 
 				RetryCount:     0,
 				EventType:      timescalev2.V2EventTypeOlapQUEUED,
 				EventTimestamp: time.Now(),
+				EventMessage:   msg,
 			},
 		)
 
@@ -842,35 +976,11 @@ func (tc *TasksControllerImpl) signalTasksCreated(ctx context.Context, tenantId 
 		}
 	}
 
-	// notify that tasks have been created
-	// TODO: make this transactionally safe?
-	for _, dag := range dags {
-		dagCp := dag
-		msg, err := tasktypes.CreatedDAGMessage(tenantId, dagCp)
-
-		if err != nil {
-			tc.l.Err(err).Msg("could not create message for olap queue")
-			continue
-		}
-
-		err = tc.pubBuffer.Pub(
-			ctx,
-			msgqueue.OLAP_QUEUE,
-			msg,
-			false,
-		)
-
-		if err != nil {
-			tc.l.Err(err).Msg("could not add message to olap queue")
-			continue
-		}
-	}
-
 	return nil
 }
 
 func (tc *TasksControllerImpl) signalTasksCreatedAndCancelled(ctx context.Context, tenantId string, tasks []*sqlcv2.V2Task) error {
-	internalEvents := make([]internalEvent, 0)
+	internalEvents := make([]tasktypes.InternalEventTaskPayload, 0)
 
 	for _, task := range tasks {
 		taskExternalId := sqlchelpers.UUIDToStr(task.ExternalID)
@@ -882,16 +992,14 @@ func (tc *TasksControllerImpl) signalTasksCreatedAndCancelled(ctx context.Contex
 
 		dataBytes, _ := json.Marshal(data)
 
-		internalEvents = append(internalEvents, internalEvent{
+		internalEvents = append(internalEvents, tasktypes.InternalEventTaskPayload{
 			EventTimestamp: time.Now(),
 			EventKey:       v2.GetTaskCancelledEventKey(taskExternalId),
 			EventData:      dataBytes,
 		})
 	}
 
-	// TODO: MOVE THIS TO THE DATA LAYER?
-	// !! FIXME: RECURSION HERE
-	err := tc.processInternalEvents(ctx, tenantId, internalEvents)
+	err := tc.sendInternalEvents(ctx, tenantId, internalEvents)
 
 	if err != nil {
 		return err
@@ -900,30 +1008,9 @@ func (tc *TasksControllerImpl) signalTasksCreatedAndCancelled(ctx context.Contex
 	// notify that tasks have been cancelled
 	// TODO: make this transactionally safe?
 	for _, task := range tasks {
-		taskCp := task
-
-		msg, err := tasktypes.CreatedTaskMessage(tenantId, taskCp)
-
-		if err != nil {
-			tc.l.Err(err).Msg("could not create message for olap queue")
-			continue
-		}
-
-		err = tc.pubBuffer.Pub(
-			ctx,
-			msgqueue.OLAP_QUEUE,
-			msg,
-			false,
-		)
-
-		if err != nil {
-			tc.l.Err(err).Msg("could not add message to olap queue")
-			continue
-		}
-
-		msg, err = tasktypes.MonitoringEventMessageFromInternal(tenantId, tasktypes.CreateMonitoringEventPayload{
-			TaskId:         taskCp.ID,
-			RetryCount:     taskCp.RetryCount,
+		msg, err := tasktypes.MonitoringEventMessageFromInternal(tenantId, tasktypes.CreateMonitoringEventPayload{
+			TaskId:         task.ID,
+			RetryCount:     task.RetryCount,
 			EventType:      timescalev2.V2EventTypeOlapCANCELLED,
 			EventTimestamp: time.Now(),
 		})
@@ -950,29 +1037,26 @@ func (tc *TasksControllerImpl) signalTasksCreatedAndCancelled(ctx context.Contex
 }
 
 func (tc *TasksControllerImpl) signalTasksCreatedAndFailed(ctx context.Context, tenantId string, tasks []*sqlcv2.V2Task) error {
-	internalEvents := make([]internalEvent, 0)
+	internalEvents := make([]tasktypes.InternalEventTaskPayload, 0)
 
 	for _, task := range tasks {
 		taskExternalId := sqlchelpers.UUIDToStr(task.ExternalID)
 
 		data := v2.FailedData{
 			StepReadableId: task.StepReadableID,
-			// TODO: GET THE CONCURRENCY KEY ERROR
-			Error: "task failed due to concurrency key error",
+			Error:          task.InitialStateReason.String,
 		}
 
 		dataBytes, _ := json.Marshal(data)
 
-		internalEvents = append(internalEvents, internalEvent{
+		internalEvents = append(internalEvents, tasktypes.InternalEventTaskPayload{
 			EventTimestamp: time.Now(),
 			EventKey:       v2.GetTaskFailedEventKey(taskExternalId),
 			EventData:      dataBytes,
 		})
 	}
 
-	// TODO: MOVE THIS TO THE DATA LAYER?
-	// !! FIXME: RECURSION HERE
-	err := tc.processInternalEvents(ctx, tenantId, internalEvents)
+	err := tc.sendInternalEvents(ctx, tenantId, internalEvents)
 
 	if err != nil {
 		return err
@@ -981,32 +1065,11 @@ func (tc *TasksControllerImpl) signalTasksCreatedAndFailed(ctx context.Context, 
 	// notify that tasks have been cancelled
 	// TODO: make this transactionally safe?
 	for _, task := range tasks {
-		taskCp := task
-
-		msg, err := tasktypes.CreatedTaskMessage(tenantId, taskCp)
-
-		if err != nil {
-			tc.l.Err(err).Msg("could not create message for olap queue")
-			continue
-		}
-
-		err = tc.pubBuffer.Pub(
-			ctx,
-			msgqueue.OLAP_QUEUE,
-			msg,
-			false,
-		)
-
-		if err != nil {
-			tc.l.Err(err).Msg("could not add message to olap queue")
-			continue
-		}
-
-		msg, err = tasktypes.MonitoringEventMessageFromInternal(tenantId, tasktypes.CreateMonitoringEventPayload{
-			TaskId:         taskCp.ID,
-			RetryCount:     taskCp.RetryCount,
+		msg, err := tasktypes.MonitoringEventMessageFromInternal(tenantId, tasktypes.CreateMonitoringEventPayload{
+			TaskId:         task.ID,
+			RetryCount:     task.RetryCount,
 			EventType:      timescalev2.V2EventTypeOlapFAILED,
-			EventPayload:   "task failed due to concurrency key error",
+			EventPayload:   task.InitialStateReason.String,
 			EventTimestamp: time.Now(),
 		})
 
@@ -1032,7 +1095,7 @@ func (tc *TasksControllerImpl) signalTasksCreatedAndFailed(ctx context.Context, 
 }
 
 func (tc *TasksControllerImpl) signalTasksCreatedAndSkipped(ctx context.Context, tenantId string, tasks []*sqlcv2.V2Task) error {
-	internalEvents := make([]internalEvent, 0)
+	internalEvents := make([]tasktypes.InternalEventTaskPayload, 0)
 
 	for _, task := range tasks {
 		taskExternalId := sqlchelpers.UUIDToStr(task.ExternalID)
@@ -1050,16 +1113,14 @@ func (tc *TasksControllerImpl) signalTasksCreatedAndSkipped(ctx context.Context,
 
 		dataBytes, _ := json.Marshal(data)
 
-		internalEvents = append(internalEvents, internalEvent{
+		internalEvents = append(internalEvents, tasktypes.InternalEventTaskPayload{
 			EventTimestamp: time.Now(),
 			EventKey:       v2.GetTaskCompletedEventKey(taskExternalId),
 			EventData:      dataBytes,
 		})
 	}
 
-	// TODO: MOVE THIS TO THE DATA LAYER?
-	// !! FIXME: RECURSION HERE
-	err := tc.processInternalEvents(ctx, tenantId, internalEvents)
+	err := tc.sendInternalEvents(ctx, tenantId, internalEvents)
 
 	if err != nil {
 		return err
@@ -1068,30 +1129,9 @@ func (tc *TasksControllerImpl) signalTasksCreatedAndSkipped(ctx context.Context,
 	// notify that tasks have been cancelled
 	// TODO: make this transactionally safe?
 	for _, task := range tasks {
-		taskCp := task
-
-		msg, err := tasktypes.CreatedTaskMessage(tenantId, taskCp)
-
-		if err != nil {
-			tc.l.Err(err).Msg("could not create message for olap queue")
-			continue
-		}
-
-		err = tc.pubBuffer.Pub(
-			ctx,
-			msgqueue.OLAP_QUEUE,
-			msg,
-			false,
-		)
-
-		if err != nil {
-			tc.l.Err(err).Msg("could not add message to olap queue")
-			continue
-		}
-
-		msg, err = tasktypes.MonitoringEventMessageFromInternal(tenantId, tasktypes.CreateMonitoringEventPayload{
-			TaskId:         taskCp.ID,
-			RetryCount:     taskCp.RetryCount,
+		msg, err := tasktypes.MonitoringEventMessageFromInternal(tenantId, tasktypes.CreateMonitoringEventPayload{
+			TaskId:         task.ID,
+			RetryCount:     task.RetryCount,
 			EventType:      timescalev2.V2EventTypeOlapSKIPPED,
 			EventTimestamp: time.Now(),
 		})

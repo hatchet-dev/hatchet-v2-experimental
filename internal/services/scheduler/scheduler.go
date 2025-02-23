@@ -600,12 +600,20 @@ func (s *Scheduler) notifyAfterConcurrency(ctx context.Context, tenantId string,
 
 	// handle cancellations
 	for _, cancelled := range res.Cancelled {
+		eventType := timescalev2.V2EventTypeOlapCANCELLED
+		shouldNotify := true
+
+		if cancelled.CancelledReason == "SCHEDULING_TIMED_OUT" {
+			eventType = timescalev2.V2EventTypeOlapSCHEDULINGTIMEDOUT
+			shouldNotify = false
+		}
+
 		msg, err := tasktypes.CancelledTaskMessage(
 			tenantId,
 			cancelled.TaskIdRetryCount.Id,
 			cancelled.TaskIdRetryCount.RetryCount,
-			timescalev2.V2EventTypeOlapCANCELLED,
-			true,
+			eventType,
+			shouldNotify,
 		)
 
 		if err != nil {

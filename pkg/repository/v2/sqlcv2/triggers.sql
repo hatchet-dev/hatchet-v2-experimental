@@ -3,7 +3,8 @@
 WITH latest_versions AS (
     SELECT DISTINCT ON("workflowId")
         "workflowId",
-        workflowVersions."id" AS "workflowVersionId"
+        workflowVersions."id" AS "workflowVersionId",
+        workflow."name" AS "workflowName"
     FROM
         "WorkflowVersion" as workflowVersions
     JOIN
@@ -17,6 +18,7 @@ WITH latest_versions AS (
 SELECT
     latest_versions."workflowVersionId",
     latest_versions."workflowId",
+    latest_versions."workflowName",
     eventRef."eventKey" as "eventKey"
 FROM
     latest_versions

@@ -572,7 +572,7 @@ func (q *Queries) ListRecentAssignedEventsForWorker(ctx context.Context, db DBTX
 
 const listSemaphoreSlotsWithStateForWorker = `-- name: ListSemaphoreSlotsWithStateForWorker :many
 SELECT
-    task_id, runtime.retry_count, worker_id, runtime.tenant_id, timeout_at, id, inserted_at, v2_task.tenant_id, queue, action_id, step_id, step_readable_id, workflow_id, schedule_timeout, step_timeout, priority, sticky, desired_worker_id, external_id, display_name, input, v2_task.retry_count, internal_retry_count, app_retry_count, additional_metadata, dag_id, dag_inserted_at, parent_external_id, child_index, child_key, initial_state, concurrency_strategy_ids, concurrency_keys, retry_backoff_factor, retry_max_backoff
+    task_id, runtime.retry_count, worker_id, runtime.tenant_id, timeout_at, id, inserted_at, v2_task.tenant_id, queue, action_id, step_id, step_readable_id, workflow_id, schedule_timeout, step_timeout, priority, sticky, desired_worker_id, external_id, display_name, input, v2_task.retry_count, internal_retry_count, app_retry_count, additional_metadata, dag_id, dag_inserted_at, parent_external_id, child_index, child_key, initial_state, initial_state_reason, concurrency_strategy_ids, concurrency_keys, retry_backoff_factor, retry_max_backoff
 FROM
     v2_task_runtime runtime
 JOIN
@@ -622,6 +622,7 @@ type ListSemaphoreSlotsWithStateForWorkerRow struct {
 	ChildIndex             pgtype.Int4        `json:"child_index"`
 	ChildKey               pgtype.Text        `json:"child_key"`
 	InitialState           V2TaskInitialState `json:"initial_state"`
+	InitialStateReason     pgtype.Text        `json:"initial_state_reason"`
 	ConcurrencyStrategyIds []int64            `json:"concurrency_strategy_ids"`
 	ConcurrencyKeys        []string           `json:"concurrency_keys"`
 	RetryBackoffFactor     pgtype.Float8      `json:"retry_backoff_factor"`
@@ -669,6 +670,7 @@ func (q *Queries) ListSemaphoreSlotsWithStateForWorker(ctx context.Context, db D
 			&i.ChildIndex,
 			&i.ChildKey,
 			&i.InitialState,
+			&i.InitialStateReason,
 			&i.ConcurrencyStrategyIds,
 			&i.ConcurrencyKeys,
 			&i.RetryBackoffFactor,
