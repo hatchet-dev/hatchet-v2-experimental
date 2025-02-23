@@ -22,7 +22,7 @@ import (
 	"github.com/hatchet-dev/hatchet/pkg/repository"
 	"github.com/hatchet-dev/hatchet/pkg/repository/prisma/sqlchelpers"
 	repov2 "github.com/hatchet-dev/hatchet/pkg/repository/v2"
-	"github.com/hatchet-dev/hatchet/pkg/repository/v2/timescalev2"
+	"github.com/hatchet-dev/hatchet/pkg/repository/v2/olapv2"
 	v2 "github.com/hatchet-dev/hatchet/pkg/scheduling/v2"
 )
 
@@ -396,7 +396,7 @@ func (s *Scheduler) scheduleStepRuns(ctx context.Context, tenantId string, res *
 					TaskId:         taskId,
 					RetryCount:     bulkAssigned.QueueItem.RetryCount,
 					WorkerId:       &workerId,
-					EventType:      timescalev2.V2EventTypeOlapASSIGNED,
+					EventType:      olapv2.V2EventTypeOlapASSIGNED,
 					EventTimestamp: time.Now(),
 				},
 			)
@@ -448,7 +448,7 @@ func (s *Scheduler) scheduleStepRuns(ctx context.Context, tenantId string, res *
 				tenantId,
 				schedulingTimedOut.TaskID,
 				schedulingTimedOut.RetryCount,
-				timescalev2.V2EventTypeOlapSCHEDULINGTIMEDOUT,
+				olapv2.V2EventTypeOlapSCHEDULINGTIMEDOUT,
 			)
 
 			if err != nil {
@@ -477,7 +477,7 @@ func (s *Scheduler) scheduleStepRuns(ctx context.Context, tenantId string, res *
 				tasktypes.CreateMonitoringEventPayload{
 					TaskId:         taskId,
 					RetryCount:     unassigned.RetryCount,
-					EventType:      timescalev2.V2EventTypeOlapREQUEUEDNOWORKER,
+					EventType:      olapv2.V2EventTypeOlapREQUEUEDNOWORKER,
 					EventTimestamp: time.Now(),
 				},
 			)

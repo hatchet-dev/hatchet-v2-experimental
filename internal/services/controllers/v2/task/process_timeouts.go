@@ -10,7 +10,7 @@ import (
 	"github.com/hatchet-dev/hatchet/internal/services/shared/tasktypes"
 	"github.com/hatchet-dev/hatchet/internal/telemetry"
 	"github.com/hatchet-dev/hatchet/pkg/repository/prisma/sqlchelpers"
-	"github.com/hatchet-dev/hatchet/pkg/repository/v2/timescalev2"
+	"github.com/hatchet-dev/hatchet/pkg/repository/v2/olapv2"
 )
 
 func (tc *TasksControllerImpl) runTenantTimeoutTasks(ctx context.Context) func() {
@@ -57,7 +57,7 @@ func (tc *TasksControllerImpl) processTaskTimeouts(ctx context.Context, tenantId
 			tasktypes.CreateMonitoringEventPayload{
 				TaskId:         taskId,
 				RetryCount:     task.RetryCount,
-				EventType:      timescalev2.V2EventTypeOlapTIMEDOUT,
+				EventType:      olapv2.V2EventTypeOlapTIMEDOUT,
 				EventTimestamp: time.Now(),
 			},
 		)

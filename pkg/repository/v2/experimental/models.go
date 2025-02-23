@@ -2,7 +2,7 @@
 // versions:
 //   sqlc v1.24.0
 
-package timescalev2
+package experimental
 
 import (
 	"database/sql/driver"
