@@ -96,6 +96,7 @@ type V2WorkflowRunPopulator struct {
 }
 
 type OLAPEventRepository interface {
+	UpdateTablePartitions(ctx context.Context) error
 	ReadTaskRun(ctx context.Context, taskExternalId string) (*olapv2.V2TasksOlap, error)
 	ReadWorkflowRun(ctx context.Context, workflowRunExternalId pgtype.UUID) (*V2WorkflowRunPopulator, error)
 	ReadTaskRunData(ctx context.Context, tenantId pgtype.UUID, taskId int64, taskInsertedAt pgtype.Timestamptz) (*olapv2.PopulateSingleTaskRunDataRow, *pgtype.UUID, error)
@@ -154,46 +155,6 @@ func NewOLAPEventRepository(l *zerolog.Logger) OLAPEventRepository {
 
 	queries := olapv2.New()
 
-	// create partitions of the events OLAP table
-	partitionCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-
-	err = queries.CreateOLAPTaskEventTmpPartitions(partitionCtx, timescalePool, NUM_PARTITIONS)
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	err = queries.CreateOLAPTaskStatusUpdateTmpPartitions(partitionCtx, timescalePool, NUM_PARTITIONS)
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	setupRangePartition(
-		partitionCtx,
-		timescalePool,
-		queries.CreateOLAPTaskPartition,
-		queries.ListOLAPTaskPartitionsBeforeDate,
-		"v2_tasks_olap",
-	)
-
-	setupRangePartition(
-		partitionCtx,
-		timescalePool,
-		queries.CreateOLAPDAGPartition,
-		queries.ListOLAPDAGPartitionsBeforeDate,
-		"v2_dags_olap",
-	)
-
-	setupRangePartition(
-		partitionCtx,
-		timescalePool,
-		queries.CreateOLAPRunsPartition,
-		queries.ListOLAPRunsPartitionsBeforeDate,
-		"v2_runs_olap",
-	)
-
 	return &olapEventRepository{
 		pool:       timescalePool,
 		l:          l,
@@ -202,63 +163,113 @@ func NewOLAPEventRepository(l *zerolog.Logger) OLAPEventRepository {
 	}
 }
 
-func setupRangePartition(
+func (o *olapEventRepository) UpdateTablePartitions(ctx context.Context) error {
+	err := o.queries.CreateOLAPTaskEventTmpPartitions(ctx, o.pool, NUM_PARTITIONS)
+
+	if err != nil {
+		return err
+	}
+
+	err = o.queries.CreateOLAPTaskStatusUpdateTmpPartitions(ctx, o.pool, NUM_PARTITIONS)
+
+	if err != nil {
+		return err
+	}
+
+	err = o.setupRangePartition(
+		ctx,
+		o.queries.CreateOLAPTaskPartition,
+		o.queries.ListOLAPTaskPartitionsBeforeDate,
+		"v2_tasks_olap",
+	)
+
+	if err != nil {
+		return err
+	}
+
+	err = o.setupRangePartition(
+		ctx,
+		o.queries.CreateOLAPDAGPartition,
+		o.queries.ListOLAPDAGPartitionsBeforeDate,
+		"v2_dags_olap",
+	)
+
+	if err != nil {
+		return err
+	}
+
+	err = o.setupRangePartition(
+		ctx,
+		o.queries.CreateOLAPRunsPartition,
+		o.queries.ListOLAPRunsPartitionsBeforeDate,
+		"v2_runs_olap",
+	)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (o *olapEventRepository) setupRangePartition(
 	ctx context.Context,
-	pool *pgxpool.Pool,
 	create func(ctx context.Context, db olapv2.DBTX, date pgtype.Date) error,
 	listBeforeDate func(ctx context.Context, db olapv2.DBTX, date pgtype.Date) ([]string, error),
 	tableName string,
-) {
+) error {
 	today := time.Now().UTC()
 	tomorrow := today.AddDate(0, 0, 1)
 	sevenDaysAgo := today.AddDate(0, 0, -7)
 
-	err := create(ctx, pool, pgtype.Date{
+	err := create(ctx, o.pool, pgtype.Date{
 		Time:  today,
 		Valid: true,
 	})
 
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
-	err = create(ctx, pool, pgtype.Date{
+	err = create(ctx, o.pool, pgtype.Date{
 		Time:  tomorrow,
 		Valid: true,
 	})
 
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
-	partitions, err := listBeforeDate(ctx, pool, pgtype.Date{
+	partitions, err := listBeforeDate(ctx, o.pool, pgtype.Date{
 		Time:  sevenDaysAgo,
 		Valid: true,
 	})
 
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	for _, partition := range partitions {
-		_, err := pool.Exec(
+		_, err := o.pool.Exec(
 			ctx,
 			fmt.Sprintf("ALTER TABLE %s DETACH PARTITION %s CONCURRENTLY", tableName, partition),
 		)
 
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
 
-		_, err = pool.Exec(
+		_, err = o.pool.Exec(
 			ctx,
 			fmt.Sprintf("DROP TABLE %s", partition),
 		)
 
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
 	}
+
+	return nil
 }
 
 func StringToReadableStatus(status string) olap.ReadableTaskStatus {

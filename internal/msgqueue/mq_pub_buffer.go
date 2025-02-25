@@ -10,6 +10,7 @@ import (
 const PUB_FLUSH_INTERVAL = 10 * time.Millisecond
 const PUB_BUFFER_SIZE = 1000
 const PUB_MAX_CONCURRENCY = 1
+const PUB_TIMEOUT = 10 * time.Second
 
 type PubFunc func(m *Message) error
 
@@ -43,12 +44,12 @@ func (m *MQPubBuffer) Pub(ctx context.Context, queue Queue, msg *Message, wait b
 	buf, ok := m.buffers.Load(k)
 
 	if !ok {
-		buf = newMsgIdPubBuffer(msg.TenantID, msg.ID, func(msg *Message) error {
-			// TODO: DON'T USE BACKGROUND CONTEXT
-			return m.mq.SendMessage(context.Background(), queue, msg)
-		})
+		buf, _ = m.buffers.LoadOrStore(k, newMsgIdPubBuffer(msg.TenantID, msg.ID, func(msg *Message) error {
+			msgCtx, cancel := context.WithTimeout(context.Background(), PUB_TIMEOUT)
+			defer cancel()
 
-		m.buffers.Store(k, buf)
+			return m.mq.SendMessage(msgCtx, queue, msg)
+		}))
 	}
 
 	msgWithErr := &msgWithErrCh{

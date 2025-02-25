@@ -100,9 +100,7 @@ func (m *MQSubBuffer) handleMsg(ctx context.Context, msg *Message) error {
 	buf, ok := m.buffers.Load(k)
 
 	if !ok {
-		buf = newMsgIdBuffer(msg.TenantID, msg.ID, m.dst)
-
-		m.buffers.Store(k, buf)
+		buf, _ = m.buffers.LoadOrStore(k, newMsgIdBuffer(msg.TenantID, msg.ID, m.dst))
 	}
 
 	// this places some backpressure on the consumer if buffers are full
