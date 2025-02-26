@@ -28,6 +28,7 @@ func main() {
 	var slots int
 	var failureRate float32
 	var payloadSize string
+	var skipVerify bool
 
 	var loadtest = &cobra.Command{
 		Use: "loadtest",
@@ -47,7 +48,7 @@ func main() {
 				}()
 			}
 
-			if err := do(duration, events, delay, wait, concurrency, workerDelay, slots, failureRate, payloadSize); err != nil {
+			if err := do(duration, events, delay, wait, concurrency, workerDelay, slots, failureRate, payloadSize, skipVerify); err != nil {
 				log.Println(err)
 				panic("load test failed")
 			}
@@ -64,6 +65,7 @@ func main() {
 	loadtest.Flags().IntVarP(&slots, "slots", "s", 0, "slots specifies the number of slots to use in the worker")
 	loadtest.Flags().Float32VarP(&failureRate, "failureRate", "f", 0, "failureRate specifies the rate of failure for the worker")
 	loadtest.Flags().StringVarP(&payloadSize, "payloadSize", "P", "0kb", "payload specifies the size of the payload to send")
+	loadtest.Flags().BoolVarP(&skipVerify, "skipVerify", "S", false, "skipVerify specifies whether to skip verification of emitted vs executed events")
 
 	cmd := &cobra.Command{Use: "app"}
 	cmd.AddCommand(loadtest)

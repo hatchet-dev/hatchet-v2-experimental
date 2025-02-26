@@ -12,7 +12,7 @@ type avgResult struct {
 	avg   time.Duration
 }
 
-func do(duration time.Duration, eventsPerSecond int, delay time.Duration, wait time.Duration, concurrency int, workerDelay time.Duration, slots int, failureRate float32, payloadSize string) error {
+func do(duration time.Duration, eventsPerSecond int, delay time.Duration, wait time.Duration, concurrency int, workerDelay time.Duration, slots int, failureRate float32, payloadSize string, skipVerify bool) error {
 	l.Info().Msgf("testing with duration=%s, eventsPerSecond=%d, delay=%s, wait=%s, concurrency=%d", duration, eventsPerSecond, delay, wait, concurrency)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -94,12 +94,14 @@ func do(duration time.Duration, eventsPerSecond int, delay time.Duration, wait t
 	log.Printf("ℹ️ final average duration per executed event: %s", finalDurationResult.avg)
 	log.Printf("ℹ️ final average scheduling time per event: %s", finalScheduledResult.avg)
 
-	if 2*emitted != executed {
-		log.Printf("⚠️ warning: emitted and executed counts do not match: %d != %d", 2*emitted, executed)
-	}
+	if !skipVerify {
+		if 2*emitted != executed {
+			log.Printf("⚠️ warning: emitted and executed counts do not match: %d != %d", 2*emitted, executed)
+		}
 
-	if 2*emitted != uniques {
-		return fmt.Errorf("❌ emitted and unique executed counts do not match: %d != %d", 2*emitted, uniques)
+		if 2*emitted != uniques {
+			return fmt.Errorf("❌ emitted and unique executed counts do not match: %d != %d", 2*emitted, uniques)
+		}
 	}
 
 	log.Printf("✅ success")
